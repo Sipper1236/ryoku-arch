@@ -30,30 +30,30 @@ SigLevel = Required
 Server = https://repo.ryoku.dev/stable/$arch
 `
 
-// desktop set from deploy.sh plus the session/system packages the ISO puts in
-// base.packages that ryoku-desktop does not depend on. --needed makes overlap
-// free.
-var ryokuPkgs = []string{"ryoku-keyring", "ryoku-shell", "ryoku-hub", "ryoku-blobs", "ryoku", "ryoku-desktop"}
+// ryokuPkgs mirrors the ISO's deploy.sh: the keyring plus the ryoku-desktop
+// umbrella. The umbrella version-pins and pulls every monorepo component and
+// the desktop's runtime tools (recorder, night light, dictation, OCR/QR, LED,
+// external-monitor brightness, ...) as hard depends, so installing just these
+// two -- exactly what the ISO installs -- is the single source of truth for the
+// Ryoku desktop set. Everything else (session, base OS, fonts) comes from
+// base.packages via readBasePackages: the same manifest the ISO pacstraps.
+var ryokuPkgs = []string{"ryoku-keyring", "ryoku-desktop"}
 
-var sessionPkgs = []string{
-	"sddm", "networkmanager", "iwd", "iw",
-	"pipewire", "pipewire-alsa", "pipewire-pulse", "wireplumber",
-	"mesa", "vulkan-icd-loader",
-	"xdg-user-dirs", "qt6ct", "adwaita-icon-theme", "vimix-cursors",
-	"polkit", "gnome-keyring",
-	"qt6-declarative", "qt6-multimedia", "qt6-multimedia-ffmpeg",
-	"gst-plugins-base", "gst-plugins-good", "gst-plugins-bad", "gst-plugins-ugly",
-	"upower", "fuzzel", "curl", "libnotify", "python", "xdg-utils", "desktop-file-utils",
-	// tools the shell invokes by name (stash, launcher, media, night light)
-	"flatpak", "ffmpeg", "yt-dlp", "mpv", "libqalculate", "mpv-mpris", "songrec",
-	// rust: the toolchain ships by default (never gated on the devtools toggle)
-	// so a shell-installed box matches the ISO's base set, which carries it.
-	"rust",
+// bootChainSkip: base.packages entries a shell-converted box must NOT get -- it
+// already owns its bootloader, initramfs, encryption and snapshot stack, and
+// (re)installing these would rewrite its boot. Everything else in base.packages
+// installs, so a shell box matches the ISO's set with no second hand-kept list
+// to drift out of sync.
+var bootChainSkip = map[string]bool{
+	"base": true, "base-devel": true, "linux": true, "linux-firmware": true,
+	"mkinitcpio": true, "sudo": true, "btrfs-progs": true, "cryptsetup": true,
+	"dosfstools": true, "efibootmgr": true, "limine": true, "plymouth": true,
+	"snapper": true, "snap-pac": true,
 }
 
-// the standard Ryoku extras, all best-effort here. awww (the wallpaper daemon)
-// and wallust (the palette generator) are hard ryoku-desktop depends from the
-// [ryoku] repo, so the packages step already pulled them; no AUR build is needed.
+// the standard Ryoku extras, all best-effort here. awww (the wallpaper daemon,
+// from the [ryoku] repo) and matugen (the palette generator, from the official
+// repo) are hard ryoku-desktop depends the packages step already pulled; no AUR build is needed.
 var aurPkgs = []string{"bibata-cursor-theme-bin", "localsend-bin", "voxtype-bin"}
 
 // system/packages/dev.packages; ryoku recovery builds from source and needs go.
@@ -61,7 +61,7 @@ var devPkgs = []string{"go", "nodejs", "npm", "python", "python-pip", "python-pi
 
 var sparsePaths = []string{
 	"ryoku/lockscreen", "ryoku/assets", "ryoku/apps",
-	"system/hardware/drivers", "release/packages/ryoku-keyring",
+	"system/hardware/drivers", "system/packages", "release/packages/ryoku-keyring",
 }
 
 type plan struct {
@@ -493,7 +493,23 @@ func stepPayload(e *engine) error {
 			return err
 		}
 	}
-	return e.cmd(e.payload, nil, "git", append([]string{"sparse-checkout", "set"}, sparsePaths...)...)
+	if err := e.cmd(e.payload, nil, "git", append([]string{"sparse-checkout", "set"}, sparsePaths...)...); err != nil {
+		return err
+	}
+	// a cache from an older installer can come out of the update missing paths
+	// the current engine needs; a broken cache is worth less than a fresh clone.
+	if _, err := os.Stat(filepath.Join(e.payload, "system/packages/base.packages")); err != nil && !e.dry {
+		e.say("payload cache is incomplete; recloning it fresh")
+		if err := os.RemoveAll(e.payload); err != nil {
+			return err
+		}
+		if err := e.cmd("", nil, "git", "clone", "--depth=1", "--filter=blob:none", "--sparse",
+			"--branch", e.ref, repoURL, e.payload); err != nil {
+			return err
+		}
+		return e.cmd(e.payload, nil, "git", append([]string{"sparse-checkout", "set"}, sparsePaths...)...)
+	}
+	return nil
 }
 
 // paths under $HOME that materialize or the seeds will touch. hypr, quickshell
@@ -508,7 +524,7 @@ var backupMove = []string{
 }
 var backupCopy = []string{
 	".config/niri", ".config/sway", ".config/kitty", ".config/fish", ".config/nvim",
-	".config/fastfetch", ".config/yazi", ".config/wallust", ".config/qt6ct",
+	".config/fastfetch", ".config/yazi", ".config/matugen", ".config/qt6ct",
 	".config/starship.toml", ".config/mimeapps.list",
 	".config/systemd/user", // raw symlink tree, restore.sh puts wants wiring back as-was
 }
@@ -710,14 +726,46 @@ func stepRepo(e *engine) error {
 	return e.sudo("pacman", "-Sy")
 }
 
+// readBasePackages parses system/packages/base.packages from the payload (the
+// same manifest the ISO pacstraps): one package per line, '#' comments and
+// blank lines dropped, boot-chain entries skipped. This is the single source of
+// truth for the machine package set, shared verbatim with the ISO.
+func (e *engine) readBasePackages() ([]string, error) {
+	path := filepath.Join(e.payload, "system/packages/base.packages")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	var pkgs []string
+	for _, ln := range strings.Split(string(data), "\n") {
+		if i := strings.IndexByte(ln, '#'); i >= 0 {
+			ln = ln[:i]
+		}
+		ln = strings.TrimSpace(ln)
+		if ln == "" || bootChainSkip[ln] {
+			continue
+		}
+		pkgs = append(pkgs, ln)
+	}
+	return pkgs, nil
+}
+
 func stepPackages(e *engine) error {
-	pkgs := append(append([]string{}, ryokuPkgs...), sessionPkgs...)
+	base, err := e.readBasePackages()
+	if err != nil {
+		if !e.dry {
+			return err
+		}
+		e.say("DRYRUN: payload not cloned; would read system/packages/base.packages")
+	}
+	pkgs := append(append([]string{}, ryokuPkgs...), base...)
 	if e.f.ucodePkg != "" {
 		pkgs = append(pkgs, e.f.ucodePkg)
 	}
 	if e.p.devtools {
 		pkgs = append(pkgs, devPkgs...)
 	}
+	pkgs = e.dropSatisfied(pkgs)
 	// a .part resumed against a mirror whose bytes moved on trips pacman's
 	// size cap on every retry; dropping resume state just costs a re-download.
 	if err := e.sudoSh(`rm -f /var/cache/pacman/pkg/*.part`); err != nil {
@@ -726,6 +774,43 @@ func stepPackages(e *engine) error {
 	// -Syu, not -S: a resumed run holds the db its first attempt synced, and
 	// a publish in between replaces or prunes the files that db points at.
 	return e.sudo(append([]string{"pacman", "-Syu", "--needed", "--noconfirm"}, pkgs...)...)
+}
+
+// dropSatisfied keeps only what no installed provider satisfies (pacman -T
+// prints the unmet names), so a provides-conflict like qt6ct-kde cannot
+// abort the install under --noconfirm.
+func (e *engine) dropSatisfied(pkgs []string) []string {
+	if e.dry || len(pkgs) == 0 {
+		return pkgs
+	}
+	out, err := exec.Command("pacman", append([]string{"-T"}, pkgs...)...).Output()
+	// exit 127 aside, pacman -T exits 1 when any target is unmet; the list on
+	// stdout is the answer either way, so only a total failure falls back.
+	if len(out) == 0 && err != nil {
+		return pkgs
+	}
+	keep := filterByUnmet(pkgs, string(out))
+	if len(keep) < len(pkgs) {
+		e.say(fmt.Sprintf("%d of %d packages already satisfied by installed providers", len(pkgs)-len(keep), len(pkgs)))
+	}
+	return keep
+}
+
+// filterByUnmet keeps only the names pacman -T reported as unmet.
+func filterByUnmet(pkgs []string, unmetOut string) []string {
+	unmet := map[string]bool{}
+	for _, ln := range strings.Split(strings.TrimSpace(unmetOut), "\n") {
+		if ln != "" {
+			unmet[ln] = true
+		}
+	}
+	var keep []string
+	for _, p := range pkgs {
+		if unmet[p] {
+			keep = append(keep, p)
+		}
+	}
+	return keep
 }
 
 func stepDrivers(e *engine) error {
@@ -1021,7 +1106,7 @@ EOF`); err != nil {
 
 func stepAUR(e *engine) error {
 	if !e.p.aur {
-		e.say("AUR extras skipped by choice; wallpaper needs wallust + awww (ryoku doctor will nag)")
+		e.say("AUR extras skipped by choice; wallpaper needs awww (ryoku doctor will nag)")
 		return nil
 	}
 	helper := e.f.aurHelper
@@ -1125,9 +1210,9 @@ func stepVerify(e *engine) error {
 		e.say("  DKMS modules are rejected at boot. To switch later, disable Secure Boot in")
 		e.say("  firmware or sign the kernel and modules (sbctl), then re-run this installer.")
 	}
-	// wallust is a hard ryoku-desktop depend from [ryoku], so the packages step
+	// matugen is a hard ryoku-desktop depend (official repo), so the packages step
 	// must have pulled it; a miss here means the desktop set install is broken.
-	check(has("wallust"), "wallust palette generator (colors follow the wallpaper)")
+	check(has("matugen"), "matugen palette generator (colors follow the wallpaper)")
 	if !has("awww") {
 		e.say(gWarn + " awww missing (AUR): static wallpapers will not set until it installs (ryoku doctor retries it)")
 	}

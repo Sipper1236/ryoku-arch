@@ -78,6 +78,9 @@ var rivalShellPkgs = []string{
 var conflictBlockerPkgs = []string{
 	"pulseaudio", "pulseaudio-alsa", "pulseaudio-bluetooth",
 	"quickshell-git", "quickshell-bin",
+	// ship the same files as ryoku-cursors; left in place they file-conflict
+	// the whole desktop transaction to death
+	"bibata-cursor-theme", "bibata-cursor-theme-bin",
 }
 
 // user daemons the Ryoku shell replaces (notifications, bar, wallpaper, idle,
