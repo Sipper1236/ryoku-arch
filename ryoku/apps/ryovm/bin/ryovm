@@ -573,9 +573,8 @@ write_seed() { # $1=dir $2=name $3=want_sudo $4=os $5=tools_csv $6=extra_csv $7=
 		printf '    permissions: "0755"\n'
 		printf '    content: |\n'
 		printf '      #!/bin/sh\n'
-		printf '      b64=$(base64 2>/dev/null | tr -d "\\n")\n'
-		printf '      if [ -n "$TMUX" ]; then printf "\\033Ptmux;\\033\\033]52;c;%%s\\007\\033\\\\" "$b64" > /dev/tty\n'
-		printf '      else printf "\\033]52;c;%%s\\007" "$b64" > /dev/tty; fi\n'
+		# shellcheck disable=SC2016  # the $vars belong to the generated script
+		printf '      b64=$(base64 2>/dev/null | tr -d "\\n")\n      if [ -n "$TMUX" ]; then printf "\\033Ptmux;\\033\\033]52;c;%%s\\007\\033\\\\" "$b64" > /dev/tty\n      else printf "\\033]52;c;%%s\\007" "$b64" > /dev/tty; fi\n'
 		if [ -n "$pkg_lines" ]; then printf 'packages:\n%s' "$pkg_lines"; fi
 		if [ -n "$run_lines" ]; then printf 'runcmd:\n%s' "$run_lines"; fi
 	} >"$dir/user-data"
@@ -808,8 +807,7 @@ cmd_launch() {
 	# failure while the window then appears makes the board contradict itself.
 	# Fail only when quickemu itself has died AND no pid file ever appeared;
 	# the first line of the die() carries the cause (the UI keeps line one).
-	local i
-	for i in $(seq 1 32); do
+	for _ in $(seq 1 32); do
 		vm_running "$vm_pid" && break
 		kill -0 "$qpid" 2>/dev/null || break
 		sleep 0.25
@@ -859,8 +857,7 @@ cmd_stop() {
 	if [ "$force" != "--force" ] && vm_running "$vm_pid" && [ -S "$vm_subdir/$vm_name-monitor.socket" ] && have python3; then
 		python3 -c 'import socket,sys,time; s=socket.socket(socket.AF_UNIX); s.settimeout(2); s.connect(sys.argv[1]); time.sleep(0.2); s.sendall(b"system_powerdown\n"); time.sleep(0.3)' \
 			"$vm_subdir/$vm_name-monitor.socket" >/dev/null 2>&1 || true
-		local i
-		for i in $(seq 1 80); do
+		for _ in $(seq 1 80); do
 			vm_running "$vm_pid" || { echo "stopped $vm_name (clean shutdown)"; return 0; }
 			sleep 0.25
 		done
@@ -868,8 +865,7 @@ cmd_stop() {
 	quickemu --vm "$vm_name.conf" --kill >/dev/null 2>&1 || true
 	# don't return while qemu still holds the image lock: a seal or snapshot
 	# issued right after "stopped" would race the dying process and fail.
-	local j
-	for j in $(seq 1 20); do
+	for _ in $(seq 1 20); do
 		vm_running "$vm_pid" || break
 		sleep 0.25
 	done
