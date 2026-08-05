@@ -84,7 +84,7 @@ type plan struct {
 func defaultPlan(f *facts) *plan {
 	return &plan{
 		// secure boot rejects unsigned dkms modules and the nvidia script also
-		// blacklists nouveau: proceeding would boot into a black screen. only
+		// denylists nouveau: proceeding would boot into a black screen. only
 		// an sbctl-managed box gets to keep the default.
 		nvidia:    f.hasNvidia && !f.nouveauLive && !(f.secureBoot && !f.sbctlSigned),
 		switchDM:  true,
