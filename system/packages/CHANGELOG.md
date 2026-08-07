@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- `base.packages`: add `matugen` and `power-profiles-daemon`. Both were on
+  `unstable-dev` but missing here, so the shell installer -- which installs this
+  manifest and then verifies `matugen` is on PATH (the palette engine behind
+  "colors follow the wallpaper") -- failed at "Verifying the install" on a
+  `main`-channel box. Both ship from the official `extra` repo.
 - `base.packages`: add `gnome-themes-extra`, the standalone `Adwaita-dark` GTK
   theme the Hyprland autostart selects (`gsettings gtk-theme`). Without it that
   name has nothing on disk, so GTK3 apps -- notably the `xdg-desktop-portal-gtk`
