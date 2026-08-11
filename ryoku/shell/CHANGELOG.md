@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **Power Saver reduces motion in the launcher, overview and wallpaper too.**
+  Their `Motion` singletons take `reduce` from `shell.services.Perf` now (like the
+  shell's shared Motion), so the power profile collapses their transitions to an
+  instant cut and each drops its own performance.json watcher
+  (`modules/{launcher/shared,overview,wallpaper}/Singletons/Motion.qml`).
 - **Power Saver strips compositor blur and shadow too.** The power-profile policy
   now reaches the heaviest present-time GPU cost. When Power Saver is active (and
   "Follow the power profile" is on) the shell writes a flag to ~/.cache/ryoku and
