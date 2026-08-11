@@ -3,6 +3,26 @@
 ## Unreleased
 
 ### Added
+- **Power profiles drive the shell, and it eases off on battery.** A new
+  `shell.services.Perf` singleton is the one reader of `performance.json`; it
+  folds the file with the active power profile and the battery state, so every
+  surface reads one set of effective switches instead of watching the file itself.
+  With the new **Follow the power profile** switch (Hub -> System -> Performance,
+  on by default) Power Saver reduces motion, drops blur and shadows and halves
+  vector-layer antialiasing (`layer.samples` 8 -> 2), the same trade the Low power
+  mode master makes; Balanced and Performance leave your explicit switches
+  untouched, so the default profile never overrides a choice. Independently, while
+  the laptop is discharging every background stat poller (CPU, memory, GPU,
+  thermals, storage, AI usage, voice, the 45 ms mic meter) samples at half rate,
+  and the qsbar GPU poll now reads the NVIDIA dGPU `runtime_status` first and skips
+  `nvidia-smi` entirely while the card is runtime-suspended, so a bar GPU widget no
+  longer wakes the discrete GPU and burns ~10 W at idle. `Motion` and the desktop,
+  launcher and visualiser `Performance` singletons now forward to `Perf`
+  (`services/Perf.qml`, `services/Motion.qml`, `services/qmldir`,
+  `modules/{desktop,launcher,visualizer}/Singletons/Performance.qml`,
+  `modules/bar/barstyles/qsbar/{Theme,panels/CpuPanel}.qml` and its
+  `variants/V2/{Theme,panels/VolumePanel,modules/AiBarInset,modules/AiPanelSurface,modules/WorkspaceWidget}.qml`,
+  Hub `pages/PerformancePage.qml`).
 - **A system font you can change without a logout.** The interface font is a
   live setting now (Hub -> Global -> System font). The shell reads it through
   `Theme.fontPrimary`, and the daemon mirrors it to the toolkits: GTK via
