@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Added
+- **Power Saver strips compositor blur and shadow too.** The power-profile policy
+  now reaches the heaviest present-time GPU cost. When Power Saver is active (and
+  "Follow the power profile" is on) the shell writes a flag to ~/.cache/ryoku and
+  reloads Hyprland, and a new `hyprland/modules/perf_saver.lua`, loaded after the
+  Hub's settings.lua so the profile wins over its decoration tweaks (and before
+  user.lua so a hand-written file still wins), drops `decoration.blur` and
+  `decoration.shadow`. Balanced and Performance restore them
+  (`shell/quickshell/shell/shell.qml`, `hyprland/modules/perf_saver.lua`,
+  `hyprland/hyprland.lua`).
 - **Power profiles drive the shell, and it eases off on battery.** A new
   `shell.services.Perf` singleton is the one reader of `performance.json`; it
   folds the file with the active power profile and the battery state, so every
