@@ -370,6 +370,7 @@ type diskLayout struct {
 	existingBoot string // the existing OS's chainloadable EFI binary, or "none" ("" when absent)
 	leftovers    []part // verified failed-install debris the backend reclaims (freed space)
 	espCount     int    // EF00 ESPs on the disk (>1 surfaces a multi-ESP review note)
+	espFreeKiB   int64  // free KiB on the existing ESP; below 8192 selects a dedicated Ryoku ESP
 }
 
 // sysDiskLayout reads the existing partitions and largest free region of a disk.
@@ -417,7 +418,7 @@ func sysDiskLayout(disk string) diskLayout {
 	dl.freeG, dl.regionStart, dl.regionEnd = pr.freeG, pr.regionStart, pr.regionEnd
 	dl.probeVerdict, dl.probeMessage = pr.verdict, pr.message
 	dl.espKind, dl.existingBoot, dl.leftovers = pr.espKind, pr.existingBoot, pr.leftovers
-	dl.espCount = pr.espCount
+	dl.espCount, dl.espFreeKiB = pr.espCount, pr.espFreeKiB
 	return dl
 }
 
@@ -450,6 +451,7 @@ type probeResult struct {
 	espKind                string // esp_kind: windows|ryoku|linux ("" when no ESP or older backend)
 	existingBoot           string // existing_boot: the existing OS's EFI binary, or "none" ("" when absent)
 	espCount               int    // esp_count: number of EF00 ESPs on the disk (0 when older backend)
+	espFreeKiB             int64  // esp_free_kib: free space on the existing ESP
 	leftovers              []part // one per verified failed-install partition to reclaim (freed)
 }
 
@@ -460,9 +462,9 @@ func probeAlongside(disk string) probeResult {
 	}
 	out, ok := run(bin, "probe", "alongside", disk)
 	if !ok {
-		return probeResult{verdict: "error", message: "could not run the disk probe (ryoku-install probe alongside)."}
+		return probeResult{verdict: "error", message: "could not run the disk probe (ryoku-install probe alongside).", espFreeKiB: -1}
 	}
-	var r probeResult
+	r := probeResult{espFreeKiB: -1}
 	var bestMiB int64
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
@@ -481,6 +483,8 @@ func probeAlongside(disk string) probeResult {
 			r.existingBoot = f[1]
 		case len(f) >= 2 && f[0] == "esp_count":
 			r.espCount = int(parseI64(f[1]))
+		case len(f) >= 2 && f[0] == "esp_free_kib":
+			r.espFreeKiB = parseI64(f[1])
 		case len(f) == 4 && f[0] == "leftover":
 			// leftover <dev> <partlabel> <sizeMiB>: verified debris the backend frees.
 			r.leftovers = append(r.leftovers, part{
@@ -1032,6 +1036,7 @@ func (m model) installEnv() []string {
 		"RYOKU_PROFILE=" + def(m.picks["profile"], "vm"),
 		"RYOKU_ESP_GIB=" + strconv.Itoa(m.espG),
 		"RYOKU_SWAP_GIB=" + strconv.Itoa(m.swapG),
+		"RYOKU_ESP_MODE=" + m.espMode(),
 		"RYOKU_SUBVOL_SNAPSHOTS=" + b(m.snapshots),
 		"RYOKU_SUBVOL_HOME=" + b(m.sepHome),
 		"RYOKU_SUBVOL_BACKUPS=" + b(m.backups),

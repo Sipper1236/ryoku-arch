@@ -6,6 +6,10 @@ A ground-up hardening of the installer for real hardware. Granular backend and
 ISO detail live in `backend/CHANGELOG.md` and `iso/CHANGELOG.md`.
 
 ### Added
+- **Dual-boot handles old 96 MiB Windows EFI partitions.** The installer
+  automatically uses a dedicated Ryoku ESP when the existing ESP lacks 8 MiB
+  free, without moving Windows partitions or changing the required free-space
+  footprint.
 - **5 GHz Wi-Fi works after install.** The configure stage now pins the Wi-Fi
   regulatory domain (the country) in the target, so the kernel leaves world
   domain `00` and stops hiding most 5 GHz channels; resolved from `RYOKU_REGDOM`,

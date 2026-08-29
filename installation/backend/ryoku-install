@@ -86,6 +86,7 @@ fi
 # wipe path when the TUI dropped the pick. validation below.
 : "${RYOKU_DISK_STRATEGY:=}"
 : "${RYOKU_ESP_GIB:=1}"
+: "${RYOKU_ESP_MODE:=auto}"
 : "${RYOKU_SWAP_GIB:=0}"
 : "${RYOKU_SUBVOL_SNAPSHOTS:=1}"
 : "${RYOKU_SUBVOL_HOME:=1}"
@@ -123,6 +124,14 @@ case $RYOKU_DISK_STRATEGY in
   '') die "RYOKU_DISK_STRATEGY is required (use 'whole' or 'alongside'); refusing to wipe disk on empty strategy." ;;
   *)  die "RYOKU_DISK_STRATEGY='$RYOKU_DISK_STRATEGY' not supported (use 'whole' or 'alongside')." ;;
 esac
+if [[ $RYOKU_DISK_STRATEGY == alongside ]]; then
+  case $RYOKU_ESP_MODE in
+    auto|shared|dedicated) ;;
+    *) die "RYOKU_ESP_MODE must be auto, shared, or dedicated (got '$RYOKU_ESP_MODE')" ;;
+  esac
+  [[ -z $RYOKU_DRYRUN || $RYOKU_ESP_MODE != auto ]] \
+    || die "alongside dry-run cannot measure the existing ESP; set RYOKU_ESP_MODE=shared or dedicated."
+fi
 # encryption pairing: catch a missing passphrase HERE, before any disk work, so
 # an encrypt request can't wipe + partition + luksFormat only to die at `open`.
 # luks.sh keeps the same check as defense in depth for a direct backend call.

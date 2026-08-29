@@ -17,10 +17,7 @@
 RYOKU_BTRFS_OPTS="compress=zstd:1,noatime"
 
 ryoku_filesystems() {
-  # ESP_DEV is our own /boot partition in both strategies (whole: the ESP;
-  # alongside: the 2 GiB XBOOTLDR beside Windows' ESP). alongside's limine.conf
-  # (on the shared ESP) finds the kernels by this FAT label, so it must be the
-  # distinct RYOKUBOOT there; whole boots them same-volume and keeps BOOT.
+  # Alongside uses a distinct label in both XBOOTLDR and dedicated-ESP modes.
   local boot_label=BOOT
   [[ ${RYOKU_DISK_STRATEGY:-} == alongside ]] && boot_label=${RYOKU_ALONGSIDE_BOOT_LABEL:-RYOKUBOOT}
   log "formatting boot ($ESP_DEV, vfat, label $boot_label) and root ($ROOT_DEV, btrfs)"
@@ -65,16 +62,15 @@ ryoku_mount() {
   # bootloader step: the Limine binaries, the kernel, and both initramfs images
   # have to fit on /mnt/boot, but pacstrap + mkinitcpio fill /boot long before
   # the bootloader runs, so a too-small ESP used to fail cryptically mid-install.
-  # with the current partitioning this NEVER fires (whole gives a >= 1 GiB ESP,
-  # alongside a 2 GiB XBOOTLDR /boot); it only catches a hand-built/reused ESP
-  # is too small, BEFORE anything is written to it. dry-run narrates (no fs yet).
+  # The generated layouts use at least 1 GiB (whole) or 2 GiB (alongside);
+  # this catches only hand-built/reused undersized boot partitions.
   if [[ -n ${RYOKU_DRYRUN:-} ]]; then
-    log "dry-run: would require >= 64 MiB free on the ESP (/mnt/boot)"
+    log "dry-run: would require >= 64 MiB free on /boot"
   else
     local esp_avail_kib
     esp_avail_kib=$(df -k --output=avail /mnt/boot 2>/dev/null | tail -1 | tr -d ' ')
     [[ $esp_avail_kib =~ ^[0-9]+$ ]] || esp_avail_kib=0
-    (( esp_avail_kib >= 65536 )) || die "ESP /mnt/boot has ${esp_avail_kib} KiB free; need >= 64 MiB for the bootloader + kernel + initramfs. Use a larger ESP (RYOKU_ESP_GIB)."
+    (( esp_avail_kib >= 65536 )) || die "/boot has ${esp_avail_kib} KiB free; need >= 64 MiB for the bootloader + kernel + initramfs."
   fi
 
   ryoku_swapfile

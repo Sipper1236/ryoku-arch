@@ -483,7 +483,7 @@ const (
 
 const minDiskGiB = 32      // installer floor: minRootGiB closure + 1G ESP + swap/snapshot headroom
 const minRootGiB = 20      // min root partition (GiB): base+desktop closure plus AUR/snapshot headroom (matches backend ryoku_min_root_gib)
-const alongsideBootGiB = 2 // XBOOTLDR /boot carved inside the free region (matches backend RYOKU_ALONGSIDE_BOOT_MIB)
+const alongsideBootGiB = 2 // fixed FAT boot partition (matches backend RYOKU_ALONGSIDE_BOOT_MIB)
 // The grid the layout is verified to render every critical element into: the
 // destructive-write warning, the target disk, the strategy, and the Yes/No
 // buttons (see TestReviewKeepsCriticalContent). Below this the text stops being
@@ -824,9 +824,10 @@ type model struct {
 	freeG                      int    // largest contiguous free region (GiB) for alongside (excludes reclaimG)
 	regionStart, regionEnd     int64  // that region's first/last sector, from the probe (exported at install)
 	probeVerdict, probeMessage string // alongside probe verdict + human cause (rendered as the block reason)
-	espKind                    string // windows|ryoku|linux for the shared ESP (drives the review boot line)
-	existingBoot               string // existing OS's chainloadable EFI binary, or "none" (review caveat)
-	espCount                   int    // EF00 ESPs on the disk; >1 surfaces a multi-ESP review note
+	espKind                    string // existing ESP kind
+	existingBoot               string // existing OS EFI binary, or "none"
+	espCount                   int
+	espFreeKiB                 int64
 	// carve (in-installer resize): resizeParts is the backend's per-partition
 	// shrinkability report; when non-empty on an alongside disk the layout page
 	// offers the carve picker. carvePart indexes the chosen partition to shrink
@@ -929,7 +930,7 @@ func (m *model) loadStep() {
 			m.regionStart, m.regionEnd = dl.regionStart, dl.regionEnd
 			m.probeVerdict, m.probeMessage = dl.probeVerdict, dl.probeMessage
 			m.espKind, m.existingBoot = dl.espKind, dl.existingBoot
-			m.espCount = dl.espCount
+			m.espCount, m.espFreeKiB = dl.espCount, dl.espFreeKiB
 			for _, p := range dl.leftovers {
 				m.reclaim = append(m.reclaim, p)
 				m.reclaimG += p.size
@@ -945,7 +946,7 @@ func (m *model) loadStep() {
 			m.kept, m.reclaim, m.reclaimG, m.freeG = nil, nil, 0, 0
 			m.regionStart, m.regionEnd = 0, 0
 			m.probeVerdict, m.probeMessage = "", ""
-			m.espKind, m.existingBoot = "", ""
+			m.espKind, m.existingBoot, m.espFreeKiB = "", "", 0
 		}
 		m.clampSwapToLayout() // keep default swap within the layout (backend-consistent)
 	case kPass:
@@ -1644,10 +1645,21 @@ func (m model) needsEraseAck() bool {
 	return false
 }
 
-// availRoot is the size (GiB) of the root partition: the space we lay out minus
-// the boot/ESP partition. For alongside that space is the detected free region
-// (a 2 GiB XBOOTLDR /boot + root both live there; Windows' ESP is shared, not
-// counted); for whole it is the disk minus any kept partitions, minus the ESP.
+func (m model) espMode() string {
+	if m.picks["disk"] != "alongside" {
+		return "auto"
+	}
+	if m.espFreeKiB < 0 {
+		return "auto"
+	}
+	if m.espFreeKiB >= 8192 {
+		return "shared"
+	}
+	return "dedicated"
+}
+
+// availRoot is the new root size before subtracting swap. Alongside always
+// reserves the fixed 2 GiB FAT boot partition.
 // The swapfile is carved from root, so usable root is availRoot - swap.
 func (m model) availRoot() int {
 	var a int
@@ -1722,7 +1734,7 @@ func (m model) layoutRows() []lrow {
 		rows = append(rows, lrow{"reclaim", fmt.Sprintf("reclaim%d", i), r.dev, "previous Ryoku, will be freed", "reclaim"})
 	}
 	if m.picks["disk"] != "alongside" {
-		rows = append(rows, lrow{"size", "esp", "ESP size", "/boot · fat32", "required"}) // alongside boot is a fixed 2 GiB XBOOTLDR
+		rows = append(rows, lrow{"size", "esp", "ESP size", "/boot · fat32", "required"}) // alongside boot is fixed at 2 GiB
 	}
 	rows = append(rows,
 		lrow{"size", "swap", "Swap (swapfile)", "@swap · 0 = none · carved from root", "optional"},
@@ -1929,11 +1941,16 @@ func (m model) layoutSummary() string {
 // layoutSegs builds the disk-bar segments: kept + (new boot/ESP) + root + free.
 func (m model) layoutSegs() []part {
 	segs := append([]part(nil), m.kept...)
-	bootG, bootDev := m.espG, "ESP"
+	bootG, bootDev, bootFlags := m.espG, "ESP", "esp"
 	if m.picks["disk"] == "alongside" {
-		bootG, bootDev = alongsideBootGiB, "boot" // fixed 2 GiB XBOOTLDR; Windows' ESP is shared, not shown
+		bootG = alongsideBootGiB
+		if m.espMode() == "dedicated" {
+			bootDev, bootFlags = "Ryoku ESP", "esp"
+		} else {
+			bootDev, bootFlags = "boot", "xbootldr"
+		}
 	}
-	segs = append(segs, part{dev: bootDev, size: bootG, fs: "vfat", mount: "/boot", flags: "esp", status: "new"})
+	segs = append(segs, part{dev: bootDev, size: bootG, fs: "vfat", mount: "/boot", flags: bootFlags, status: "new"})
 	rootUsable := m.availRoot() - m.swapG
 	if rootUsable < 0 {
 		rootUsable = 0
@@ -1951,7 +1968,11 @@ func gibRound(mib int64) int { return int((mib + 512) / 1024) }
 // ryokuSegs are the segments Ryoku drops into a gapG-GiB gap: the 2 GiB boot
 // partition, the btrfs root, and a swap partition when one is configured.
 func (m model) ryokuSegs(gapG int) []part {
-	segs := []part{{dev: "boot", size: alongsideBootGiB, fs: "vfat", mount: "/boot", flags: "esp", status: "new"}}
+	flags := "xbootldr"
+	if m.espMode() == "dedicated" {
+		flags = "esp"
+	}
+	segs := []part{{dev: "boot", size: alongsideBootGiB, fs: "vfat", mount: "/boot", flags: flags, status: "new"}}
 	root := gapG - alongsideBootGiB - m.swapG
 	if root < 0 {
 		root = 0
@@ -2994,7 +3015,13 @@ func (m model) reviewBody(w int) string {
 	if m.swapG == 0 {
 		swap = "none"
 	}
-	esp := fmt.Sprintf("%dG", m.espG)
+	esp, bootKind := fmt.Sprintf("%dG", m.espG), "ESP"
+	if m.picks["disk"] == "alongside" {
+		bootKind = "boot"
+		esp = fmt.Sprintf("%dG %s", alongsideBootGiB, map[string]string{
+			"shared": "XBOOTLDR", "dedicated": "dedicated ESP", "auto": "boot",
+		}[m.espMode()])
+	}
 	// strategy: render in red+bold for "whole" so the wipe is undeniable on
 	// Review before the user moves to Yes. Alongside renders green to mark it
 	// as the non-destructive path. Anything else (should never reach Review
@@ -3019,32 +3046,33 @@ func (m model) reviewBody(w int) string {
 		row("hostname", m.picks["hostname"]),
 		row("user", m.picks["username"]), row("password", m.picks["password"]),
 		row("encryption", m.picks["encryption"]), "",
-		fg(cSub, "layout     ") + fg(cText, fmt.Sprintf("ESP %s · root %dG · swap %s", esp, m.availRoot()-m.swapG, swap)),
+		fg(cSub, "layout     ") + fg(cText, fmt.Sprintf("%s %s · root %dG · swap %s", bootKind, esp, m.availRoot()-m.swapG, swap)),
 		fg(cSub, "subvols    ") + fg(cText, subs),
 	}
 	if len(m.kept) > 0 {
 		lines = append(lines, fg(cSub, "kept       ")+fg(cYell, fmt.Sprintf("%d existing partition(s)", len(m.kept))))
 	}
-	if strat == "alongside" && (m.espKind == "ryoku" || m.espKind == "linux") {
-		existing := "Linux"
-		if m.espKind == "ryoku" {
-			existing = "Ryoku"
+	if strat == "alongside" {
+		existing := map[string]string{"windows": "Windows", "ryoku": "Ryoku", "linux": "Linux"}[m.espKind]
+		if existing == "" {
+			existing = "existing OS"
 		}
-		if m.existingBoot == "none" {
+		if m.espMode() == "dedicated" {
 			lines = append(lines,
-				fg(cSub, "boot       ")+fg(cText, "shared existing ESP (backed up first)"),
-				fg(cYell, "           the existing system stays bootable via the firmware menu only (no chainload entry found)"))
+				fg(cSub, "boot       ")+fg(cText, "dedicated Ryoku ESP; existing "+existing+" ESP is untouched"))
 		} else {
-			lines = append(lines, fg(cSub, "boot       ")+fg(cText, "shared existing ESP (backed up first) + "+existing+" (existing) entry in the boot menu"))
+			boot := "shared existing ESP (" + m.espKind + ", backed up first)"
+			if m.existingBoot == "none" {
+				lines = append(lines, fg(cSub, "boot       ")+fg(cText, boot),
+					fg(cYell, "           existing system stays available through the firmware menu only (no chainload entry found)"))
+			} else {
+				lines = append(lines, fg(cSub, "boot       ")+fg(cText, boot+" + "+existing+" (existing) entry in the boot menu"))
+			}
+			if m.espCount > 1 {
+				lines = append(lines,
+					fg(cYell, fmt.Sprintf("           %d EFI partitions found; Ryoku shares the %s ESP", m.espCount, m.espKind)))
+			}
 		}
-	}
-	if strat == "alongside" && m.espCount > 1 {
-		kind := m.espKind
-		if kind == "" {
-			kind = "existing"
-		}
-		lines = append(lines,
-			fg(cYell, fmt.Sprintf("           %d EFI partitions found - Ryoku shares the %s ESP; other systems stay bootable from the Limine menu", m.espCount, kind)))
 	}
 	if len(m.reclaim) > 0 {
 		lines = append(lines, fg(cSub, "reclaim    ")+fg(cRed, fmt.Sprintf("%d leftover partition(s) (%dG) from a failed prior install", len(m.reclaim), m.reclaimG)))
@@ -3399,7 +3427,7 @@ func snapshot() {
 		c.idx, c.picks = 9, alongPicks
 		c.diskDev, c.diskTotal, c.diskG = "/dev/loop0", 931, 931
 		c.diskBytes = 953869 * 1024 * 1024
-		c.gpt, c.espKind, c.existingBoot, c.probeVerdict = true, "ryoku", "none", "ok"
+		c.gpt, c.espKind, c.existingBoot, c.probeVerdict, c.espFreeKiB = true, "ryoku", "none", "ok", 8192
 		c.kept, c.freeG, c.resizeParts = ryokuKept, 0, ryokuParts
 		c.espG, c.swapG = 1, 16
 		c.snapshots, c.sepHome, c.backups = true, true, false
@@ -3418,6 +3446,11 @@ func snapshot() {
 	m = carve()
 	m.idx, m.netOnline, m.hwSecureBoot = 14, true, false // review
 	show("alongside: review (shared ESP, no erase)", m)
+
+	m = carve()
+	m.idx, m.netOnline, m.hwSecureBoot, m.espFreeKiB = 14, true, false, 6144
+	m.espKind, m.existingBoot = "windows", "/EFI/Microsoft/Boot/bootmgfw.efi"
+	show("alongside: review (dedicated ESP, existing ESP untouched)", m)
 
 	m = carve()
 	m.idx, m.netOnline, m.hwSecureBoot = 14, true, false

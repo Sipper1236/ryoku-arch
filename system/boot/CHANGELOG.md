@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Fixed
+- `limine/ryoku-windows-entry` now also restores the installer-recorded
+  Linux/Ryoku neighbor after Limine regenerates its menu on dedicated-ESP
+  dual-boot systems.
 - `limine/ryoku-windows-entry`: `strip_managed` is now title-anchored and
   fence-tolerant instead of deleting everything between the begin/end fences.
   When limine-entry-tool 1.37 adopts the flat `/Ryoku Linux` placeholder it

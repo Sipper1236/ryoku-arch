@@ -28,9 +28,9 @@ ryoku_preflight() {
     log "preflight: would require the repo payload at $RYOKU_REPO and a working DNS resolver before any disk write"
     if [[ ${RYOKU_DISK_STRATEGY:-} == alongside ]]; then
       if [[ -n ${RYOKU_RESIZE_PART:-} ]]; then
-        log "preflight: would also require GPT + a shared usable ESP (Windows, Ryoku, or another Linux), the shrink tool for ${RYOKU_RESIZE_PART}'s filesystem, and RYOKU_RESIZE_TAKE_MIB >= $(( (2 + $(ryoku_min_root_gib)) * 1024 )); the freed region is checked after the carve"
+        log "preflight: would also require GPT + a usable ESP to identify the existing OS, the shrink tool for ${RYOKU_RESIZE_PART}'s filesystem, and RYOKU_RESIZE_TAKE_MIB >= $(( (2 + $(ryoku_min_root_gib)) * 1024 )); auto mode uses a dedicated Ryoku ESP when the existing ESP has < 8 MiB free"
       else
-        log "preflight: would also require GPT, a usable EF00 ESP with >= 8 MiB free (the scanned one, Windows-first, when the disk has several), a free region >= $(( 2 + $(ryoku_min_root_gib) ))GiB, and warn on any BitLocker neighbor"
+        log "preflight: would also require GPT, a usable EF00 ESP to identify the existing OS, a free region >= $(( 2 + $(ryoku_min_root_gib) ))GiB, and warn on any BitLocker neighbor; auto mode shares the existing ESP with >= 8 MiB free and otherwise creates a dedicated Ryoku ESP"
       fi
     fi
     log "preflight: ok (profile=$RYOKU_PROFILE, strategy=$RYOKU_DISK_STRATEGY, encrypt=${RYOKU_ENCRYPT:-0})"
@@ -81,39 +81,49 @@ ryoku_preflight() {
   log "preflight: ok (profile=$RYOKU_PROFILE, strategy=$RYOKU_DISK_STRATEGY, encrypt=${RYOKU_ENCRYPT:-0})"
 }
 
-# ryoku_require_shared_esp: the gates common to every alongside-family install
-# (plain alongside AND carve). A GPT disk with a usable ESP to share -- Windows',
-# an existing Ryoku's, or another Linux's -- picked by the same ryoku_esp_scan the
-# probe and the bootloader use (a Windows ESP first, else the first usable), with
-# >= 8 MiB free for the Limine loader we land beside it. A disk with several ESPs
-# is allowed (we warn and share one); only no usable ESP is fatal. Sets
-# RYOKU_PF_WESP and RYOKU_PF_ESP_KIND. Fail closed: writes a user's only disk once.
-ryoku_require_shared_esp() {
-  local disk=$RYOKU_DISK pttype ef_count espinfo wesp kind tmpd avail_kib=0
+ryoku_resolve_esp_mode() {
+  local avail_kib=${1:-0}
+  case ${RYOKU_ESP_MODE:-auto} in
+    auto)
+      if (( avail_kib >= 8192 )); then printf 'shared\n'; else printf 'dedicated\n'; fi
+      ;;
+    shared)
+      (( avail_kib >= 8192 )) || die "the shared ESP has ${avail_kib} KiB free; shared mode needs >= 8 MiB. Use dedicated mode or free space on the ESP."
+      printf 'shared\n'
+      ;;
+    dedicated) printf 'dedicated\n' ;;
+    *) die "RYOKU_ESP_MODE must be auto, shared, or dedicated (got '$RYOKU_ESP_MODE')" ;;
+  esac
+}
+
+# Alongside needs a GPT disk and an existing ESP so the current OS can be
+# discovered for the boot menu. Shared mode also requires 8 MiB free there;
+# dedicated mode leaves it untouched and boots from Ryoku's own ESP.
+ryoku_require_existing_esp() {
+  local disk=$RYOKU_DISK pttype ef_count espinfo esp kind boot avail_kib=0
   pttype=$(blkid -o value -s PTTYPE "$disk" 2>/dev/null || true)
   [[ $pttype == gpt ]] || die "alongside needs a GPT disk; $disk has '${pttype:-no}' partition table. Use whole-disk, or convert to GPT."
 
-  # A disk may carry more than one ESP -- a second OS that made its own, or a
-  # leftover. We do NOT refuse it: ryoku_esp_scan picks the one to share (a
-  # Windows ESP first, else the first usable one), exactly as the probe and the
-  # bootloader do, and Limine finds every other OS's loader at boot. Only a disk
-  # with NO usable ESP is fatal, since alongside has nothing to land beside.
+  # Scan every ESP to identify the existing system. Windows is preferred for
+  # chainload metadata, but dedicated mode never writes the selected ESP.
   ef_count=$(sgdisk -p "$disk" 2>/dev/null | awk '$6=="EF00"' | wc -l)
-  espinfo=$(ryoku_esp_scan "$disk") || die "no usable EFI System Partition on $disk. alongside shares an existing ESP; use whole-disk instead, or create an ESP first."
-  read -r wesp kind _ <<<"$espinfo"
-  (( ef_count > 1 )) && log "WARNING: $disk has $ef_count EFI System Partitions; Ryoku shares the $kind ESP ($wesp) and lands its Limine loader there. Other systems stay bootable from the Limine menu. (Recorded, not blocking.)"
+  espinfo=$(ryoku_esp_scan "$disk") || die "no usable EFI System Partition on $disk to identify the existing OS. Use whole-disk, or create an ESP first."
+  read -r esp kind boot <<<"$espinfo"
 
-  # limine is < 1 MiB, but demand 8 MiB headroom on the shared ESP.
-  tmpd=$(mktemp -d)
-  if mount -o ro "$wesp" "$tmpd" 2>/dev/null; then
-    avail_kib=$(df -k --output=avail "$tmpd" 2>/dev/null | tail -1 | tr -d ' ')
-    umount "$tmpd" 2>/dev/null || true
-  fi
-  rmdir "$tmpd" 2>/dev/null || true
+  avail_kib=$(ryoku_esp_free_kib "$esp")
   [[ $avail_kib =~ ^[0-9]+$ ]] || avail_kib=0
-  (( avail_kib >= 8192 )) || die "the shared ESP $wesp has ${avail_kib} KiB free; alongside needs >= 8 MiB there for the Limine loader. Free space on the ESP, or use whole-disk."
-  RYOKU_PF_WESP=$wesp
+  RYOKU_RESOLVED_ESP_MODE=$(ryoku_resolve_esp_mode "$avail_kib")
+  export RYOKU_RESOLVED_ESP_MODE
+  if [[ $RYOKU_RESOLVED_ESP_MODE == shared ]]; then
+    log "alongside boot mode: shared ESP ($esp, ${avail_kib} KiB free)"
+    (( ef_count > 1 )) && log "WARNING: $disk has $ef_count EFI System Partitions; Ryoku shares the $kind ESP ($esp)."
+  else
+    log "alongside boot mode: dedicated Ryoku ESP (existing $kind ESP has ${avail_kib} KiB free and stays untouched)"
+  fi
+  RYOKU_PF_ESP=$esp
   RYOKU_PF_ESP_KIND=$kind
+  RYOKU_PF_ESP_BOOT=$boot
+  export RYOKU_PF_ESP RYOKU_PF_ESP_KIND RYOKU_PF_ESP_BOOT
 }
 
 # ryoku_bitlocker_warn <disk>: a BitLocker neighbour is not blocking (the user may
@@ -124,25 +134,21 @@ ryoku_bitlocker_warn() {
   fi
 }
 
-# alongside preflight: the shared ESP gates PLUS an existing free region big
-# enough for the 2 GiB boot + root floor. fail closed with an actionable message.
+# Alongside preflight resolves the boot mode and validates the free region.
 ryoku_preflight_alongside() {
   local disk=$RYOKU_DISK need_gib region_mib
-  ryoku_require_shared_esp
+  ryoku_require_existing_esp
   need_gib=$(( 2 + $(ryoku_min_root_gib) ))
   region_mib=$(ryoku_free_regions "$disk" | sort -k3,3 -nr | awk 'NR==1{print $3+0}')
   (( region_mib >= need_gib * 1024 )) || die "no unallocated region >= ${need_gib}GiB on $disk (largest is $(( region_mib / 1024 ))GiB). Shrink a partition first, then retry."
   ryoku_bitlocker_warn "$disk"
-  log "preflight alongside: GPT ok, shared ESP $RYOKU_PF_WESP ($RYOKU_PF_ESP_KIND, >= 8 MiB free), free region $(( region_mib / 1024 ))GiB >= ${need_gib}GiB"
+  log "preflight alongside: GPT ok, boot mode $RYOKU_RESOLVED_ESP_MODE, existing ESP $RYOKU_PF_ESP ($RYOKU_PF_ESP_KIND), free region $(( region_mib / 1024 ))GiB >= ${need_gib}GiB"
 }
 
-# carve preflight: the shared ESP gates PLUS the shrink tool for the selected
-# partition's filesystem and a big-enough take. NO free-region gate here: carve
-# CREATES that region, and the alongside partition step re-checks it once the gap
-# exists. The deep shrinkability re-verify happens in ryoku_carve.
+# Carve uses the same boot-mode gate, then validates the shrink target and size.
 ryoku_preflight_resize() {
   local disk=$RYOKU_DISK part=$RYOKU_RESIZE_PART take=${RYOKU_RESIZE_TAKE_MIB:-0} fstype tool need_gib
-  ryoku_require_shared_esp
+  ryoku_require_existing_esp
   [[ -b $part ]] || die "carve target RYOKU_RESIZE_PART=$part is not a block device."
   local parent; parent=$(lsblk -no PKNAME "$part" 2>/dev/null | head -n1)
   [[ /dev/$parent == "$disk" ]] || die "carve target $part is not a partition of $disk (parent is ${parent:-unknown})."
@@ -158,5 +164,5 @@ ryoku_preflight_resize() {
   need_gib=$(( 2 + $(ryoku_min_root_gib) ))
   { [[ $take =~ ^[0-9]+$ ]] && (( take >= need_gib * 1024 )); } || die "RYOKU_RESIZE_TAKE_MIB='${take}' must free at least ${need_gib} GiB (2 GiB boot + $(ryoku_min_root_gib) GiB root) for Ryoku."
   ryoku_bitlocker_warn "$disk"
-  log "preflight carve: GPT ok, shared ESP $RYOKU_PF_WESP ($RYOKU_PF_ESP_KIND), will carve ${take} MiB out of $part ($fstype) with $tool"
+  log "preflight carve: GPT ok, boot mode $RYOKU_RESOLVED_ESP_MODE, will carve ${take} MiB out of $part ($fstype) with $tool"
 }

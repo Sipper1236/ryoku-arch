@@ -31,30 +31,30 @@ ryoku_bootloader() {
   # below), or the installed system can't find its own NVMe at boot.
   ryoku_boot_vmd
 
-  if [[ ${RYOKU_DISK_STRATEGY:-} == alongside ]]; then
+  if [[ ${RYOKU_DISK_STRATEGY:-} == alongside && ${RYOKU_RESOLVED_ESP_MODE:-${RYOKU_ESP_MODE:-shared}} != dedicated ]]; then
     ryoku_bootloader_alongside
   else
-    if chroot_has limine-mkinitcpio; then
-      log "building UKI via limine-mkinitcpio"
-      ryoku_boot_limine_conf branding_only
-      run arch-chroot /mnt limine-mkinitcpio
-      chroot_has limine-update && run arch-chroot /mnt limine-update
-    else
-      log "building initramfs via mkinitcpio -P"
-      ryoku_boot_limine_conf with_entry
-      # /usr/bin/mkinitcpio, never plain `mkinitcpio`: limine-mkinitcpio-hook
-      # ships /usr/local/bin/mkinitcpio, a wrapper that runs the real thing and
-      # then PROMPTS ("Would you like to run 'limine-mkinitcpio' now?"). The
-      # installer answers nothing, so the prompt is either a hang or a coin toss.
-      run arch-chroot /mnt /usr/bin/mkinitcpio -P
-    fi
-    # any Windows on any drive: chainload it from the menu.
-    ryoku_windows_entry
-    ryoku_boot_install_efi
+    ryoku_bootloader_own_esp
   fi
 
   log "enabling services: sddm, NetworkManager, bluetooth, rtkit, power-profiles-daemon"
   run arch-chroot /mnt systemctl enable sddm.service NetworkManager.service bluetooth.service rtkit-daemon.service power-profiles-daemon.service
+}
+
+ryoku_bootloader_own_esp() {
+  if chroot_has limine-mkinitcpio; then
+    log "building UKI via limine-mkinitcpio"
+    ryoku_boot_limine_conf branding_only
+    run arch-chroot /mnt limine-mkinitcpio
+    chroot_has limine-update && run arch-chroot /mnt limine-update
+  else
+    log "building initramfs via mkinitcpio -P"
+    ryoku_boot_limine_conf with_entry
+    run arch-chroot /mnt /usr/bin/mkinitcpio -P
+  fi
+  ryoku_windows_entry
+  ryoku_dedicated_existing_entry
+  ryoku_boot_install_efi
 }
 
 # finalize: runs after the AUR step, when the limine hooks may have landed.
@@ -67,7 +67,7 @@ ryoku_bootloader() {
 # (ryoku_bootloader_finalize_alongside): the same menu lives on the XBOOTLDR
 # /boot, plus the limine-entry-tool key pins + an in-chroot limine-update rerun.
 ryoku_bootloader_finalize() {
-  if [[ ${RYOKU_DISK_STRATEGY:-} == alongside ]]; then
+  if [[ ${RYOKU_DISK_STRATEGY:-} == alongside && ${RYOKU_RESOLVED_ESP_MODE:-${RYOKU_ESP_MODE:-shared}} != dedicated ]]; then
     ryoku_bootloader_finalize_alongside
     return 0
   fi
@@ -88,6 +88,7 @@ ryoku_bootloader_finalize() {
   fi
   # the hook's rewrite re-serialized the file; make sure Windows is still there.
   ryoku_windows_entry
+  ryoku_dedicated_existing_entry
 }
 
 # finalize, alongside: pin the two limine-entry-tool keys the branded, dedup-free
@@ -395,6 +396,38 @@ ryoku_windows_entry() {
   fi
 }
 
+# Add the selected non-Windows ESP loader to a dedicated-ESP install. Windows is
+# handled separately by ryoku_windows_entry.
+ryoku_dedicated_existing_entry() {
+  local mode=${RYOKU_RESOLVED_ESP_MODE:-${RYOKU_ESP_MODE:-shared}}
+  local conf=${1:-/mnt/boot/limine.conf} state=${2:-/mnt/etc/ryoku/limine-existing-esp}
+  local esp kind boot partuuid title
+  [[ ${RYOKU_DISK_STRATEGY:-} == alongside && $mode == dedicated && -f $conf ]] || return 0
+  if [[ -n ${RYOKU_DRYRUN:-} ]]; then
+    log "dry-run: would persist and add the existing non-Windows OS to $conf by ESP PARTUUID when a loader is found"
+    return 0
+  fi
+  esp=${RYOKU_PF_ESP:-}
+  kind=${RYOKU_PF_ESP_KIND:-}
+  boot=${RYOKU_PF_ESP_BOOT:--}
+  [[ -n $esp && -n $kind ]] \
+    || die "dedicated bootloader: preflight did not preserve the existing ESP metadata."
+  [[ $kind != windows ]] || return 0
+  if [[ -z $boot || $boot == - || $boot == none ]]; then
+    log "note: the existing $kind system has no chainloadable EFI binary; it stays available through the firmware menu."
+    return 0
+  fi
+  partuuid=$(blkid -o value -s PARTUUID "$esp" 2>/dev/null || true)
+  [[ -n $partuuid ]] \
+    || die "dedicated bootloader: blkid found no PARTUUID for the existing ESP $esp."
+  run mkdir -p "$(dirname "$state")"
+  printf '%s\t%s\t%s\n' "$kind" "$partuuid" "$boot" | write_file "$state"
+  [[ $kind == ryoku ]] && title="Ryoku (existing)" || title="Linux (existing)"
+  grep -qxF "/$title" "$conf" && return 0
+  ryoku_alongside_existing_entry "$kind" "$boot" "$partuuid" >>"$conf"
+  log "existing $kind install detected: added a GUID-addressed chainload entry"
+}
+
 # install_efi: drop the Limine EFI binary on the ESP and register a boot
 # entry. paths match limine-install (limine-entry-tool) exactly --
 # EFI/limine/limine_x64.efi + the EFI/BOOT fallback -- so the tool's pacman
@@ -405,12 +438,8 @@ ryoku_boot_install_efi() {
   log "installing Limine EFI binary + boot entry"
   run mkdir -p /mnt/boot/EFI/BOOT /mnt/boot/EFI/limine
   run cp /mnt/usr/share/limine/BOOTX64.EFI /mnt/boot/EFI/limine/limine_x64.efi
-  # EFI/BOOT/BOOTX64.EFI is the UEFI removable-media fallback loader. writing it
-  # is safe here: the wipe strategy installs onto OUR OWN ESP (alongside takes a
-  # separate path, ryoku_bootloader_alongside, and never reaches this function),
-  # so this can't clobber a foreign fallback (the Calamares #2416 hazard). it is
-  # also the loader that keeps the box bootable when firmware ignores or drops the
-  # NVRAM entry we register below -- see the best-effort handling there.
+  # Only whole-disk and dedicated-alongside modes reach this path, so /boot is
+  # Ryoku's own ESP and the fallback cannot overwrite another OS.
   run cp /mnt/usr/share/limine/BOOTX64.EFI /mnt/boot/EFI/BOOT/BOOTX64.EFI
 
   local esp_partnum
