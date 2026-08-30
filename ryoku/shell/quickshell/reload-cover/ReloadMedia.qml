@@ -3,7 +3,7 @@ import QtQuick
 Item {
     id: root
 
-    property var descriptor: ({ path: "", name: "", kind: "default", bytes: 0 })
+    property var descriptor: ({ path: "", name: "", kind: "default", bytes: 0, enabled: true })
     property bool active: true
     property bool forceDefault: false
     onMediaPathChanged: {
@@ -13,8 +13,9 @@ Item {
 
     readonly property string mediaPath: descriptor && typeof descriptor.path === "string" ? descriptor.path : ""
     readonly property string mediaKind: descriptor && typeof descriptor.kind === "string" ? descriptor.kind : "default"
-    readonly property bool wantsVideo: mediaPath !== "" && mediaKind === "video"
-    readonly property bool wantsImage: mediaPath !== "" && (mediaKind === "image" || mediaKind === "animated")
+    readonly property bool customEnabled: !descriptor || descriptor.enabled !== false
+    readonly property bool wantsVideo: customEnabled && mediaPath !== "" && mediaKind === "video"
+    readonly property bool wantsImage: customEnabled && mediaPath !== "" && (mediaKind === "image" || mediaKind === "animated")
     readonly property string imageSource: mediaPath.indexOf("://") >= 0 ? mediaPath : "file://" + mediaPath
     readonly property size orientationProbeSize: Qt.size(64, 64)
     property bool orientationKnown: false
@@ -32,7 +33,7 @@ Item {
         && customImageLoader.item
         && customImageLoader.item.status === Image.Ready
     readonly property bool videoReady: videoLoader.status === Loader.Ready && videoLoader.item && videoLoader.item.ready
-    readonly property bool customReady: !forceDefault && (imageReady || videoReady)
+    readonly property bool customReady: customEnabled && !forceDefault && (imageReady || videoReady)
     readonly property bool mediaError: wantsImage
         ? probeFailed
             || (orientationKnown && (customImageLoader.status === Loader.Error

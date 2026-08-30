@@ -44,7 +44,7 @@ Item {
             compare(item.mediaError, false)
         }
 
-        function test_valid_image_becomes_custom_media() {
+        function test_missing_enabled_defaults_to_custom_media() {
             const source = Qt.resolvedUrl("../../ryoku/shell/quickshell/reload-cover/assets/logo.png")
             const item = makeMedia({ path: String(source), name: "logo.png", kind: "image", bytes: 1 })
             tryCompare(item, "customReady", true, 3000)
@@ -55,7 +55,25 @@ Item {
             compare(customImage.sourceSize.width, Math.ceil(item.width))
             compare(customImage.sourceSize.height, 0)
             verifyOrientationProbe(item, false)
+        }
 
+        function test_disabled_custom_image_keeps_default_and_releases_decoders() {
+            const source = Qt.resolvedUrl("../../ryoku/shell/quickshell/reload-cover/assets/logo.png")
+            const enabled = { path: String(source), name: "logo.png", kind: "image", bytes: 1, enabled: true }
+            const item = makeMedia({ path: enabled.path, name: enabled.name, kind: enabled.kind, bytes: enabled.bytes, enabled: false })
+            wait(500)
+            compare(item.showingDefault, true)
+            compare(item.customReady, false)
+            const probeLoader = findChild(item, "imageProbeLoader")
+            verify(!!probeLoader, "Orientation probe loader exists")
+            compare(probeLoader.status, Loader.Null)
+            compare(probeLoader.item, null)
+            verify(!findChild(item, "customImage"))
+
+            item.descriptor = enabled
+            tryCompare(item, "customReady", true, 3000)
+            compare(item.showingDefault, false)
+            verify(!!findChild(item, "customImage"), "Custom image exists")
         }
 
         function test_tall_image_preserves_aspect_with_bounded_decode() {
