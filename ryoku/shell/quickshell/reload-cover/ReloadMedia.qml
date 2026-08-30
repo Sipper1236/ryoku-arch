@@ -6,14 +6,27 @@ Item {
     property var descriptor: ({ path: "", name: "", kind: "default", bytes: 0 })
     property bool active: true
     property bool forceDefault: false
+    onMediaPathChanged: {
+        orientationKnown = false
+        imageTall = false
+    }
 
     readonly property string mediaPath: descriptor && typeof descriptor.path === "string" ? descriptor.path : ""
     readonly property string mediaKind: descriptor && typeof descriptor.kind === "string" ? descriptor.kind : "default"
     readonly property bool wantsVideo: mediaPath !== "" && mediaKind === "video"
     readonly property bool wantsImage: mediaPath !== "" && (mediaKind === "image" || mediaKind === "animated")
     readonly property string imageSource: mediaPath.indexOf("://") >= 0 ? mediaPath : "file://" + mediaPath
-    readonly property bool probeReady: imageProbe.status === Image.Ready
-    readonly property bool probeTall: imageProbe.implicitHeight > imageProbe.implicitWidth
+    readonly property size orientationProbeSize: Qt.size(64, 64)
+    property bool orientationKnown: false
+    property bool imageTall: false
+    readonly property bool probeReady: imageProbeLoader.status === Loader.Ready
+        && imageProbeLoader.item
+        && imageProbeLoader.item.status === Image.Ready
+    readonly property bool probeFailed: imageProbeLoader.status === Loader.Ready
+        && imageProbeLoader.item
+        && imageProbeLoader.item.status === Image.Error
+    readonly property bool probeReleased: wantsImage && orientationKnown
+        && imageProbeLoader.status === Loader.Null
     readonly property bool imageReady: wantsImage
         && customImageLoader.status === Loader.Ready
         && customImageLoader.item
@@ -21,8 +34,8 @@ Item {
     readonly property bool videoReady: videoLoader.status === Loader.Ready && videoLoader.item && videoLoader.item.ready
     readonly property bool customReady: !forceDefault && (imageReady || videoReady)
     readonly property bool mediaError: wantsImage
-        ? imageProbe.status === Image.Error
-            || (probeReady && (customImageLoader.status === Loader.Error
+        ? probeFailed
+            || (orientationKnown && (customImageLoader.status === Loader.Error
                 || (customImageLoader.status === Loader.Ready
                     && customImageLoader.item
                     && customImageLoader.item.status === Image.Error)))
@@ -45,15 +58,29 @@ Item {
         height: root.defaultLogoHeight
     }
 
-    AnimatedImage {
-        id: imageProbe
-        width: 0
-        height: 0
-        source: root.wantsImage ? root.imageSource : ""
-        sourceSize.width: 64
-        asynchronous: true
-        cache: false
-        playing: false
+    Component {
+        id: orientationProbe
+        Image {
+            objectName: "imageProbe"
+            source: root.imageSource
+            fillMode: Image.PreserveAspectFit
+            sourceSize: root.orientationProbeSize
+            asynchronous: true
+            cache: false
+            onStatusChanged: {
+                if (status === Image.Ready) {
+                    root.imageTall = implicitHeight > implicitWidth
+                    root.orientationKnown = true
+                }
+            }
+        }
+    }
+
+    Loader {
+        id: imageProbeLoader
+        objectName: "imageProbeLoader"
+        active: root.wantsImage && !root.orientationKnown && !root.forceDefault
+        sourceComponent: orientationProbe
     }
 
     Component {
@@ -87,9 +114,9 @@ Item {
     Loader {
         id: customImageLoader
         anchors.fill: parent
-        active: root.wantsImage && root.probeReady && !root.forceDefault
+        active: root.wantsImage && root.orientationKnown && !root.forceDefault
         visible: root.imageReady && !root.forceDefault
-        sourceComponent: root.probeTall ? tallImage : wideImage
+        sourceComponent: root.imageTall ? tallImage : wideImage
     }
 
     Loader {

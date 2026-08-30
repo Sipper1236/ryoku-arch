@@ -25,6 +25,17 @@ Item {
             verify(!!item, "Component exists")
             return item
         }
+        function verifyOrientationProbe(item, expectedTall) {
+            compare(item.orientationProbeSize.width, 64)
+            compare(item.orientationProbeSize.height, 64)
+            compare(item.imageTall, expectedTall)
+            tryCompare(item, "probeReleased", true, 3000)
+            const probeLoader = findChild(item, "imageProbeLoader")
+            verify(!!probeLoader, "Orientation probe loader exists")
+            compare(probeLoader.status, Loader.Null)
+            compare(probeLoader.item, null)
+        }
+
 
         function test_default_uses_bundled_wordmark() {
             const item = makeMedia({ path: "", name: "", kind: "default", bytes: 0 })
@@ -43,6 +54,8 @@ Item {
             fuzzyCompare(customImage.paintedWidth / customImage.paintedHeight, 928 / 160, 0.02)
             compare(customImage.sourceSize.width, Math.ceil(item.width))
             compare(customImage.sourceSize.height, 0)
+            verifyOrientationProbe(item, false)
+
         }
 
         function test_tall_image_preserves_aspect_with_bounded_decode() {
@@ -54,6 +67,7 @@ Item {
             fuzzyCompare(customImage.paintedWidth / customImage.paintedHeight, 640 / 12800, 0.01)
             compare(customImage.sourceSize.width, 0)
             compare(customImage.sourceSize.height, Math.ceil(item.height))
+            verifyOrientationProbe(item, true)
         }
 
         function test_animated_image_becomes_custom_media() {
@@ -64,7 +78,7 @@ Item {
         }
 
         function test_missing_image_reports_error_and_keeps_default() {
-            ignoreWarning(/QML AnimatedImage: Error Reading Animated Image File file:\/\/\/missing\/reload-cover\.png/)
+            ignoreWarning(/QML Image: Cannot open: file:\/\/\/missing\/reload-cover\.png/)
             const item = makeMedia({ path: "/missing/reload-cover.png", name: "missing.png", kind: "image", bytes: 1 })
             tryCompare(item, "mediaError", true, 3000)
             compare(item.showingDefault, true)
