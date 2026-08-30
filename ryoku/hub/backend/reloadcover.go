@@ -17,6 +17,30 @@ const reloadCoverMaxBytes int64 = 64 << 20
 
 var reloadCoverManagedName = regexp.MustCompile(`^[0-9a-f]{64}\.(bmp|gif|jpe?g|mkv|mov|mp4|png|svg|webm|webp)$`)
 
+var reloadCoverAfterFirstCopyWriteHook func()
+
+type reloadCoverHookWriter struct {
+	writer io.Writer
+	hook   func()
+}
+
+func (writer *reloadCoverHookWriter) Write(body []byte) (int, error) {
+	written, err := writer.writer.Write(body)
+	if written > 0 && writer.hook != nil {
+		hook := writer.hook
+		writer.hook = nil
+		hook()
+	}
+	return written, err
+}
+
+func reloadCoverCopyWriter(writer io.Writer) io.Writer {
+	if reloadCoverAfterFirstCopyWriteHook == nil {
+		return writer
+	}
+	return &reloadCoverHookWriter{writer: writer, hook: reloadCoverAfterFirstCopyWriteHook}
+}
+
 type reloadCoverAsset struct {
 	Path  string `json:"path"`
 	Name  string `json:"name"`
@@ -143,6 +167,27 @@ func pruneReloadCover(keep string) error {
 	return pruneReloadCoverExcept(kept)
 }
 
+func reusableReloadCoverDestination(path string, size int64, digest string) (bool, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false, err
+	}
+	if !info.Mode().IsRegular() || info.Size() != size {
+		return false, nil
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	copied, err := io.Copy(hash, io.LimitReader(file, size+1))
+	if err != nil {
+		return false, err
+	}
+	return copied == size && hex.EncodeToString(hash.Sum(nil)) == digest, nil
+}
+
 func importReloadCover(raw string) (reloadCoverAsset, error) {
 	source, err := resolveReloadCoverSource(raw)
 	if err != nil {
@@ -181,7 +226,7 @@ func importReloadCover(raw string) (reloadCoverAsset, error) {
 		}
 	}()
 	hash := sha256.New()
-	bytes, err := io.Copy(io.MultiWriter(temp, hash), io.LimitReader(input, reloadCoverMaxBytes+1))
+	bytes, err := io.Copy(reloadCoverCopyWriter(io.MultiWriter(temp, hash)), io.LimitReader(input, reloadCoverMaxBytes+1))
 	if err != nil {
 		temp.Close()
 		return reloadCoverAsset{}, err
@@ -201,14 +246,17 @@ func importReloadCover(raw string) (reloadCoverAsset, error) {
 	if err := temp.Close(); err != nil {
 		return reloadCoverAsset{}, err
 	}
-	destination := filepath.Join(reloadCoverDir(), hex.EncodeToString(hash.Sum(nil))+strings.ToLower(filepath.Ext(source)))
-	if _, err := os.Stat(destination); err != nil {
-		if !os.IsNotExist(err) {
-			return reloadCoverAsset{}, err
-		}
+	digest := hex.EncodeToString(hash.Sum(nil))
+	destination := filepath.Join(reloadCoverDir(), digest+strings.ToLower(filepath.Ext(source)))
+	reusable, err := reusableReloadCoverDestination(destination, bytes, digest)
+	if os.IsNotExist(err) {
 		if err := os.Rename(tempPath, destination); err != nil {
 			return reloadCoverAsset{}, err
 		}
+	} else if err != nil {
+		return reloadCoverAsset{}, err
+	} else if !reusable {
+		return reloadCoverAsset{}, fmt.Errorf("existing reload-cover destination is not reusable")
 	}
 	tempPath = ""
 	kept := map[string]bool{destination: true}

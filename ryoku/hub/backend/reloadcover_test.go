@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -115,6 +114,82 @@ func TestImportReloadCoverCopiesContentAddressedAsset(t *testing.T) {
 	}
 }
 
+func TestImportReloadCoverRejectsInvalidDestinationCollision(t *testing.T) {
+	body := []byte("collision fixture")
+	digest := sha256.Sum256(body)
+	cases := []struct {
+		name   string
+		create func(t *testing.T, destination string)
+		verify func(t *testing.T, destination string)
+	}{
+		{
+			name: "directory",
+			create: func(t *testing.T, destination string) {
+				t.Helper()
+				if err := os.Mkdir(destination, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			},
+			verify: func(t *testing.T, destination string) {
+				t.Helper()
+				info, err := os.Lstat(destination)
+				if err != nil || !info.IsDir() {
+					t.Fatalf("directory collision changed: %v, %v", info, err)
+				}
+			},
+		},
+		{
+			name: "symlink",
+			create: func(t *testing.T, destination string) {
+				t.Helper()
+				target := writeReloadAsset(t, t.TempDir(), "target.png", []byte("target"))
+				if err := os.Symlink(target, destination); err != nil {
+					t.Fatal(err)
+				}
+			},
+			verify: func(t *testing.T, destination string) {
+				t.Helper()
+				info, err := os.Lstat(destination)
+				if err != nil || info.Mode()&os.ModeSymlink == 0 {
+					t.Fatalf("symlink collision changed: %v, %v", info, err)
+				}
+			},
+		},
+		{
+			name: "wrong-content",
+			create: func(t *testing.T, destination string) {
+				t.Helper()
+				if err := os.WriteFile(destination, []byte("wrong"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			},
+			verify: func(t *testing.T, destination string) {
+				t.Helper()
+				got, err := os.ReadFile(destination)
+				if err != nil || string(got) != "wrong" {
+					t.Fatalf("wrong-content collision changed: %q, %v", got, err)
+				}
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, data := reloadCoverTestHome(t)
+			source := writeReloadAsset(t, t.TempDir(), "collision.png", body)
+			dir := filepath.Join(data, "ryoku", "reload-cover")
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			destination := filepath.Join(dir, hex.EncodeToString(digest[:])+".png")
+			tc.create(t, destination)
+			if _, err := importReloadCover(source); err == nil {
+				t.Fatal("invalid destination collision was accepted")
+			}
+			tc.verify(t, destination)
+		})
+	}
+}
+
 func TestImportReloadCoverEnforcesLimit(t *testing.T) {
 	reloadCoverTestHome(t)
 	source := filepath.Join(t.TempDir(), "large.mp4")
@@ -182,44 +257,29 @@ func TestImportReloadCoverRemovesTemporaryFileWhenSourceGrows(t *testing.T) {
 	if err := os.Truncate(source, reloadCoverMaxBytes); err != nil {
 		t.Fatal(err)
 	}
-	done := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			default:
-			}
-			entries, err := os.ReadDir(reloadCoverDir())
-			if err != nil {
-				runtime.Gosched()
-				continue
-			}
-			for _, entry := range entries {
-				if !strings.HasPrefix(entry.Name(), ".import-") {
-					continue
-				}
-				file, err := os.OpenFile(source, os.O_APPEND|os.O_WRONLY, 0o644)
-				if err != nil {
-					return
-				}
-				defer file.Close()
-				for {
-					select {
-					case <-done:
-						return
-					default:
-						if _, err := file.Write(make([]byte, 1<<20)); err != nil {
-							return
-						}
-					}
-				}
-			}
-			runtime.Gosched()
+	var appendErr error
+	appended := false
+	oldHook := reloadCoverAfterFirstCopyWriteHook
+	reloadCoverAfterFirstCopyWriteHook = func() {
+		file, err := os.OpenFile(source, os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			appendErr = err
+			return
 		}
-	}()
+		_, appendErr = file.Write([]byte{0})
+		if err := file.Close(); appendErr == nil {
+			appendErr = err
+		}
+		appended = appendErr == nil
+	}
+	t.Cleanup(func() { reloadCoverAfterFirstCopyWriteHook = oldHook })
 	_, err := importReloadCover(source)
-	close(done)
+	if appendErr != nil {
+		t.Fatal(appendErr)
+	}
+	if !appended {
+		t.Fatal("source was not appended after copying began")
+	}
 	if err == nil || !strings.Contains(err.Error(), "64 MiB") {
 		t.Fatalf("growing source error = %v", err)
 	}
