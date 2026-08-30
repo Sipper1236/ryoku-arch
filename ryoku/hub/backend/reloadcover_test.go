@@ -36,6 +36,43 @@ func writeReloadAsset(t *testing.T, dir, name string, body []byte) string {
 	return path
 }
 
+func replaceReloadCoverDirWithSymlink(t *testing.T, data string) (string, map[string][]byte) {
+	t.Helper()
+	managed := filepath.Join(data, "ryoku", "reload-cover")
+	external := t.TempDir()
+	files := map[string][]byte{
+		strings.Repeat("a", 64) + ".png": []byte("external image"),
+		strings.Repeat("b", 64) + ".gif": []byte("external animation"),
+	}
+	for name, body := range files {
+		writeReloadAsset(t, external, name, body)
+	}
+	if err := os.MkdirAll(filepath.Dir(managed), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(external, managed); err != nil {
+		t.Fatal(err)
+	}
+	return external, files
+}
+
+func assertReloadCoverFilesUnchanged(t *testing.T, dir string, want map[string][]byte) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != len(want) {
+		t.Fatalf("external entry count = %d, want %d", len(entries), len(want))
+	}
+	for name, body := range want {
+		got, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil || string(got) != string(body) {
+			t.Fatalf("external %q = %q, %v; want %q", name, got, err, body)
+		}
+	}
+}
+
 func TestReloadCoverKind(t *testing.T) {
 	cases := map[string]string{
 		"mark.bmp":  "image",
@@ -112,6 +149,17 @@ func TestImportReloadCoverCopiesContentAddressedAsset(t *testing.T) {
 	if !info.ModTime().Equal(historical) {
 		t.Fatalf("reused asset modification time = %v, want %v", info.ModTime(), historical)
 	}
+}
+
+func TestImportReloadCoverRejectsSymlinkedManagedDirectory(t *testing.T) {
+	_, data := reloadCoverTestHome(t)
+	external, files := replaceReloadCoverDirWithSymlink(t, data)
+	source := writeReloadAsset(t, t.TempDir(), "source.png", []byte("source"))
+
+	if _, err := importReloadCover(source); err == nil {
+		t.Fatal("import through a symlinked managed directory was accepted")
+	}
+	assertReloadCoverFilesUnchanged(t, external, files)
 }
 
 func TestImportReloadCoverRejectsInvalidDestinationCollision(t *testing.T) {
@@ -323,6 +371,16 @@ func TestPruneReloadCoverKeepsOnlyManagedSelection(t *testing.T) {
 	}
 }
 
+
+func TestPruneReloadCoverRejectsSymlinkedManagedDirectory(t *testing.T) {
+	_, data := reloadCoverTestHome(t)
+	external, files := replaceReloadCoverDirWithSymlink(t, data)
+
+	if err := pruneReloadCover(""); err == nil {
+		t.Fatal("prune through a symlinked managed directory was accepted")
+	}
+	assertReloadCoverFilesUnchanged(t, external, files)
+}
 func TestImportReloadCoverKeepsCommittedAssetWhenPruning(t *testing.T) {
 	cfg, data := reloadCoverTestHome(t)
 	dir := filepath.Join(data, "ryoku", "reload-cover")

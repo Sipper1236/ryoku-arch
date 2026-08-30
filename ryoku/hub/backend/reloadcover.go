@@ -1,9 +1,11 @@
 package main
 
 import (
+	cryptorand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -11,6 +13,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"golang.org/x/sys/unix"
 )
 
 const reloadCoverMaxBytes int64 = 64 << 20
@@ -114,6 +118,42 @@ func managedReloadCoverPath(path string) bool {
 	return filepath.Dir(clean) == filepath.Clean(reloadCoverDir()) && reloadCoverManagedName.MatchString(filepath.Base(clean))
 }
 
+func openReloadCoverDir(create bool) (*os.File, error) {
+	dir := filepath.Clean(reloadCoverDir())
+	if create {
+		if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.Mkdir(dir, 0o755); err != nil && !os.IsExist(err) {
+			return nil, err
+		}
+	}
+	fd, err := unix.Open(dir, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, fmt.Errorf("reload-cover directory must be a real directory: %w", err)
+	}
+	return os.NewFile(uintptr(fd), dir), nil
+}
+
+func createReloadCoverTemp(dir *os.File) (*os.File, string, error) {
+	for range 10 {
+		var suffix [16]byte
+		if _, err := cryptorand.Read(suffix[:]); err != nil {
+			return nil, "", err
+		}
+		name := ".import-" + hex.EncodeToString(suffix[:])
+		fd, err := unix.Openat(int(dir.Fd()), name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
+		if errors.Is(err, unix.EEXIST) {
+			continue
+		}
+		if err != nil {
+			return nil, "", err
+		}
+		return os.NewFile(uintptr(fd), filepath.Join(dir.Name(), name)), name, nil
+	}
+	return nil, "", fmt.Errorf("couldn't create reload-cover temporary file")
+}
+
 func committedReloadCoverPath() string {
 	body, err := os.ReadFile(reloadCoverBrandPath())
 	if err != nil {
@@ -135,24 +175,25 @@ func pruneReloadCoverExcept(kept map[string]bool) error {
 			return fmt.Errorf("refusing reload-cover prune outside %s", dir)
 		}
 	}
-	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
+	managed, err := openReloadCoverDir(false)
+	if errors.Is(err, unix.ENOENT) {
 		return nil
 	}
+	if err != nil {
+		return err
+	}
+	defer managed.Close()
+	entries, err := managed.ReadDir(-1)
 	if err != nil {
 		return err
 	}
 	for _, entry := range entries {
 		name := entry.Name()
 		owned := reloadCoverManagedName.MatchString(name) || strings.HasPrefix(name, ".import-")
-		if entry.IsDir() || !owned {
+		if entry.IsDir() || !owned || kept[filepath.Join(dir, name)] {
 			continue
 		}
-		path := filepath.Join(dir, name)
-		if kept[path] {
-			continue
-		}
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		if err := unix.Unlinkat(int(managed.Fd()), name, 0); err != nil && !errors.Is(err, unix.ENOENT) {
 			return err
 		}
 	}
@@ -167,19 +208,20 @@ func pruneReloadCover(keep string) error {
 	return pruneReloadCoverExcept(kept)
 }
 
-func reusableReloadCoverDestination(path string, size int64, digest string) (bool, error) {
-	info, err := os.Lstat(path)
+func reusableReloadCoverDestination(dir *os.File, name string, size int64, digest string) (bool, error) {
+	fd, err := unix.Openat(int(dir.Fd()), name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return false, err
+	}
+	file := os.NewFile(uintptr(fd), filepath.Join(dir.Name(), name))
+	defer file.Close()
+	info, err := file.Stat()
 	if err != nil {
 		return false, err
 	}
 	if !info.Mode().IsRegular() || info.Size() != size {
 		return false, nil
 	}
-	file, err := os.Open(path)
-	if err != nil {
-		return false, err
-	}
-	defer file.Close()
 	hash := sha256.New()
 	copied, err := io.Copy(hash, io.LimitReader(file, size+1))
 	if err != nil {
@@ -212,17 +254,18 @@ func importReloadCover(raw string) (reloadCoverAsset, error) {
 	if err != nil {
 		return reloadCoverAsset{}, err
 	}
-	if err := os.MkdirAll(reloadCoverDir(), 0o755); err != nil {
-		return reloadCoverAsset{}, err
-	}
-	temp, err := os.CreateTemp(reloadCoverDir(), ".import-")
+	managed, err := openReloadCoverDir(true)
 	if err != nil {
 		return reloadCoverAsset{}, err
 	}
-	tempPath := temp.Name()
+	defer managed.Close()
+	temp, tempName, err := createReloadCoverTemp(managed)
+	if err != nil {
+		return reloadCoverAsset{}, err
+	}
 	defer func() {
-		if tempPath != "" {
-			os.Remove(tempPath)
+		if tempName != "" {
+			unix.Unlinkat(int(managed.Fd()), tempName, 0)
 		}
 	}()
 	hash := sha256.New()
@@ -247,10 +290,10 @@ func importReloadCover(raw string) (reloadCoverAsset, error) {
 		return reloadCoverAsset{}, err
 	}
 	digest := hex.EncodeToString(hash.Sum(nil))
-	destination := filepath.Join(reloadCoverDir(), digest+strings.ToLower(filepath.Ext(source)))
-	reusable, err := reusableReloadCoverDestination(destination, bytes, digest)
+	destinationName := digest + strings.ToLower(filepath.Ext(source))
+	reusable, err := reusableReloadCoverDestination(managed, destinationName, bytes, digest)
 	if os.IsNotExist(err) {
-		if err := os.Rename(tempPath, destination); err != nil {
+		if err := unix.Renameat(int(managed.Fd()), tempName, int(managed.Fd()), destinationName); err != nil {
 			return reloadCoverAsset{}, err
 		}
 	} else if err != nil {
@@ -258,7 +301,8 @@ func importReloadCover(raw string) (reloadCoverAsset, error) {
 	} else if !reusable {
 		return reloadCoverAsset{}, fmt.Errorf("existing reload-cover destination is not reusable")
 	}
-	tempPath = ""
+	tempName = ""
+	destination := filepath.Join(reloadCoverDir(), destinationName)
 	kept := map[string]bool{destination: true}
 	if committed := committedReloadCoverPath(); committed != "" {
 		kept[committed] = true
