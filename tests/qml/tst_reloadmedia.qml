@@ -48,6 +48,8 @@ Item {
         }
 
         function test_missing_image_reports_error_and_keeps_default() {
+            ignoreWarning(/QML AnimatedImage: Error Reading Animated Image File file:\/\/\/missing\/reload-cover\.png/)
+            ignoreWarning(/QML AnimatedImage: Error Reading Animated Image File file:\/\/\/missing\/reload-cover\.png/)
             const item = makeMedia({ path: "/missing/reload-cover.png", name: "missing.png", kind: "image", bytes: 1 })
             tryCompare(item, "mediaError", true, 3000)
             compare(item.showingDefault, true)
