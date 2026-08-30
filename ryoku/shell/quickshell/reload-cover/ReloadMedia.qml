@@ -37,10 +37,11 @@ Item {
 
     AnimatedImage {
         id: customImage
+        objectName: "customImage"
         anchors.fill: parent
         visible: root.imageReady && !root.forceDefault
         source: root.wantsImage ? (root.mediaPath.indexOf("://") >= 0 ? root.mediaPath : "file://" + root.mediaPath) : ""
-        sourceSize: Qt.size(Math.max(1, Math.ceil(width)), Math.max(1, Math.ceil(height)))
+        sourceSize.width: Math.max(1, Math.ceil(width))
         fillMode: Image.PreserveAspectFit
         asynchronous: true
         cache: false

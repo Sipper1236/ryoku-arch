@@ -38,6 +38,9 @@ Item {
             const item = makeMedia({ path: String(source), name: "logo.png", kind: "image", bytes: 1 })
             tryCompare(item, "customReady", true, 3000)
             compare(item.showingDefault, false)
+            const customImage = findChild(item, "customImage")
+            verify(!!customImage, "Custom image exists")
+            fuzzyCompare(customImage.paintedWidth / customImage.paintedHeight, 928 / 160, 0.02)
         }
 
         function test_animated_image_becomes_custom_media() {
