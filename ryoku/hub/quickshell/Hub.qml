@@ -835,11 +835,13 @@ Rectangle {
     Process { id: hyprRestore; onRunningChanged: if (!running && hub.quitting) Qt.quit() }
     function requestQuit() {
         if (hub.quitting) return;
-        var cleanup = ["ryoku-hub", "reload-cover", "prune"];
-        var keep = ReloadCoverModel.path(hub.committed.reloadCover);
-        if (keep !== "")
-            cleanup.push(keep);
-        Spawn.run(cleanup);
+        if (brandFV.loaded) {
+            var cleanup = ["ryoku-hub", "reload-cover", "prune"];
+            var keep = ReloadCoverModel.path(hub.committed.reloadCover);
+            if (keep !== "")
+                cleanup.push(keep);
+            Spawn.run(cleanup);
+        }
         // Bar Studio edits are already live on the desktop: an unsaved quit
         // puts the saved state back through the same channel before the Hub
         // goes, whichever way it was closed.
