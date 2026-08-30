@@ -11,6 +11,7 @@ PanelWindow {
     required property var targetScreen
     required property string phase
     required property bool startClose
+    required property var reloadCover
     signal mapped()
 
     screen: targetScreen
@@ -26,6 +27,13 @@ PanelWindow {
     property real diagonal: Math.sqrt(width * width + height * height)
     property real iris: diagonal
     property bool mappedReported: false
+    readonly property real mediaOpacity: {
+        if (cover.phase === "closing") return Math.max(0, 1 - cover.iris / (cover.diagonal * 0.38));
+        if (cover.phase === "hold" || cover.phase === "failed") return 1;
+        if (cover.phase === "opening") return Math.max(0, 1 - cover.iris / (cover.diagonal * 0.38));
+        return 0;
+    }
+
 
     function reportMapped(): void {
         if (!mappedReported && backingWindowVisible && width > 0 && height > 0) {
@@ -95,26 +103,19 @@ PanelWindow {
         }
     }
 
-    Image {
-        id: logo
-        anchors.centerIn: parent
-        source: "assets/logo.png"
-        sourceSize.width: Math.round(Math.min(parent.width * 0.58, 928))
-        fillMode: Image.PreserveAspectFit
-        width: sourceSize.width
-        height: width * 160 / 928
-        opacity: {
-            if (cover.phase === "closing") return Math.max(0, 1 - cover.iris / (cover.diagonal * 0.38));
-            if (cover.phase === "hold" || cover.phase === "failed") return 1;
-            if (cover.phase === "opening") return Math.max(0, 1 - cover.iris / (cover.diagonal * 0.38));
-            return 0;
-        }
+    ReloadMedia {
+        id: media
+        anchors.fill: parent
+        descriptor: cover.reloadCover
+        active: cover.backingWindowVisible
+        forceDefault: cover.phase === "failed"
+        opacity: cover.mediaOpacity
         scale: opacity < 1 ? 0.94 + opacity * 0.06 : 1
     }
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: logo.bottom
-        anchors.topMargin: 28
+        anchors.top: parent.verticalCenter
+        anchors.topMargin: media.defaultLogoHeight / 2 + 28
         visible: cover.phase === "failed"
         text: "RELOAD FAILED"
         color: "#ff735d"
