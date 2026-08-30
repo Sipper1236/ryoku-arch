@@ -11,11 +11,21 @@ Item {
     readonly property string mediaKind: descriptor && typeof descriptor.kind === "string" ? descriptor.kind : "default"
     readonly property bool wantsVideo: mediaPath !== "" && mediaKind === "video"
     readonly property bool wantsImage: mediaPath !== "" && (mediaKind === "image" || mediaKind === "animated")
-    readonly property bool imageReady: wantsImage && customImage.status === Image.Ready
+    readonly property string imageSource: mediaPath.indexOf("://") >= 0 ? mediaPath : "file://" + mediaPath
+    readonly property bool probeReady: imageProbe.status === Image.Ready
+    readonly property bool probeTall: imageProbe.implicitHeight > imageProbe.implicitWidth
+    readonly property bool imageReady: wantsImage
+        && customImageLoader.status === Loader.Ready
+        && customImageLoader.item
+        && customImageLoader.item.status === Image.Ready
     readonly property bool videoReady: videoLoader.status === Loader.Ready && videoLoader.item && videoLoader.item.ready
     readonly property bool customReady: !forceDefault && (imageReady || videoReady)
     readonly property bool mediaError: wantsImage
-        ? customImage.status === Image.Error
+        ? imageProbe.status === Image.Error
+            || (probeReady && (customImageLoader.status === Loader.Error
+                || (customImageLoader.status === Loader.Ready
+                    && customImageLoader.item
+                    && customImageLoader.item.status === Image.Error)))
         : (wantsVideo && (videoLoader.status === Loader.Error
             || (videoLoader.status === Loader.Ready && videoLoader.item && videoLoader.item.failed)))
     readonly property string mediaErrorText: wantsVideo && videoLoader.status === Loader.Ready && videoLoader.item
@@ -36,16 +46,50 @@ Item {
     }
 
     AnimatedImage {
-        id: customImage
-        objectName: "customImage"
-        anchors.fill: parent
-        visible: root.imageReady && !root.forceDefault
-        source: root.wantsImage ? (root.mediaPath.indexOf("://") >= 0 ? root.mediaPath : "file://" + root.mediaPath) : ""
-        sourceSize.width: Math.max(1, Math.ceil(width))
-        fillMode: Image.PreserveAspectFit
+        id: imageProbe
+        width: 0
+        height: 0
+        source: root.wantsImage ? root.imageSource : ""
+        sourceSize.width: 64
         asynchronous: true
         cache: false
-        playing: root.active && visible && status === Image.Ready
+        playing: false
+    }
+
+    Component {
+        id: wideImage
+        AnimatedImage {
+            objectName: "customImage"
+            anchors.fill: parent
+            source: root.imageSource
+            sourceSize.width: Math.max(1, Math.ceil(width))
+            fillMode: Image.PreserveAspectFit
+            asynchronous: true
+            cache: false
+            playing: root.active && root.imageReady && !root.forceDefault && status === Image.Ready
+        }
+    }
+
+    Component {
+        id: tallImage
+        AnimatedImage {
+            objectName: "customImage"
+            anchors.fill: parent
+            source: root.imageSource
+            sourceSize.height: Math.max(1, Math.ceil(height))
+            fillMode: Image.PreserveAspectFit
+            asynchronous: true
+            cache: false
+            playing: root.active && root.imageReady && !root.forceDefault && status === Image.Ready
+        }
+    }
+
+    Loader {
+        id: customImageLoader
+        anchors.fill: parent
+        active: root.wantsImage && root.probeReady && !root.forceDefault
+        visible: root.imageReady && !root.forceDefault
+        sourceComponent: root.probeTall ? tallImage : wideImage
     }
 
     Loader {

@@ -41,6 +41,19 @@ Item {
             const customImage = findChild(item, "customImage")
             verify(!!customImage, "Custom image exists")
             fuzzyCompare(customImage.paintedWidth / customImage.paintedHeight, 928 / 160, 0.02)
+            compare(customImage.sourceSize.width, Math.ceil(item.width))
+            compare(customImage.sourceSize.height, 0)
+        }
+
+        function test_tall_image_preserves_aspect_with_bounded_decode() {
+            const source = Qt.resolvedUrl("fixtures/tall.png")
+            const item = makeMedia({ path: String(source), name: "tall.png", kind: "image", bytes: 1 })
+            tryCompare(item, "customReady", true, 3000)
+            const customImage = findChild(item, "customImage")
+            verify(!!customImage, "Custom image exists")
+            fuzzyCompare(customImage.paintedWidth / customImage.paintedHeight, 640 / 12800, 0.01)
+            compare(customImage.sourceSize.width, 0)
+            compare(customImage.sourceSize.height, Math.ceil(item.height))
         }
 
         function test_animated_image_becomes_custom_media() {
@@ -51,7 +64,6 @@ Item {
         }
 
         function test_missing_image_reports_error_and_keeps_default() {
-            ignoreWarning(/QML AnimatedImage: Error Reading Animated Image File file:\/\/\/missing\/reload-cover\.png/)
             ignoreWarning(/QML AnimatedImage: Error Reading Animated Image File file:\/\/\/missing\/reload-cover\.png/)
             const item = makeMedia({ path: "/missing/reload-cover.png", name: "missing.png", kind: "image", bytes: 1 })
             tryCompare(item, "mediaError", true, 3000)
