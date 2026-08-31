@@ -1,42 +1,37 @@
 # Maintainer: Ryoku <releases@ryoku.dev>
 #
-# Ryogami: the Ryoku wallpaper daemon (Rust). One process owns image + live
-# wallpapers, the unified transition engine, matugen theming, and the depth
-# cutout worker, behind ryoku's line pub/sub on $XDG_RUNTIME_DIR/ryogami.sock.
-# It replaces the Go wallpaper backend and the C ryoku-livewall daemon.
+# Ryogami: the Ryoku wallpaper daemon (Go). One process owns the wallpaper
+# catalog (thumbnails, colours, favourites), applies through the in-shell
+# surface topic, the matugen palette, and the depth surface, behind ryoku's
+# line pub/sub on $XDG_RUNTIME_DIR/ryogami.sock. The vendored skwd-wall picker
+# (wall-ui) is its front end.
 #
-# built from the in-repo Cargo workspace at ryoku/shell/ryogami, no tarball
+# built from the in-repo Go module at ryoku/shell/ryogami/daemon, no tarball
 # fetched. publish CI runs makepkg inside this dir against a full checkout, so
-# the repo root is three levels up. CARGO_TARGET_DIR points into $srcdir so the
-# source tree stays untouched.
+# the repo root is three levels up; go builds into $srcdir so the source tree
+# stays untouched.
 pkgname=ryogami
-pkgver=${RYOKU_PKGVER:-0.1.0}
+pkgver=${RYOKU_PKGVER:-0.2.0}
 pkgrel=1
-pkgdesc="Ryogami: the Ryoku wallpaper daemon (image + live, transitions, depth)"
+pkgdesc="Ryogami: the Ryoku wallpaper daemon (catalog, thumbnails, applies, depth)"
 arch=('x86_64')
 url="https://ryoku.dev"
 license=('MIT')
-# runtime libs the renderer links: ffmpeg (libav* decode), wayland (client +
-# egl), mesa + libglvnd (EGL/GL), alsa-lib (cpal livewall audio). matugen
-# generates the palette on wallpaper apply.
-depends=('ffmpeg' 'wayland' 'mesa' 'libglvnd' 'alsa-lib' 'matugen' 'quickshell')
-# the rust toolchain builds it; clang drives ffmpeg-the-third's bindgen and git
-# fetches its git dependency. the rest are the dev headers the crates link
-# against, resolved through pkgconf.
-makedepends=('rust' 'clang' 'git' 'ffmpeg' 'wayland' 'wayland-protocols' 'mesa' 'alsa-lib' 'pkgconf')
+# runtime tools the daemon shells out to: imagemagick + ffmpeg (thumbnails and
+# colour extraction), matugen (palette on apply), quickshell (the wall-ui).
+depends=('imagemagick' 'ffmpeg' 'matugen' 'quickshell')
+makedepends=('go')
 source=()
 
 _repo="$startdir/../../.."
 
 build() {
-  cd "$_repo/ryoku/shell/ryogami"
-  # keep the checkout clean: cargo writes into $srcdir, not the source tree.
-  # --locked pins the resolve to the committed Cargo.lock.
-  CARGO_TARGET_DIR="$srcdir/target" cargo build --release --locked
+  cd "$_repo/ryoku/shell/ryogami/daemon"
+  go build -o "$srcdir/ryogami" .
 }
 
 package() {
-  install -Dm755 "$srcdir/target/release/ryogami" "$pkgdir/usr/bin/ryogami"
+  install -Dm755 "$srcdir/ryogami" "$pkgdir/usr/bin/ryogami"
   # user unit: systemd finds it under /usr/lib/systemd/user without materialize,
   # exactly where ExecStart already points (/usr/bin/ryogami).
   install -Dm644 "$_repo/ryoku/shell/systemd/user/ryogami.service" \

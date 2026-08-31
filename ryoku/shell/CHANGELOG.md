@@ -21,6 +21,18 @@
   them into the published frame and drops a cutout whose wallpaper already left
   the slot (`ipc/ryogami.go`, `ipc/depth.go`, `ryogami/src/server/routing.rs`).
 
+- **The ryogami daemon is now Go, not Rust.** A drop-in rewrite at
+  `ryogami/daemon/` keeps the whole wire contract (ryogami.sock verbs, JSON-RPC
+  with result payloads, `subscribe` event streaming, the wallpaper topic, the
+  depth surface, the wall-ui spawn) and the cache layout, so the picker, the
+  shell QML, the keybinds, and the depth bridge run unchanged while applies go
+  straight to the in-shell surface. The catalog persists as a JSON index that
+  reuses already-generated thumbnails; effects, optimize, convert, steam and
+  analysis answer unknown-method until ported (the default feature set never
+  calls them). Builds with the desktop's Go toolchain: no cargo, no Rust
+  dependency chain (`ryogami/daemon/`, `release/packages/ryogami/PKGBUILD`,
+  `deploy.sh`).
+
 - **Super+W opens the ryogami wallpaper picker, the vendored skwd-wall
   full-screen browser.** The picker QML (by liixini, MIT) is vendored under
   `ryogami/wall-ui/`, renamed to speak ryogami.sock (`ryogami.wall.*` events,

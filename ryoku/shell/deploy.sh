@@ -169,25 +169,17 @@ else
   say "skipped ryoku-livewall (toolchain or ffmpeg/wayland dev libs absent; live falls back to the still)"
 fi
 
-# Build ryogami, the Rust wallpaper daemon (image + live wallpapers, transition
-# engine, matugen theming, depth worker) the shell drives over ryogami.sock.
-# Needs the rust toolchain + clang and the ffmpeg/wayland/egl dev libs (build-
-# time only); skip cleanly when cargo is absent so a plain config deploy still
-# works (it ships prebuilt on installs). Builds into the workspace target dir and
-# installs the daemon to the same bin location as ryoku-shell.
-if command -v cargo >/dev/null 2>&1; then
-  say "building ryogami"
-  (cd "$here/ryogami" && cargo build --release --locked)
-  install -m755 "$here/ryogami/target/release/ryogami" "$bindir/ryogami"
-  say "installed $bindir/ryogami"
-else
-  say "skipped ryogami (rust/cargo absent; wallpaper daemon not rebuilt)"
-fi
+# Build ryogami, the Go wallpaper daemon (catalog, thumbs, applies, depth
+# surface) the shell and the wall-ui picker drive over ryogami.sock. Same Go
+# toolchain the rest of the desktop builds with, so no extra gate.
+say "building ryogami"
+(cd "$here/ryogami/daemon" && go build -o ryogami .)
+install -m755 "$here/ryogami/daemon/ryogami" "$bindir/ryogami"
+say "installed $bindir/ryogami"
 
 # Stage the wall-ui, the vendored skwd-wall picker the daemon spawns through
-# quickshell over ryogami.sock. Pure QML, so it deploys even without cargo; the
-# unit rewrite below points the daemon at this copy (the package resolver
-# default is /usr/share/ryogami instead).
+# quickshell over ryogami.sock. Pure QML; the unit rewrite below points the
+# daemon at this copy (the package resolver default is /usr/share/ryogami).
 datadir="${XDG_DATA_HOME:-$HOME/.local/share}"
 rm -rf "$datadir/ryogami/wall-ui"
 mkdir -p "$datadir/ryogami/wall-ui"

@@ -15,7 +15,7 @@ negative space. Both are handled below.
 ## How the parts fit
 
 ```
-ryoku-shell daemon (Go)                ryogami daemon (Rust)       shell (QML)
+ryoku-shell daemon (Go)                ryogami daemon (Go)         shell (QML)
 -----------------------                ---------------------       -----------
 depth refresh / set-enabled            wallpaper apply             depth/Singletons/Config.qml  (depth.json)
   -> scheduleDepth (async worker)        -> publishes frame            |  enabled, model, alphaMatting, feather, lift, shadow, front
