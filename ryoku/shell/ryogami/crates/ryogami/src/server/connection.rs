@@ -61,9 +61,13 @@ pub async fn run() -> anyhow::Result<()> {
         topics,
         wall_surface,
         depth,
-        resource_tier: Arc::new(Mutex::new(ResourceTier::default())),
+        resource_tier: Arc::new(Mutex::new(config.resource_tier)),
+        config_file: crate::config::config_path(),
         event_tx: event_tx.clone(),
     };
+    // The renderer reads the tier through `render::current_tier`; seed it from the
+    // persisted config so a restart honours the last `wallpaper resource`.
+    crate::render::set_tier(config.resource_tier);
     // Publish the empty snapshot so a subscriber before the first set sees a frame.
     state.wall_surface.publish_current().await;
     tokio::spawn(wall::depth::depth_worker(state.clone(), depth_rx));
@@ -137,6 +141,11 @@ pub async fn run() -> anyhow::Result<()> {
                             || prev_niri.backdrop_dim != new_cfg.niri.backdrop_dim;
                         *state.config.write().await = new_cfg;
                         let _ = broadcast_event(&tx, "ryogami.wall.config_changed", serde_json::json!({}));
+                        {
+                            let tier = state.config.read().await.resource_tier;
+                            *state.resource_tier.lock().await = tier;
+                            crate::render::set_tier(tier);
+                        }
 
                         let wallpapers_on = state.config.read().await.features.wallpapers;
                         if wallpapers_on && prev_engine != new_engine {

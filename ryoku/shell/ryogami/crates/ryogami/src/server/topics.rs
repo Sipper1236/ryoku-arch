@@ -58,27 +58,9 @@ impl Topics {
     }
 }
 
-/// Render fidelity tier. Drives the renderer's buffer policy in Task 3; stored on
-/// the running daemon by `wallpaper resource <low|medium|high>`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum ResourceTier {
-    Low,
-    #[default]
-    Medium,
-    High,
-}
-
-impl ResourceTier {
-    #[must_use]
-    pub fn parse(s: &str) -> Option<Self> {
-        match s {
-            "low" => Some(Self::Low),
-            "medium" => Some(Self::Medium),
-            "high" => Some(Self::High),
-            _ => None,
-        }
-    }
-}
+/// Render fidelity tier. Owned by `config` (persisted in ryogami.json); re-exported
+/// here so `SharedState` and the wire command keep their existing import path.
+pub use crate::config::ResourceTier;
 
 #[derive(Clone, Default)]
 struct WallEntry {

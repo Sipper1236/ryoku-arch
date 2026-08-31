@@ -7,10 +7,6 @@ use crate::wall::{self, optimize};
 
 use super::*;
 
-/// Cover is the schema default fit (ryoku contract 08 sec 8). Task 6 wires
-/// `wallpaper.content_fit` from ryogami.json; until then every set uses Cover.
-const DEFAULT_FIT: &str = "Cover";
-
 /// Dispatch one wire command line and return its single-line reply. `subscribe
 /// <topic>` is handled at the connection layer (topic streaming). A leading `{`
 /// is an internal JSON-RPC request (wall/optimize/effects/state), kept for those
@@ -69,10 +65,11 @@ async fn wallpaper_command(line: &str, state: &SharedState) -> String {
 }
 
 async fn wallpaper_set(state: &SharedState, path: &str, screen: &str) -> String {
+    let fit = crate::config::content_fit();
     if screen.is_empty() {
-        state.wall_surface.show(path, DEFAULT_FIT, None).await;
+        state.wall_surface.show(path, &fit, None).await;
     } else {
-        state.wall_surface.show_output(screen, path, DEFAULT_FIT, None).await;
+        state.wall_surface.show_output(screen, path, &fit, None).await;
     }
     *state.current_wallpaper.lock().await = Some(basename(path));
     state.depth.schedule(false);
@@ -136,7 +133,7 @@ async fn wallpaper_restore(state: &SharedState) -> String {
         Ok(name) if !name.is_empty() => {
             let p = cfg.wallpaper_dir().join(&name);
             if p.is_file() {
-                state.wall_surface.show(&p.display().to_string(), DEFAULT_FIT, None).await;
+                state.wall_surface.show(&p.display().to_string(), &crate::config::content_fit(), None).await;
             }
             *state.current_wallpaper.lock().await = Some(name);
             state.depth.schedule(false);
@@ -168,7 +165,11 @@ async fn wallpaper_resource(state: &SharedState, tokens: &[&str]) -> String {
         return "err wallpaper: resource expects low|medium|high".into();
     };
     *state.resource_tier.lock().await = tier;
+    state.config.write().await.resource_tier = tier;
     crate::render::set_tier(tier);
+    if let Err(e) = crate::config::persist_resource_tier(&state.config_file, tier) {
+        tracing::warn!("failed to persist resource tier: {e}");
+    }
     "ok".into()
 }
 
@@ -301,6 +302,11 @@ mod tests {
         let h = test_state();
         assert_eq!(dispatch_command("wallpaper resource high", &h.state).await, "ok");
         assert_eq!(*h.state.resource_tier.lock().await, ResourceTier::High);
+        assert_eq!(h.state.config.read().await.resource_tier, ResourceTier::High, "in-memory config updated");
+        // The tier is persisted to the (temp) ryogami.json so a restart honours it.
+        let persisted: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&h.state.config_file).unwrap()).unwrap();
+        assert_eq!(persisted["resource_tier"], "high");
         assert!(dispatch_command("wallpaper resource bogus", &h.state).await.starts_with("err"));
     }
 

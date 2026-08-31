@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::collections::BTreeMap;
 
 use tokio::process::Command;
 use tracing::{info, warn};
@@ -266,6 +267,185 @@ pub(super) async fn run_matugen_with(
     run_matugen_inner(image_path, config, &config_path, scheme, mode, color_index).await;
 }
 
+
+// --- ~/.cache/ryoku/colors.json ---------------------------------------------
+//
+// Ryogami owns the wallpaper-derived palette (the seam: ryoku-shell owns
+// named-scheme theming). On every apply the daemon authors the one palette file
+// every Quickshell `Scheme` singleton reads: base16 for the legacy readers plus
+// the camelCase Material 3 roles. The key set mirrors ryoku's Go
+// `matugenColorsJSON` so the file stays byte-shape compatible.
+
+/// matugen's snake_case Material 3 roles -> the camelCase keys the shell reads.
+const ROLE_KEYS: &[(&str, &str)] = &[
+    ("surface", "surface"),
+    ("surface_variant", "surfaceVariant"),
+    ("surface_container_lowest", "surfaceContainerLowest"),
+    ("surface_container_low", "surfaceContainerLow"),
+    ("surface_container", "surfaceContainer"),
+    ("surface_container_high", "surfaceContainerHigh"),
+    ("surface_container_highest", "surfaceContainerHighest"),
+    ("inverse_surface", "inverseSurface"),
+    ("inverse_on_surface", "inverseOnSurface"),
+    ("surface_tint", "surfaceTint"),
+    ("primary", "primary"),
+    ("primary_container", "primaryContainer"),
+    ("secondary", "secondary"),
+    ("secondary_container", "secondaryContainer"),
+    ("tertiary", "tertiary"),
+    ("tertiary_container", "tertiaryContainer"),
+    ("error", "error"),
+    ("error_container", "errorContainer"),
+    ("outline", "outline"),
+    ("outline_variant", "outlineVariant"),
+    ("on_surface", "onSurface"),
+    ("on_surface_variant", "onSurfaceVariant"),
+    ("on_primary", "onPrimary"),
+    ("on_primary_container", "onPrimaryContainer"),
+    ("on_secondary", "onSecondary"),
+    ("on_secondary_container", "onSecondaryContainer"),
+    ("on_tertiary", "onTertiary"),
+    ("on_tertiary_container", "onTertiaryContainer"),
+    ("on_error", "onError"),
+    ("on_error_container", "onErrorContainer"),
+    ("shadow", "shadow"),
+    ("scrim", "scrim"),
+];
+
+/// The sixteen base16 slots, mapped from the Material 3 palette exactly as ryoku's
+/// Go `matugenBase16` does so both palette sources read alike.
+fn base16(pal: &BTreeMap<String, String>) -> serde_json::Map<String, serde_json::Value> {
+    let pick = |k: &str, fallback: &str| -> String {
+        pal.get(k).filter(|v| !v.is_empty()).cloned().unwrap_or_else(|| fallback.to_string())
+    };
+    let bg = pick("surface", &pick("background", "#121212"));
+    let fg = pick("on_surface", &pick("on_background", "#e6e6e6"));
+    let primary = pick("primary", "#a8c7fa");
+    let secondary = pick("secondary", "#7cacf8");
+    let tertiary = pick("tertiary", "#ffb4a9");
+    let errc = pick("error", "#ffb4ab");
+    let outline = pick("outline", "#8e918f");
+    let c15 = pick("on_primary_container", &fg);
+    let slots: [(&str, &str); 19] = [
+        ("background", bg.as_str()),
+        ("foreground", fg.as_str()),
+        ("cursor", fg.as_str()),
+        ("color0", bg.as_str()),
+        ("color1", errc.as_str()),
+        ("color2", primary.as_str()),
+        ("color3", tertiary.as_str()),
+        ("color4", secondary.as_str()),
+        ("color5", primary.as_str()),
+        ("color6", tertiary.as_str()),
+        ("color7", fg.as_str()),
+        ("color8", outline.as_str()),
+        ("color9", errc.as_str()),
+        ("color10", primary.as_str()),
+        ("color11", tertiary.as_str()),
+        ("color12", secondary.as_str()),
+        ("color13", primary.as_str()),
+        ("color14", outline.as_str()),
+        ("color15", c15.as_str()),
+    ];
+    slots
+        .iter()
+        .map(|(k, v)| ((*k).to_string(), serde_json::Value::String((*v).to_string())))
+        .collect()
+}
+
+/// base16 slots plus the camelCase Material 3 roles: the colors.json body.
+fn colors_json(pal: &BTreeMap<String, String>) -> serde_json::Value {
+    let mut out = base16(pal);
+    for (snake, camel) in ROLE_KEYS {
+        if let Some(v) = pal.get(*snake)
+            && !v.is_empty()
+        {
+            out.insert((*camel).to_string(), serde_json::Value::String(v.clone()));
+        }
+    }
+    serde_json::Value::Object(out)
+}
+
+/// Flatten matugen's `-j hex` output (`colors.<role>.default.color`) into a
+/// `role -> hex` map.
+fn flat_palette(raw: &serde_json::Value) -> BTreeMap<String, String> {
+    let mut pal = BTreeMap::new();
+    if let Some(obj) = raw.get("colors").and_then(|v| v.as_object()) {
+        for (k, v) in obj {
+            if let Some(hex) = v.get("default").and_then(|d| d.get("color")).and_then(|c| c.as_str()) {
+                pal.insert(k.clone(), hex.to_string());
+            }
+        }
+    }
+    pal
+}
+
+/// Run matugen once in dry-run to read the palette for the applied image, mirroring
+/// the apply's scheme/mode/index/contrast so colors.json matches the rendered set.
+async fn extract_palette(
+    image_path: &str,
+    config: &Config,
+    scheme: &str,
+    mode: &str,
+    color_index: u32,
+) -> Option<serde_json::Value> {
+    let mut command = Command::new("matugen");
+    command
+        .arg("--dry-run")
+        .arg("-j")
+        .arg("hex")
+        .arg("image")
+        .arg("-t")
+        .arg(scheme)
+        .arg("-m")
+        .arg(mode)
+        .arg("--source-color-index")
+        .arg(color_index.to_string());
+    if let Some(contrast) = config.matugen_contrast() {
+        command.arg("--contrast").arg(contrast.to_string());
+    }
+    let out = command
+        .arg(image_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await
+        .ok()?;
+    if !out.status.success() {
+        warn!("matugen palette extract failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+        return None;
+    }
+    serde_json::from_slice(&out.stdout).ok()
+}
+
+/// Author `~/.cache/ryoku/colors.json` from the applied image. Coalesced with the
+/// rest of the matugen worker (the apply path themes the final wallpaper of a
+/// burst); written via temp + rename so a reader never sees a half-written file.
+async fn write_ryoku_colors(image_path: &str, config: &Config, scheme: &str, mode: &str, color_index: u32) {
+    let Some(raw) = extract_palette(image_path, config, scheme, mode, color_index).await else {
+        return;
+    };
+    let pal = flat_palette(&raw);
+    if pal.is_empty() {
+        return;
+    }
+    let path = config.colors_path();
+    if let Some(parent) = path.parent() {
+        let _ = tokio::fs::create_dir_all(parent).await;
+    }
+    let text = serde_json::to_string_pretty(&colors_json(&pal)).unwrap_or_default();
+    let tmp = path.with_extension("json.tmp");
+    if tokio::fs::write(&tmp, text).await.is_err() {
+        return;
+    }
+    if tokio::fs::rename(&tmp, &path).await.is_err() {
+        let _ = tokio::fs::remove_file(&tmp).await;
+        return;
+    }
+    info!("wrote wallpaper palette to {}", path.display());
+}
+
 pub(super) async fn run_matugen_inner(
     image_path: &str,
     config: &Config,
@@ -274,6 +454,9 @@ pub(super) async fn run_matugen_inner(
     mode: &str,
     color_index: u32,
 ) {
+    // Ryogami owns the wallpaper palette: author colors.json before fanning the
+    // same palette into the app templates below.
+    write_ryoku_colors(image_path, config, scheme, mode, color_index).await;
     let mut command = Command::new("matugen");
     command
         .arg("-c")
@@ -360,6 +543,51 @@ pub(super) async fn run_reloads(config: &Config) {
 mod tests {
     use super::*;
     use crate::config::Integration;
+
+    #[test]
+    fn colors_json_maps_base16_slots_and_m3_roles() {
+        let mut pal = BTreeMap::new();
+        pal.insert("surface".to_string(), "#111111".to_string());
+        pal.insert("on_surface".to_string(), "#eeeeee".to_string());
+        pal.insert("primary".to_string(), "#aabbcc".to_string());
+        pal.insert("secondary".to_string(), "#445566".to_string());
+        pal.insert("tertiary".to_string(), "#778899".to_string());
+        pal.insert("outline".to_string(), "#888888".to_string());
+        pal.insert("error".to_string(), "#ff0000".to_string());
+        let v = colors_json(&pal);
+        // base16 derived from the M3 roles (mirrors the Go matugenBase16 mapping).
+        assert_eq!(v["background"], "#111111"); // surface
+        assert_eq!(v["foreground"], "#eeeeee"); // on_surface
+        assert_eq!(v["color0"], "#111111");
+        assert_eq!(v["color1"], "#ff0000"); // error
+        assert_eq!(v["color2"], "#aabbcc"); // primary
+        assert_eq!(v["color4"], "#445566"); // secondary
+        assert_eq!(v["color8"], "#888888"); // outline
+        // camelCase M3 roles carried verbatim.
+        assert_eq!(v["surface"], "#111111");
+        assert_eq!(v["onSurface"], "#eeeeee");
+        assert_eq!(v["primary"], "#aabbcc");
+    }
+
+    #[test]
+    fn base16_falls_back_when_roles_absent() {
+        let v = colors_json(&BTreeMap::new());
+        assert_eq!(v["background"], "#121212", "empty palette -> documented fallback");
+        assert_eq!(v["foreground"], "#e6e6e6");
+    }
+
+    #[test]
+    fn flat_palette_reads_default_color() {
+        let raw = serde_json::json!({
+            "colors": {
+                "primary": { "default": { "color": "#123456" } },
+                "surface": { "default": { "color": "#abcdef" } },
+            }
+        });
+        let pal = flat_palette(&raw);
+        assert_eq!(pal.get("primary").map(String::as_str), Some("#123456"));
+        assert_eq!(pal.get("surface").map(String::as_str), Some("#abcdef"));
+    }
 
     #[tokio::test]
     async fn generate_matugen_config_skips_missing_template_files() {
@@ -508,6 +736,10 @@ mod tests {
         config.paths.cache = Some(cache.to_string_lossy().to_string());
         config.paths.templates = Some(dir.path().to_string_lossy().to_string());
         config.default_matugen_config = Some(user_cfg.to_string_lossy().to_string());
+        // Redirect the palette write into the temp dir so it never clobbers the
+        // developer's real ~/.cache/ryoku/colors.json.
+        let colors = dir.path().join("colors.json");
+        config.colors_path_override = Some(colors.clone());
 
         run_matugen(&img_path.to_string_lossy(), &config).await;
 
@@ -517,6 +749,15 @@ mod tests {
         );
         let content = std::fs::read_to_string(&user_out).unwrap();
         assert!(content.starts_with("primary=#"), "template rendered: {content}");
+
+        // Ryogami owns the wallpaper palette: colors.json is authored on apply,
+        // carrying the base16 slots and the camelCase Material 3 roles.
+        assert!(colors.exists(), "colors.json authored on apply");
+        let pal: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(&std::fs::read_to_string(&colors).unwrap()).unwrap();
+        for key in ["background", "foreground", "color0", "surface", "primary", "onSurface"] {
+            assert!(pal.get(key).and_then(|v| v.as_str()).is_some_and(|s| s.starts_with('#')), "colors.json role {key}");
+        }
     }
 
     #[tokio::test]

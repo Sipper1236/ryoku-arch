@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use serde::Deserialize;
-use tracing::info;
+use tracing::{info, warn};
 
 #[derive(Debug, Clone, Deserialize, Default)]
 #[allow(dead_code)]
@@ -56,6 +56,45 @@ pub struct Config {
     pub paper: PaperConfig,
     #[serde(default)]
     pub we_render: WeRenderConfig,
+    /// Render fidelity, persisted by `wallpaper resource`; seeds the renderer tier.
+    #[serde(default)]
+    pub resource_tier: ResourceTier,
+    /// Redirect for the wallpaper palette file (default `~/.cache/ryoku/colors.json`);
+    /// not user-facing, set only so tests never write the real cache.
+    #[serde(skip)]
+    pub colors_path_override: Option<PathBuf>,
+}
+
+/// Render fidelity tier. Drives the renderer's buffer policy (Task 3), set by the
+/// `wallpaper resource` command and persisted to ryogami.json (Task 6).
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ResourceTier {
+    Low,
+    #[default]
+    Medium,
+    High,
+}
+
+impl ResourceTier {
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "low" => Some(Self::Low),
+            "medium" => Some(Self::Medium),
+            "high" => Some(Self::High),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -609,6 +648,13 @@ impl Config {
         resolve_path(configured.or(Some("~/.config/matugen/config.toml")))
     }
 
+    /// Where the wallpaper palette is authored on apply; the ryoku contract path
+    /// unless a test redirected it.
+    #[must_use]
+    pub fn colors_path(&self) -> PathBuf {
+        self.colors_path_override.clone().unwrap_or_else(ryoku_colors_path)
+    }
+
     pub fn data_dir() -> PathBuf {
         if let Ok(p) = std::env::var("RYOGAMI_DATA_DIR") {
             return PathBuf::from(p);
@@ -632,8 +678,58 @@ pub fn config_dir() -> PathBuf {
     )
 }
 
+/// ryoku's per-user config dir (`~/.config/ryoku`), shared with the Go shell.
+#[must_use]
+pub fn ryoku_config_dir() -> PathBuf {
+    std::env::var("XDG_CONFIG_HOME")
+        .map_or_else(|_| home().join(".config"), PathBuf::from)
+        .join("ryoku")
+}
+
+/// The daemon config file, self-seeded and watched: `~/.config/ryoku/ryogami.json`.
+#[must_use]
 pub fn config_path() -> PathBuf {
-    config_dir().join("config.json")
+    ryoku_config_dir().join("ryogami.json")
+}
+
+/// The wallpaper-derived palette Ryogami owns: `~/.cache/ryoku/colors.json`.
+#[must_use]
+pub fn ryoku_colors_path() -> PathBuf {
+    std::env::var("XDG_CACHE_HOME")
+        .map_or_else(|_| home().join(".cache"), PathBuf::from)
+        .join("ryoku")
+        .join("colors.json")
+}
+
+/// The topic frame `fit`, read live from ryoku's `shell.json` `wallpaper.content_fit`
+/// (the Settings UI owns it, mirroring `transition_preset`). One of the four fits
+/// ryoku's QML maps to `Image.fillMode`; an unknown/absent value is Cover.
+#[must_use]
+pub fn content_fit() -> String {
+    content_fit_in(&ryoku_config_dir())
+}
+
+fn content_fit_in(ryoku_dir: &std::path::Path) -> String {
+    const MODES: [&str; 4] = ["Contain", "Cover", "Fill", "ScaleDown"];
+    #[derive(Deserialize, Default)]
+    struct ShellJson {
+        #[serde(default)]
+        wallpaper: ShellWallpaper,
+    }
+    #[derive(Deserialize, Default)]
+    struct ShellWallpaper {
+        #[serde(default)]
+        content_fit: String,
+    }
+    let parsed = std::fs::read(ryoku_dir.join("shell.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<ShellJson>(&b).ok())
+        .unwrap_or_default();
+    if MODES.contains(&parsed.wallpaper.content_fit.as_str()) {
+        parsed.wallpaper.content_fit
+    } else {
+        "Cover".to_string()
+    }
 }
 
 pub fn shell_config_path() -> PathBuf {
@@ -656,14 +752,24 @@ struct ShellConfig {
 
 pub fn load() -> anyhow::Result<Config> {
     let path = config_path();
-    let mut cfg = if path.exists() {
-        let text = std::fs::read_to_string(&path)?;
-        let parsed: Config = serde_json::from_str(&text)?;
-        info!("config loaded from {}", path.display());
-        parsed
-    } else {
-        info!("no config at {}, using defaults", path.display());
-        Config::default()
+    if !path.exists() {
+        seed_default(&path);
+    }
+    let mut cfg = match std::fs::read_to_string(&path) {
+        Ok(text) => match serde_json::from_str::<Config>(&text) {
+            Ok(parsed) => {
+                info!("config loaded from {}", path.display());
+                parsed
+            }
+            Err(e) => {
+                warn!("config at {} unparseable ({e}); using defaults", path.display());
+                Config::default()
+            }
+        },
+        Err(_) => {
+            info!("no config at {}, using defaults", path.display());
+            Config::default()
+        }
     };
 
     let shell_path = shell_config_path();
@@ -683,6 +789,48 @@ pub fn load() -> anyhow::Result<Config> {
     }
 
     Ok(cfg)
+}
+
+/// Write a starter `ryogami.json` the first time the daemon runs, so the user has
+/// a documented file to edit (the schema is default-tolerant, so this is just the
+/// two ryoku-facing knobs, not the whole surface). Best-effort: a failure leaves
+/// the daemon on in-memory defaults.
+fn seed_default(path: &std::path::Path) {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let seed = serde_json::json!({
+        "resource_tier": "medium",
+        "matugen": { "schemeType": "scheme-fidelity", "mode": "dark" },
+    });
+    let ok = serde_json::to_string_pretty(&seed)
+        .ok()
+        .is_some_and(|text| std::fs::write(path, text).is_ok());
+    if ok {
+        info!("seeded default config at {}", path.display());
+    } else {
+        warn!("could not seed config at {}", path.display());
+    }
+}
+
+/// Persist the resource tier back into `ryogami.json`, preserving every other key
+/// (including ones the daemon does not model). Written via a temp file + rename so
+/// a reader never observes a half-written config.
+pub fn persist_resource_tier(path: &std::path::Path, tier: ResourceTier) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut root = std::fs::read_to_string(path)
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .filter(serde_json::Value::is_object)
+        .unwrap_or_else(|| serde_json::json!({}));
+    root["resource_tier"] = serde_json::Value::String(tier.as_str().to_string());
+    let text = serde_json::to_string_pretty(&root)?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, text)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
 }
 
 fn home() -> PathBuf {
@@ -967,5 +1115,66 @@ mod tests {
         assert_eq!(e.auto_recolor_theme(), "Catppuccin", "blank -> default theme");
         e.auto_theme = "Tokyo Night".into();
         assert_eq!(e.auto_recolor_theme(), "Tokyo Night", "explicit theme wins");
+    }
+
+    #[test]
+    fn resource_tier_defaults_to_medium_and_tolerates_unknown_keys() {
+        // A future/unknown key never fails the parse (no deny_unknown_fields).
+        let c: Config = serde_json::from_str(r#"{"someFutureKey":42,"nested":{"x":1}}"#).unwrap();
+        assert_eq!(c.resource_tier, ResourceTier::Medium, "absent -> Medium");
+    }
+
+    #[test]
+    fn resource_tier_round_trips_each_variant() {
+        for (json, want) in [
+            (r#"{"resource_tier":"low"}"#, ResourceTier::Low),
+            (r#"{"resource_tier":"medium"}"#, ResourceTier::Medium),
+            (r#"{"resource_tier":"high"}"#, ResourceTier::High),
+        ] {
+            let c: Config = serde_json::from_str(json).unwrap();
+            assert_eq!(c.resource_tier, want);
+            assert_eq!(ResourceTier::parse(want.as_str()), Some(want), "parse/as_str agree");
+        }
+    }
+
+    #[test]
+    fn content_fit_reads_shell_json_and_defaults_to_cover() {
+        let dir = tempfile::tempdir().unwrap();
+        // No shell.json -> Cover.
+        assert_eq!(content_fit_in(dir.path()), "Cover", "absent file -> Cover");
+        // Unknown value -> Cover.
+        std::fs::write(dir.path().join("shell.json"), r#"{"wallpaper":{"content_fit":"Bogus"}}"#).unwrap();
+        assert_eq!(content_fit_in(dir.path()), "Cover", "unknown value -> Cover");
+        // Each valid fit round-trips.
+        for fit in ["Contain", "Cover", "Fill", "ScaleDown"] {
+            std::fs::write(dir.path().join("shell.json"), format!(r#"{{"wallpaper":{{"content_fit":"{fit}"}}}}"#)).unwrap();
+            assert_eq!(content_fit_in(dir.path()), fit);
+        }
+    }
+
+    #[test]
+    fn seeded_config_round_trips_with_medium_tier() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ryogami.json");
+        seed_default(&path);
+        assert!(path.exists(), "seed writes the file");
+        let c: Config = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(c.resource_tier, ResourceTier::Medium);
+    }
+
+    #[test]
+    fn persist_resource_tier_writes_and_preserves_unknown_keys() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ryogami.json");
+        std::fs::write(&path, r#"{"resource_tier":"low","userKept":"x"}"#).unwrap();
+        persist_resource_tier(&path, ResourceTier::High).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(v["resource_tier"], "high", "tier overwritten");
+        assert_eq!(v["userKept"], "x", "unmodeled key preserved");
+        // A missing file is created from scratch.
+        let fresh = dir.path().join("fresh.json");
+        persist_resource_tier(&fresh, ResourceTier::Low).unwrap();
+        let f: Config = serde_json::from_str(&std::fs::read_to_string(&fresh).unwrap()).unwrap();
+        assert_eq!(f.resource_tier, ResourceTier::Low);
     }
 }

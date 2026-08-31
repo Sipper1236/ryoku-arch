@@ -1,3 +1,4 @@
+mod client;
 mod config;
 mod db;
 mod render;
@@ -13,9 +14,15 @@ const VERSION: &str = env!("RYOGAMI_VERSION");
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    if std::env::args().skip(1).any(|a| a == "--version" || a == "-V") {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--version" || a == "-V") {
         println!("ryogami {VERSION}");
         return Ok(());
+    }
+    // A `wallpaper …` / `depth …` subcommand acts as a client to the running
+    // daemon; anything else (no args, or `daemon`) starts the daemon below.
+    if let Some(line) = client::command_line(&args) {
+        return client::run(&line).await;
     }
 
     let log_dir = std::env::var("XDG_CACHE_HOME")

@@ -127,3 +127,43 @@ fn subscribe_to_unknown_topic_errors() {
     r.read_line(&mut line).unwrap();
     assert!(line.trim().starts_with("err"), "expected err, got {line:?}");
 }
+
+#[test]
+fn cli_wallpaper_set_publishes_frame() {
+    // The real `ryogami` binary, given a subcommand, acts as a client: it connects
+    // to ryogami.sock, sends the line command, and a topic subscriber sees the frame.
+    let d = start_daemon();
+    let runtime = d.sock.parent().unwrap().to_path_buf();
+
+    let sub = connect(&d.sock);
+    sub.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let mut sub_w = sub.try_clone().unwrap();
+    let mut sub_r = BufReader::new(sub);
+    sub_w.write_all(b"subscribe wallpaper\n").unwrap();
+    sub_w.flush().unwrap();
+    let init_rev = read_frame(&mut sub_r)["default"]["revision"].as_i64().unwrap();
+
+    let img = d.root.join("cli.png");
+    std::fs::write(&img, b"placeholder").unwrap();
+    let img_str = img.display().to_string();
+
+    let out = Command::new(env!("CARGO_BIN_EXE_ryogami"))
+        .arg("wallpaper")
+        .arg("set")
+        .arg(&img_str)
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("HOME", &d.root)
+        .output()
+        .expect("run ryogami client");
+    assert!(
+        out.status.success(),
+        "client exit={:?} stderr={}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "ok", "client prints daemon reply");
+
+    let frame = read_frame(&mut sub_r);
+    assert_eq!(frame["default"]["path"].as_str().unwrap(), img_str, "frame carries the CLI's path");
+    assert!(frame["default"]["revision"].as_i64().unwrap() > init_rev, "revision bumped");
+}

@@ -66,6 +66,8 @@ pub struct SharedState {
     pub depth: crate::wall::depth::DepthHandle,
     /// Render fidelity, set by `wallpaper resource`; read by the renderer.
     pub resource_tier: Arc<Mutex<ResourceTier>>,
+    /// The `ryogami.json` path; `wallpaper resource` persists the tier here.
+    pub config_file: std::path::PathBuf,
     /// Internal event bus (progress/watcher signals); not on the wire.
     pub event_tx: broadcast::Sender<String>,
 }
@@ -112,6 +114,9 @@ pub async fn auto_optimize_if_enabled(
 #[cfg(test)]
 pub(crate) struct TestHarness {
     pub state: SharedState,
+    // Owns the throwaway dir backing `state.config_file` so tier-persist tests
+    // never touch the developer's real ~/.config/ryoku/ryogami.json.
+    _tmp: tempfile::TempDir,
 }
 
 #[cfg(test)]
@@ -131,6 +136,7 @@ pub(crate) fn test_state() -> TestHarness {
     let (event_tx, _events) = broadcast::channel::<String>(256);
     let config = Config::default();
     let (wall_surface, topics) = WallSurface::new();
+    let tmp = tempfile::tempdir().expect("temp config dir");
     let state = SharedState {
         config: Arc::new(RwLock::new(config.clone())),
         db: Arc::new(Mutex::new(db::open_in_memory().expect("in-memory db"))),
@@ -147,10 +153,11 @@ pub(crate) fn test_state() -> TestHarness {
         topics,
         wall_surface,
         resource_tier: Arc::new(Mutex::new(ResourceTier::default())),
+        config_file: tmp.path().join("ryogami.json"),
         depth: crate::wall::depth::DepthHandle::new().0,
         event_tx,
     };
-    TestHarness { state }
+    TestHarness { state, _tmp: tmp }
 }
 
 #[cfg(test)]
