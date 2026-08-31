@@ -96,6 +96,8 @@ func Update(args []string) error {
 	// checkout: update through the git channel. packaged: pacman + a hand-off
 	// to the freshly installed binary (stage2).
 	if checkout {
+		logPath := startUpdateLog()
+		defer stopUpdateLog()
 		if err := channelUpdate(); err != nil {
 			progress.fail(err)
 			return err
@@ -107,6 +109,9 @@ func Update(args []string) error {
 		progress.at("finalize")
 		snapperPost(pre, "ryoku-update")
 		progress.logf("Update complete")
+		if logPath != "" {
+			fmt.Println("  " + sys.Dim("full log: "+logPath))
+		}
 		return finishRun()
 	}
 

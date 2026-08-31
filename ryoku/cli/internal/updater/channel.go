@@ -116,9 +116,9 @@ func channelUpdate() error {
 		return err
 	}
 	if after := gitShort(repo, "HEAD"); after != before {
-		progress.logf("Advanced %s -> %s", before, after)
+		progress.logf("Advanced %s -> %s (v%s %s)", before, after, readVersion(repo), ch)
 	} else {
-		progress.logf("Already on the latest %s commit (%s)", ch, before)
+		progress.logf("Already on the latest %s (v%s, %s)", ch, readVersion(repo), before)
 	}
 
 	progress.at("deploy")
@@ -137,6 +137,17 @@ func deployRun(path string) error {
 		return sys.Run(path)
 	}
 	return renderQuiet([]string{path})
+}
+
+// readVersion reads the checkout's VERSION file (e.g. 0.50.8-beta.19), the
+// release bump every push carries, so the update names the version, not just the
+// commit. "?" when absent.
+func readVersion(repo string) string {
+	b, err := os.ReadFile(filepath.Join(repo, "VERSION"))
+	if err != nil {
+		return "?"
+	}
+	return strings.TrimSpace(string(b))
 }
 
 // syncChannel advances a clean checkout onto origin/<ch> when that is a lossless

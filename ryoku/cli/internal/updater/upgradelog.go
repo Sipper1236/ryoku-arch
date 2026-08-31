@@ -7,8 +7,11 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	"ryoku-cli/internal/sys"
 )
@@ -63,12 +66,130 @@ func renderUpgrade(phase string, argv []string) error {
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
 	sc.Split(scanLinesCR)
 	for sc.Scan() {
+		logRaw(sc.Text())
 		r.feed(sc.Text())
 	}
 	pr.Close()
 	werr := cmd.Wait()
 	r.finish(werr == nil)
 	return werr
+}
+
+// rawLog, set for the duration of an update, receives every unstyled line the
+// renderers consume, so the full firehose is preserved for review even though
+// the terminal shows only the curated view.
+var rawLog io.Writer
+
+func logRaw(line string) {
+	if rawLog != nil {
+		fmt.Fprintln(rawLog, line)
+	}
+}
+
+var updateLogFile *os.File
+
+// startUpdateLog opens the per-update raw log (overwritten each run) and points
+// rawLog at it, so a curated run still leaves the full firehose to read. Returns
+// the path, or "" when it cannot be created (logging is best-effort).
+func startUpdateLog() string {
+	path := filepath.Join(sys.Xdg("XDG_STATE_HOME", ".local/state"), "ryoku", "update-log.txt")
+	if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
+		return ""
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return ""
+	}
+	updateLogFile = f
+	rawLog = f
+	return path
+}
+
+func stopUpdateLog() {
+	rawLog = nil
+	if updateLogFile != nil {
+		updateLogFile.Close()
+		updateLogFile = nil
+	}
+}
+
+// liveSpinner animates on a timer, so a long silent step (a plugin compile that
+// prints nothing for a minute) keeps spinning instead of looking hung. set()
+// swaps the label, the ticker redraws, perm() prints a line above the spinner.
+// Every write is serialized through the mutex.
+type liveSpinner struct {
+	mu     sync.Mutex
+	w      io.Writer
+	label  string
+	frame  int
+	active bool
+	stop   chan struct{}
+	done   chan struct{}
+}
+
+func newLiveSpinner(w io.Writer) *liveSpinner {
+	s := &liveSpinner{w: w, stop: make(chan struct{}), done: make(chan struct{})}
+	go s.loop()
+	return s
+}
+
+func (s *liveSpinner) loop() {
+	t := time.NewTicker(120 * time.Millisecond)
+	defer t.Stop()
+	defer close(s.done)
+	for {
+		select {
+		case <-s.stop:
+			return
+		case <-t.C:
+			s.mu.Lock()
+			s.draw()
+			s.mu.Unlock()
+		}
+	}
+}
+
+// draw redraws the current label in place; the caller holds the lock.
+func (s *liveSpinner) draw() {
+	if s.label == "" {
+		return
+	}
+	f := string(spinFrames[s.frame%len(spinFrames)])
+	s.frame++
+	label := s.label
+	if w := sys.TermWidth() - 1; len(label)+4 > w && w > 4 {
+		label = label[:w-4]
+	}
+	fmt.Fprint(s.w, "\r\033[K  "+sys.Brand(f)+" "+sys.Dim(label))
+	s.active = true
+}
+
+func (s *liveSpinner) set(label string) {
+	s.mu.Lock()
+	s.label = label
+	s.draw() // show the new step at once, without waiting for the next tick
+	s.mu.Unlock()
+}
+
+func (s *liveSpinner) perm(line string) {
+	s.mu.Lock()
+	if s.active {
+		fmt.Fprint(s.w, "\r\033[K")
+		s.active = false
+	}
+	fmt.Fprintln(s.w, line)
+	s.mu.Unlock()
+}
+
+func (s *liveSpinner) close() {
+	close(s.stop)
+	<-s.done
+	s.mu.Lock()
+	if s.active {
+		fmt.Fprint(s.w, "\r\033[K")
+		s.active = false
+	}
+	s.mu.Unlock()
 }
 
 // renderQuiet runs argv showing a single in-place spinner of its current line
@@ -95,13 +216,7 @@ func renderQuiet(argv []string) error {
 		return err
 	}
 	pw.Close()
-	frame, active := 0, false
-	clear := func() {
-		if active {
-			fmt.Fprint(os.Stdout, "\r\033[K")
-			active = false
-		}
-	}
+	sp := newLiveSpinner(os.Stdout)
 	sc := bufio.NewScanner(pr)
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
 	sc.Split(scanLinesCR)
@@ -110,26 +225,19 @@ func renderQuiet(argv []string) error {
 		if line == "" {
 			continue
 		}
+		logRaw(line)
 		switch {
 		case quietError(line):
-			clear()
-			fmt.Fprintln(os.Stdout, "  "+sys.Red("✗ ")+line)
+			sp.perm("  " + sys.Red("✗ ") + line)
 		case quietWarn(line):
-			clear()
-			fmt.Fprintln(os.Stdout, "  "+sys.Amber("! ")+line)
+			sp.perm("  " + sys.Amber("! ") + line)
 		default:
-			f := string(spinFrames[frame%len(spinFrames)])
-			frame++
-			if w := sys.TermWidth() - 1; len(line)+4 > w && w > 4 {
-				line = line[:w-4]
-			}
-			fmt.Fprint(os.Stdout, "\r\033[K  "+sys.Brand(f)+" "+sys.Dim(line))
-			active = true
+			sp.set(line)
 		}
 	}
 	pr.Close()
 	werr := cmd.Wait()
-	clear()
+	sp.close()
 	return werr
 }
 
