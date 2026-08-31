@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **ryoku-gpu grows `check-pin` and marks forced pins.** `check-pin` audits the
+  written gpu.lua against today's policy in one verdict line (`ok` | `forced` |
+  `stale-pin SLOT`), living beside the policy it audits so the ryoku doctor
+  never re-implements laptop or GPU detection. A `RYOKU_GPU_FORCE=1 persist`
+  now writes a `-- ryoku-gpu-forced` marker so a deliberate laptop pin is never
+  reverted by tooling (`system/hardware/gpu/ryoku-gpu`).
+
 ### Added
 - `ttf-maple-mono-nf` (release/packages + base.packages): Maple Mono, Nerd Font
   variant, shipped from [ryoku] as the upstream prebuilt NF release so it
