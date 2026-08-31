@@ -10,6 +10,12 @@ pkgdesc="Oh My Zsh framework for the Ryoku Zsh integration"
 arch=('any')
 url='https://github.com/ohmyzsh/ohmyzsh'
 license=('MIT')
+# Supersede the AUR builds that own /usr/share/oh-my-zsh: without this, a box
+# that already has oh-my-zsh-git installed aborts the update with hundreds of
+# "exists in filesystem" file conflicts. replaces makes pacman swap them out.
+provides=('oh-my-zsh')
+conflicts=('oh-my-zsh' 'oh-my-zsh-git')
+replaces=('oh-my-zsh' 'oh-my-zsh-git')
 makedepends=('git')
 _omz_commit=4b657407c98bbc8830ae66c2ac7ff3d737c55a83
 source=("oh-my-zsh::git+$url.git#commit=$_omz_commit")
