@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"ryoku-cli/internal/sys"
 	"strconv"
 	"strings"
@@ -3192,6 +3193,7 @@ type pacnewOutcome int
 const (
 	pacnewIdentical pacnewOutcome = iota // bytes match: pacman's new default is already in place
 	pacnewRyokuOnly                      // differs only by Ryoku's deterministic [ryoku] repo stanza
+	pacnewLocaleGen                      // locale.gen re-shipping the template that re-comments the user's locale
 	pacnewConflict                       // a real merge only a human should make
 )
 
@@ -3210,7 +3212,36 @@ func classifyPacnew(livePath string, live, pacnew []byte) pacnewOutcome {
 		bytes.Equal(trimTrailing(stripRyokuRepoStanza(live)), trimTrailing(pacnew)) {
 		return pacnewRyokuOnly
 	}
+	// locale.gen perpetually .pacnews: the installer uncomments the user's
+	// locale, so every glibc bump re-ships the all-commented template (and now and
+	// then a new obscure commented locale). On a configured system it is never
+	// user-actionable -- the active locales live in the real file and dropping the
+	// .pacnew never touches them -- so clear it instead of nagging forever.
+	if filepath.Base(livePath) == "locale.gen" && localeConfigured(live) {
+		return pacnewLocaleGen
+	}
 	return pacnewConflict
+}
+
+var localeCharsetRe = regexp.MustCompile(`^[A-Z0-9][A-Z0-9._-]*$`)
+
+// localeConfigured reports whether locale.gen has at least one active
+// (uncommented) locale definition, i.e. a normal configured system whose
+// locale.gen.pacnew is just the re-shipped template. A charset-shaped second
+// field distinguishes a locale line from the prose header.
+func localeConfigured(live []byte) bool {
+	sc := bufio.NewScanner(bytes.NewReader(live))
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 2 && strings.ContainsAny(fields[0], "_.") && localeCharsetRe.MatchString(fields[1]) {
+			return true
+		}
+	}
+	return false
 }
 
 // stripRyokuRepoStanza removes the `[ryoku]` section (and a single blank
@@ -3280,9 +3311,9 @@ func reconcilePacnew(checkOnly bool) recResult {
 	}
 	if conflicts == 0 {
 		if checkOnly {
-			return wouldRes("%d pending .pacnew are safe to drop (identical to the live config or only the [ryoku] repo addition)", resolved)
+			return wouldRes("%d pending .pacnew are safe to drop (identical to the live config, only the [ryoku] repo addition, or a re-commented locale.gen)", resolved)
 		}
-		return fixedRes("cleared %d safe .pacnew (identical to the live config or only the [ryoku] repo addition)", resolved)
+		return fixedRes("cleared %d safe .pacnew (identical to the live config, only the [ryoku] repo addition, or a re-commented locale.gen)", resolved)
 	}
 	msg := warnRes("%d pending config update(s) (.pacnew) need review", conflicts)
 	if resolved > 0 {
