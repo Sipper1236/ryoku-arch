@@ -169,6 +169,21 @@ else
   say "skipped ryoku-livewall (toolchain or ffmpeg/wayland dev libs absent; live falls back to the still)"
 fi
 
+# Build ryogami, the Rust wallpaper daemon (image + live wallpapers, transition
+# engine, matugen theming, depth worker) the shell drives over ryogami.sock.
+# Needs the rust toolchain + clang and the ffmpeg/wayland/egl dev libs (build-
+# time only); skip cleanly when cargo is absent so a plain config deploy still
+# works (it ships prebuilt on installs). Builds into the workspace target dir and
+# installs the daemon to the same bin location as ryoku-shell.
+if command -v cargo >/dev/null 2>&1; then
+  say "building ryogami"
+  (cd "$here/ryogami" && cargo build --release --locked)
+  install -m755 "$here/ryogami/target/release/ryogami" "$bindir/ryogami"
+  say "installed $bindir/ryogami"
+else
+  say "skipped ryogami (rust/cargo absent; wallpaper daemon not rebuilt)"
+fi
+
 # Build the Ryoku Hub backend (a separate Go binary; the hub's quickshell config
 # shells out to it for the keybind legend and its TOML config).
 say "building ryoku-hub"
@@ -531,6 +546,9 @@ mkdir -p "$cfg/systemd/user"; cp -a "$here/systemd/user/." "$cfg/systemd/user/"
 # dev deploy runs the daemon from ~/.local/bin; the package ships /usr/bin.
 sed -i -e "s|^ExecStart=.*|ExecStart=$bindir/ryoku-shell daemon|" \
   -e "s|^ExecStartPre=.*|ExecStartPre=-$bindir/ryoku-shell quit|" "$cfg/systemd/user/ryoku-shell.service"
+# ryogami.service ships ExecStart=/usr/bin/ryogami (the package path); point the
+# dev-deployed unit at ~/.local/bin, mirroring the ryoku-shell rewrite above.
+sed -i "s|^ExecStart=.*|ExecStart=$bindir/ryogami|" "$cfg/systemd/user/ryogami.service"
 systemctl --user daemon-reload 2>/dev/null || true
 # ryoku-ai-usage.service ships three ExecStart=-/usr/bin/<collector> lines (the
 # package path); rewrite them to ~/.local/bin so the dev-deployed collectors
