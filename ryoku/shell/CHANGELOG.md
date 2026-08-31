@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Changed
+- **ryogami: the light/dark toggle now retints the whole desktop, and the
+  ollama AI tagging subsystem is gone.** The picker's light/dark (and
+  scheme/source-colour) controls called a `wall.retheme` RPC the ryogami
+  daemon never implemented and which never ran matugen, so the choice never
+  left the picker; they now hand the knobs to the shell's one matugen store
+  (`ryoku-hub hypr matugen set`, the same merge-write the Hub uses), which
+  ryoku-shell watches and retints from, so mode/scheme/index apply
+  system-wide. Separately, the ollama vision auto-tagger and everything that
+  only served it are removed for a clean cutover: the ollama settings page,
+  status indicator, retag button, scan controls, the tag cloud and tag
+  filter/sort, and the weather filter, plus the daemon's analyze plumbing and
+  the `Tags`/`Colours`/`Weather`/`AnalyzedBy` catalog fields. The
+  hue/saturation colour sort (magick-derived) stays
+  (`ryogami/wall-ui/`, `ryogami/daemon/`, `services/DaemonClient.qml`).
+
 ### Added
 - **The wallpaper's subject can be cut out and drawn in front of the desktop
   widgets, composed from the Super+Esc Desktop route.** A DEPTH card turns the

@@ -186,11 +186,26 @@ QtObject {
         if (!path) return
         call("wall.preheat", {path: path})
     }
+    // The system palette lives in the shell's matugen knob store
+    // (~/.config/ryoku/matugen.json), which ryoku-shell watches and retints on
+    // change. The ryogami daemon does not run matugen, so the old wall.retheme
+    // RPC was a no-op and light/dark never left the picker. Hand the knobs to
+    // the one writer the Hub also uses ("ryoku-hub hypr matugen set", a merge),
+    // so mode/scheme/index retint the whole desktop.
+    property var _rethemeProc: Process {}
     function retheme(scheme, mode, colorIndex, callback) {
-        var params = {scheme: scheme || "", mode: mode || ""}
-        if (typeof colorIndex === "number") params.color_index = colorIndex | 0
-        else if (typeof colorIndex === "function" && callback === undefined) { callback = colorIndex }
-        call("wall.retheme", params, callback)
+        if (typeof colorIndex === "function" && callback === undefined) {
+            callback = colorIndex
+            colorIndex = undefined
+        }
+        var knobs = {}
+        if (mode) knobs.mode = mode
+        if (scheme) knobs.schemeType = scheme
+        if (typeof colorIndex === "number") knobs.sourceColorIndex = colorIndex | 0
+        _rethemeProc.running = false
+        _rethemeProc.command = ["ryoku-hub", "hypr", "matugen", "set", JSON.stringify(knobs)]
+        _rethemeProc.running = true
+        if (callback) callback({ ok: true }, null)
     }
     function themePreview(scheme, mode, colorIndex, callback) {
         call("wall.theme_preview", {

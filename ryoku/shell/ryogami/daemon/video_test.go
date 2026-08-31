@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -145,7 +146,10 @@ func TestVideoPlayExplicitOutputs(t *testing.T) {
 	if !waitFor(t, func() bool { return len(readMarker(t, marker)) == 2 }) {
 		t.Fatalf("players did not spawn: %q", readMarker(t, marker))
 	}
+	// The two players write their argv markers concurrently, so the file order
+	// is not the spawn order; compare as a set.
 	got := readMarker(t, marker)
+	sort.Strings(got)
 	// A 1280-wide direct-playable clip: no transcode, source path verbatim,
 	// medium cap resolved from the fake monitors' physical width (2560; the
 	// compositor upscales to physical pixels, so scale never divides it).
@@ -176,6 +180,7 @@ func TestVideoPlayBroadcastSpansMonitors(t *testing.T) {
 		t.Fatalf("broadcast did not span both monitors: %q", readMarker(t, marker))
 	}
 	got := readMarker(t, marker)
+	sort.Strings(got)
 	want := []string{c + " 2560 fit DP-1", c + " 2560 fit DP-2"}
 	for i := range want {
 		if got[i] != want[i] {
