@@ -42,13 +42,13 @@ func (d *daemon) wallpaperVerb(line string) string {
 		if path == "" {
 			return "err wallpaper: set requires a path"
 		}
-		if err := d.applyWallpaper(typeOf(path), path, outputs); err != nil {
+		if err := d.applyWallpaper(typeOf(path), path, "set", outputs, nil, nil); err != nil {
 			return "err wallpaper: " + err.Error()
 		}
 		return "ok"
 	case "random":
 		if pick := d.pickRandom(nil, false); pick != "" {
-			if err := d.applyWallpaper(typeOf(pick), pick, outputs); err != nil {
+			if err := d.applyWallpaper(typeOf(pick), pick, "set", outputs, nil, nil); err != nil {
 				return "err wallpaper: " + err.Error()
 			}
 			return "ok"
@@ -56,7 +56,7 @@ func (d *daemon) wallpaperVerb(line string) string {
 		return "err wallpaper: no wallpapers available"
 	case "next":
 		if pick := d.pickNext(); pick != "" {
-			if err := d.applyWallpaper(typeOf(pick), pick, outputs); err != nil {
+			if err := d.applyWallpaper(typeOf(pick), pick, "set", outputs, nil, nil); err != nil {
 				return "err wallpaper: " + err.Error()
 			}
 			return "ok"
@@ -83,7 +83,13 @@ func (d *daemon) wallpaperVerb(line string) string {
 		persistResourceTier(f[1])
 		return "ok"
 	case "live-reload":
-		d.surface.republish()
+		// Relaunch the current clip after a settings change; a still just
+		// republishes so nothing reveals.
+		if d.video.Playing() {
+			d.restoreOutputs()
+		} else {
+			d.surface.republish()
+		}
 		return "ok"
 	case "":
 		return "err wallpaper: missing mode"
@@ -195,6 +201,6 @@ func (d *daemon) candidatePaths(types []string, favouritesOnly bool) []string {
 
 func (d *daemon) randomPick(types []string, favouritesOnly bool) {
 	if pick := d.pickRandom(types, favouritesOnly); pick != "" {
-		_ = d.applyWallpaper(typeOf(pick), pick, nil)
+		_ = d.applyWallpaper(typeOf(pick), pick, "set", nil, nil, nil)
 	}
 }

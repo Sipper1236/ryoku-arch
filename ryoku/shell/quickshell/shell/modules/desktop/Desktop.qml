@@ -15,6 +15,7 @@ import Ryoku.PluginKit
 import shell.services as Services
 import "../depth"
 import "../depth/Singletons" as DepthCfg
+import "../wallpaper" as WallpaperMod
 
 // desktop widgets layer: WlrLayer.Bottom (below windows), instantiated once per
 // monitor by the main shell, carrying the clock. only clicks on bare wallpaper
@@ -32,6 +33,8 @@ Scope {
     property string wallpaperUrl: ""
     property string wallpaperFit: "Cover"
     property string depthUrl: ""
+    property var wallpaperTransition: null
+    property bool wallpaperLive: false
     readonly property var depthState: Services.ShellState.forScreen(root.screen)
     // compose mode frees every widget for dragging (like visualiser placement),
     // so a locked clock can still be nestled into the subject; Done restores it.
@@ -169,28 +172,20 @@ Scope {
             guides.flash(v, h);
         }
 
-        // The base wallpaper painter. The daemon publishes the frame and this
-        // scene renders it; decoding is capped at the surface resolution so an
-        // 8K source costs a screen-sized texture instead of a full-resolution
-        // decode (which both lagged every switch and overran the image
-        // allocation cap on very large files, leaving the desktop black).
-        Image {
+        // The base wallpaper painter: the reveal backdrop composites each new
+        // frame over the old one through the preset the daemon attached to the
+        // frame (a GPU mask shader), decoding capped at surface resolution. A
+        // live player (mpvpaper on the background layer) owns the pixels while
+        // a video plays, so the painter yields instead of occluding it.
+        WallpaperMod.Backdrop {
             id: backdrop
             anchors.fill: parent
-            source: root.wallpaperUrl
-            cache: false
-            asynchronous: true
-            sourceSize.width: Math.ceil(width * dpr)
-            sourceSize.height: Math.ceil(height * dpr)
-            readonly property real dpr: (root.screen && root.screen.devicePixelRatio) ? root.screen.devicePixelRatio : 1
-            fillMode: {
-                switch (root.wallpaperFit) {
-                case "Contain": return Image.PreserveAspectFit;
-                case "Fill": return Image.Stretch;
-                case "ScaleDown": return Image.PreserveAspectFit;
-                default: return Image.PreserveAspectCrop;
-                }
-            }
+            readonly property real screenDpr: (root.screen && root.screen.devicePixelRatio) ? root.screen.devicePixelRatio : 1
+            dpr: screenDpr
+            url: root.wallpaperLive ? "" : root.wallpaperUrl
+            fit: root.wallpaperFit
+            transition: root.wallpaperTransition
+            visible: !root.wallpaperLive
         }
 
         // Mirror of the same image for glass widgets: Qt cannot sample another
@@ -203,10 +198,10 @@ Scope {
             source: root.wallpaperUrl
             cache: false
             asynchronous: true
-            sourceSize.width: Math.ceil(width * backdrop.dpr)
-            sourceSize.height: Math.ceil(height * backdrop.dpr)
-            visible: (Config.calendarEnabled && Config.calendarStyle === "glass")
-                || (Config.musicEnabled && Config.musicStyle === "glass")
+            sourceSize.width: Math.ceil(width * backdrop.screenDpr)
+            sourceSize.height: Math.ceil(height * backdrop.screenDpr)
+            visible: !root.wallpaperLive && ((Config.calendarEnabled && Config.calendarStyle === "glass")
+                || (Config.musicEnabled && Config.musicStyle === "glass"))
             fillMode: {
                 switch (root.wallpaperFit) {
                 case "Contain": return Image.PreserveAspectFit;

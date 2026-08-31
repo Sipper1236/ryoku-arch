@@ -57,31 +57,34 @@ func (w *wallSurface) publishCurrent() {
 	w.publishLocked()
 }
 
-func fresh(rev int64, pic, fit string) frameEntry {
+func fresh(rev int64, pic, fit string, tr interface{}) frameEntry {
 	// A fresh wallpaper needs a fresh cutout; the shell daemon's depth worker
 	// regenerates it and hands it back over `depth set`.
-	return frameEntry{Path: pic, Revision: rev, Fit: fit}
+	return frameEntry{Path: pic, Revision: rev, Fit: fit, Transition: tr}
 }
 
 // show is the broadcast set: replace the default and clear every override.
-func (w *wallSurface) show(pic, fit string) {
+func (w *wallSurface) show(pic, fit string, tr interface{}, live bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.seq++
-	w.def = fresh(w.seq, pic, fit)
+	w.def = fresh(w.seq, pic, fit, tr)
+	w.def.Live = live
 	w.outputs = map[string]frameEntry{}
 	w.publishLocked()
 }
 
 // showOutput writes one per-output override, leaving the rest intact.
-func (w *wallSurface) showOutput(name, pic, fit string) {
+func (w *wallSurface) showOutput(name, pic, fit string, tr interface{}, live bool) {
 	if name == "" {
 		return
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.seq++
-	w.outputs[name] = fresh(w.seq, pic, fit)
+	e := fresh(w.seq, pic, fit, tr)
+	e.Live = live
+	w.outputs[name] = e
 	w.publishLocked()
 }
 

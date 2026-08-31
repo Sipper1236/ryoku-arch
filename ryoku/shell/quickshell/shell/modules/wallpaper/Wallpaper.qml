@@ -37,6 +37,10 @@ Item {
     readonly property string depthUrl: frame.depth.length > 0
         ? "file://" + frame.depth + "?v=" + frame.depthRev : ""
     readonly property string fit: frame.fit
+    // The reveal preset for the current revision (null = plain crossfade) and
+    // whether a live player owns the slot (the in-shell painter yields to it).
+    readonly property var transition: frame.transition
+    readonly property bool live: frame.live
     // Ryogami paints the wallpaper out of band, so there is no in-shell decode
     // left to gate on: widgets simply wait for the first topic frame.
     readonly property bool reloadReady: frame.ready

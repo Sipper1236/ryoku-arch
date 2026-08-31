@@ -14,10 +14,11 @@ import (
 // per-output state for restore, bump the catalog's apply count, trigger the
 // matugen palette, and broadcast the applied event the picker listens for.
 
-// applyWallpaper handles static and video applies. On Ryoku the in-shell
-// surface renders both (a live player claims a video slot through the shell);
-// external paper renderers from the skwd lineage are not part of this port.
-func (d *daemon) applyWallpaper(wpType, path string, outputs []string) error {
+// applyWallpaper handles static and video applies. Stills render on the
+// in-shell surface (with a reveal transition); videos play through mpvpaper on
+// the background layer, and the frame's live flag makes the shell painter
+// yield to it.
+func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mute map[string]bool, volume map[string]int) error {
 	if path == "" {
 		return fmt.Errorf("missing 'path' parameter")
 	}
@@ -25,19 +26,34 @@ func (d *daemon) applyWallpaper(wpType, path string, outputs []string) error {
 		return fmt.Errorf("wallpaper not readable: %v", err)
 	}
 	fit := contentFit()
+	live := wpType == "video"
+	// A reveal transition is an image operation; a video's frame swap is a cut.
+	var tr interface{}
+	if !live {
+		if picked := d.transitionFor(mode); picked != nil {
+			tr = picked
+		}
+	}
+	if live {
+		d.video.Play(outputs, path, mute, volume)
+	} else if d.video.Playing() {
+		d.video.Stop()
+	}
 	if len(outputs) == 0 || contains(outputs, "*") {
-		d.surface.show(path, fit)
+		d.surface.show(path, fit, tr, live)
 	} else {
 		for _, out := range outputs {
-			d.surface.showOutput(out, path, fit)
+			d.surface.showOutput(out, path, fit, tr, live)
 		}
 	}
 	name := filepath.Base(path)
 	d.setCurrent(name)
-	d.saveOutputs(outputs, wpType, path)
+	d.saveOutputs(outputs, wpType, path, mute)
 	key := strings.TrimSuffix(name, filepath.Ext(name))
 	d.store.mutate(keyFor(d.store, name, key), func(e *Entry) { e.ApplyCount++ })
-	go d.runMatugen(path)
+	if !live {
+		go d.runMatugen(path)
+	}
 	d.broadcast("ryogami.wall.applied", map[string]interface{}{
 		"type": wpType, "name": name, "path": path, "we_id": "", "key": key,
 	})
@@ -70,7 +86,7 @@ func contains(list []string, s string) bool {
 // saveOutputs persists {output: {type, path}} to cacheDir/outputs.json for the
 // startup restore, mirroring the Rust daemon: a broadcast apply clears the map
 // to a single "*" entry, a per-output apply removes "*".
-func (d *daemon) saveOutputs(outputs []string, wpType, path string) {
+func (d *daemon) saveOutputs(outputs []string, wpType, path string, mute map[string]bool) {
 	cacheDir := d.config().cacheDir()
 	state := map[string]map[string]interface{}{}
 	loadJSON(filepath.Join(cacheDir, "outputs.json"), &state)
@@ -82,7 +98,7 @@ func (d *daemon) saveOutputs(outputs []string, wpType, path string) {
 		delete(state, "*")
 	}
 	for _, k := range keys {
-		state[k] = map[string]interface{}{"type": wpType, "path": path}
+		state[k] = map[string]interface{}{"type": wpType, "path": path, "mute": mute[k]}
 	}
 	_ = os.MkdirAll(cacheDir, 0o755)
 	saveJSON(filepath.Join(cacheDir, "outputs.json"), state)
@@ -96,17 +112,32 @@ func (d *daemon) restoreOutputs() {
 	loadJSON(filepath.Join(cacheDir, "outputs.json"), &state)
 	fit := contentFit()
 	restored := ""
-	if e, okAll := state["*"]; okAll {
-		if p, _ := e["path"].(string); p != "" && fileExists(p) {
-			d.surface.show(p, fit)
-			restored = filepath.Base(p)
+	restore := func(out string, e map[string]interface{}) {
+		p, _ := e["path"].(string)
+		if p == "" || !fileExists(p) {
+			return
 		}
+		live := e["type"] == "video"
+		if live {
+			mute := map[string]bool{out: e["mute"] == true}
+			var outs []string
+			if out != "*" {
+				outs = []string{out}
+			}
+			d.video.Play(outs, p, mute, nil)
+		}
+		if out == "*" {
+			d.surface.show(p, fit, nil, live)
+		} else {
+			d.surface.showOutput(out, p, fit, nil, live)
+		}
+		restored = filepath.Base(p)
+	}
+	if e, okAll := state["*"]; okAll {
+		restore("*", e)
 	} else {
 		for out, e := range state {
-			if p, _ := e["path"].(string); p != "" && fileExists(p) {
-				d.surface.showOutput(out, p, fit)
-				restored = filepath.Base(p)
-			}
+			restore(out, e)
 		}
 	}
 	if restored != "" {

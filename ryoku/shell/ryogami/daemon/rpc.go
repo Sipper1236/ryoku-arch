@@ -45,7 +45,7 @@ func (d *daemon) dispatchRequest(req *request) response {
 		if wpType != "static" && wpType != "video" {
 			return errResp(req.ID, 1, fmt.Sprintf("unsupported type: %s", wpType))
 		}
-		if err := d.applyWallpaper(wpType, strParam(p, "path", ""), strsParam(p, "outputs")); err != nil {
+		if err := d.applyWallpaper(wpType, strParam(p, "path", ""), "set", strsParam(p, "outputs"), muteParam(p), volumeParam(p)); err != nil {
 			return errResp(req.ID, 4, err.Error())
 		}
 		return ok(req.ID, map[string]interface{}{"applied": d.currentName()})
@@ -53,6 +53,62 @@ func (d *daemon) dispatchRequest(req *request) response {
 	case "wall.restore":
 		d.restoreOutputs()
 		return ok(req.ID, map[string]interface{}{"ok": true})
+
+	case "effects.list":
+		return ok(req.ID, map[string]interface{}{"effects": EffectsList()})
+
+	case "effects.preview":
+		out, err := EffectsPreview(d.config().cacheDir(), strParam(p, "input", ""), strParam(p, "effect", ""), subParams(p))
+		if err != nil {
+			return errResp(req.ID, 3, err.Error())
+		}
+		return ok(req.ID, map[string]interface{}{"output": out})
+
+	case "effects.commit":
+		out, err := EffectsCommit(strParam(p, "preview", ""), strParam(p, "input", ""), strParam(p, "effect", ""), subParams(p))
+		if err != nil {
+			return errResp(req.ID, 3, err.Error())
+		}
+		go d.rescan(true)
+		return ok(req.ID, map[string]interface{}{"output": out})
+
+	case "effects.discard":
+		if err := EffectsDiscard(strParam(p, "preview", "")); err != nil {
+			return errResp(req.ID, 3, err.Error())
+		}
+		return ok(req.ID, map[string]interface{}{"ok": true})
+
+	case "optimize.start", "video_convert.start":
+		kind := "optimize"
+		if req.Method == "video_convert.start" {
+			kind = "convert"
+		}
+		if err := d.optimizer.Start(kind, strParam(p, "preset", "balanced"), strParam(p, "resolution", "4k")); err != nil {
+			return errResp(req.ID, 3, err.Error())
+		}
+		return ok(req.ID, map[string]interface{}{"started": true})
+
+	case "optimize.cancel", "video_convert.cancel":
+		kind := "optimize"
+		if req.Method == "video_convert.cancel" {
+			kind = "convert"
+		}
+		d.optimizer.Cancel(kind)
+		return ok(req.ID, map[string]interface{}{"cancelled": true})
+
+	case "optimize.status", "video_convert.status":
+		kind := "optimize"
+		if req.Method == "video_convert.status" {
+			kind = "convert"
+		}
+		return ok(req.ID, d.optimizer.Status(kind))
+
+	case "optimize.presets", "video_convert.presets":
+		kind := "optimize"
+		if req.Method == "video_convert.presets" {
+			kind = "convert"
+		}
+		return ok(req.ID, map[string]interface{}{"presets": d.optimizer.Presets(kind)})
 
 	case "wall.set_favourite":
 		key := strParam(p, "key", "")
@@ -182,4 +238,41 @@ func nullable(s string) interface{} {
 		return nil
 	}
 	return s
+}
+
+// muteParam and volumeParam pull wall.apply's per-output audio maps.
+func muteParam(p map[string]interface{}) map[string]bool {
+	out := map[string]bool{}
+	if m, has := p["outputs_audio"].(map[string]interface{}); has {
+		for k, v := range m {
+			if b, isBool := v.(bool); isBool {
+				out[k] = b
+			}
+		}
+	}
+	return out
+}
+
+func volumeParam(p map[string]interface{}) map[string]int {
+	out := map[string]int{}
+	if m, has := p["outputs_volume"].(map[string]interface{}); has {
+		for k, v := range m {
+			if n, isNum := v.(float64); isNum {
+				vol := int(n)
+				if vol > 100 {
+					vol = 100
+				}
+				out[k] = vol
+			}
+		}
+	}
+	return out
+}
+
+// subParams pulls the nested params object an effects request carries.
+func subParams(p map[string]interface{}) map[string]interface{} {
+	if m, has := p["params"].(map[string]interface{}); has {
+		return m
+	}
+	return map[string]interface{}{}
 }

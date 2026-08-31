@@ -159,6 +159,8 @@ ShellRoot {
                 wallpaperUrl: wallpaper.wallpaperUrl
                 wallpaperFit: wallpaper.fit
                 depthUrl: wallpaper.depthUrl
+                wallpaperTransition: wallpaper.transition
+                wallpaperLive: wallpaper.live
             }
             Visualizer {
                 screen: perScreen.modelData

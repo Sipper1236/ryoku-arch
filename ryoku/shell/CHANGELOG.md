@@ -21,6 +21,21 @@
   them into the published frame and drops a cutout whose wallpaper already left
   the slot (`ipc/ryogami.go`, `ipc/depth.go`, `ryogami/src/server/routing.rs`).
 
+
+- **The full skwd wallpaper stack now runs in the Go daemon: transitions,
+  effects, pipelines, and a video engine.** Every static switch reveals through
+  the 22-preset shader engine, rendered in-shell by the restored reveal
+  backdrop (`modules/wallpaper/Backdrop.qml`, `reveal.frag`), with the preset
+  attached to each published frame and `wallpaper.transition_preset` in
+  shell.json pinning one (default rotates with no repeats). The picker's
+  effects panel is served natively (theme palettes, invert, flip, mirror,
+  grayscale, brightness, contrast, saturation, gamma, pixelate, border,
+  round), image optimize and video convert run their preset pipelines with
+  progress events, and videos and live walls play through mpvpaper on the
+  background layer while the shell painter yields (frame `live` flag). The
+  engine settings page now shows the one real engine instead of the skwd
+  lineage's external painters (`ryogami/daemon/`, `wall-ui/qml/wallpaper/
+  settings/PaperSettings.qml`).
 - **The ryogami daemon is now Go, not Rust.** A drop-in rewrite at
   `ryogami/daemon/` keeps the whole wire contract (ryogami.sock verbs, JSON-RPC
   with result payloads, `subscribe` event streaming, the wallpaper topic, the

@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -26,7 +28,12 @@ type daemon struct {
 	currentMu sync.Mutex
 	current   string // basename of the last applied wallpaper
 
-	random *randomRotation
+	random    *randomRotation
+	video     *videoPlayer
+	optimizer *Optimizer
+
+	// previous transition preset index (-1 = none); guards the no-repeat pick.
+	lastTransition int
 
 	scanMu   sync.Mutex // one rescan at a time; rescans are idempotent
 	scanning bool
@@ -70,13 +77,34 @@ func runDaemon() error {
 	fmt.Fprintf(os.Stderr, "ryogami: listening on %s\n", sock)
 
 	d := &daemon{
-		cfg:     cfg,
-		surface: newWallSurface(),
-		store:   openStore(cfg.cacheDir()),
-		events:  newEventHub(),
-		ui:      newWallUIProcess(),
-		random:  newRandomRotation(),
+		cfg:            cfg,
+		surface:        newWallSurface(),
+		store:          openStore(cfg.cacheDir()),
+		events:         newEventHub(),
+		ui:             newWallUIProcess(),
+		random:         newRandomRotation(),
+		lastTransition: -1,
+		video:          newVideoPlayer(),
 	}
+	// A finished pipeline replaced sources on disk, so the catalog rescans;
+	// every pipeline event also reaches subscribed clients untouched.
+	d.optimizer = NewOptimizer(cfg.wallpaperDir(), cfg.videoDir(), func(ev string, data map[string]interface{}) {
+		d.broadcast(ev, data)
+		if strings.HasSuffix(ev, ".finished") {
+			go d.rescan(true)
+		}
+	})
+
+	// mpvpaper children must not outlive the daemon, and a previous daemon's
+	// orphans must not play under a fresh restore.
+	d.video.Stop()
+	go func() {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+		<-sig
+		d.video.Stop()
+		os.Exit(0)
+	}()
 
 	// Publish the empty snapshot so a subscriber before the first set sees a
 	// defined frame, then restore the last wallpaper and rescan the catalog.
