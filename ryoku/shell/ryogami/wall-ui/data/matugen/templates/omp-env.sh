@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+# matugen template: rendered to an env fragment the shell sources.
 export RYOGAMI_PRIMARY="{{colors.primary.default.hex}}"
 export RYOGAMI_ON_PRIMARY="{{colors.on_primary.default.hex}}"
 export RYOGAMI_PRIMARY_CONTAINER="{{colors.primary_container.default.hex}}"
