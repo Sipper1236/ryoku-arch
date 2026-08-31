@@ -112,7 +112,7 @@ func depthOut(source string) string {
 // UI: busy drives the progress bar, path drives the preview thumbnail.
 func (d *daemon) depthStatusJSON() string {
 	path := ""
-	if wall := d.currentWall(); wall != "" && !isVideo(wall) {
+	if wall := d.currentWall(); wall != "" && !isVideo(wall) && !d.currentWallVideo() {
 		if p := depthOut(wall); isFile(p) {
 			path = p
 		}
@@ -187,7 +187,7 @@ func (d *daemon) depthWorker() {
 func (d *daemon) reconcileDepth(force, gen bool) {
 	wall := d.currentWall()
 	reg := loadDepthWalls()
-	effective := wall != "" && !isVideo(wall) && reg.Walls[wall]
+	effective := wall != "" && !isVideo(wall) && !d.currentWallVideo() && reg.Walls[wall]
 	if reg.Current != effective || !isFile(depthWallsPath()) {
 		reg.Current = effective
 		saveDepthWalls(reg)
@@ -245,7 +245,7 @@ func (d *daemon) depthSetEnabled(on bool) {
 			delete(reg.Walls, wall)
 		}
 	}
-	reg.Current = on && wall != "" && !isVideo(wall)
+	reg.Current = on && wall != "" && !isVideo(wall) && !d.currentWallVideo()
 	saveDepthWalls(reg)
 	if on {
 		d.depthGen.Store(true)
@@ -300,11 +300,11 @@ type depthTarget struct {
 func (d *daemon) depthTargets() []depthTarget {
 	f := d.wallFrame()
 	var out []depthTarget
-	if p := f.Default.Path; p != "" && !f.Default.Live && !isVideo(p) && isFile(p) {
+	if p := f.Default.Path; p != "" && !f.Default.Live && !f.Default.Video && !isVideo(p) && isFile(p) {
 		out = append(out, depthTarget{"", p})
 	}
 	for name, e := range f.Outputs {
-		if e.Path != "" && !e.Live && !isVideo(e.Path) && isFile(e.Path) {
+		if e.Path != "" && !e.Live && !e.Video && !isVideo(e.Path) && isFile(e.Path) {
 			out = append(out, depthTarget{name, e.Path})
 		}
 	}

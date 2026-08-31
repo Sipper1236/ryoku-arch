@@ -24,6 +24,7 @@ import (
 type ryogamiFrameEntry struct {
 	Path  string `json:"path"`
 	Live  bool   `json:"live"`
+	Video bool   `json:"video"`
 	Depth string `json:"depth"`
 }
 
@@ -71,6 +72,15 @@ func (d *daemon) currentWall() string {
 	d.ryoWallMu.Lock()
 	defer d.ryoWallMu.Unlock()
 	return d.ryoWall.Default.Path
+}
+
+// currentWallVideo reports whether that default frame is a video's still:
+// ryogami paints a clip's extracted frame with a `video` marker, and depth
+// must treat it like the video it stands for, not as an image.
+func (d *daemon) currentWallVideo() bool {
+	d.ryoWallMu.Lock()
+	defer d.ryoWallMu.Unlock()
+	return d.ryoWall.Default.Video
 }
 
 // wallFrame returns a copy of the last frame seen from ryogami.

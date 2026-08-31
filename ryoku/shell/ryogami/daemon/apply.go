@@ -74,10 +74,10 @@ func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mut
 		d.video.Play(outputs, path, liveFit(fit), d.config().ResourceTier, repaint)
 	}
 	if len(outputs) == 0 || contains(outputs, "*") {
-		d.surface.show(paint, fit, tr, frameLive)
+		d.surface.show(paint, fit, tr, frameLive, live)
 	} else {
 		for _, out := range outputs {
-			d.surface.showOutput(out, paint, fit, tr, frameLive)
+			d.surface.showOutput(out, paint, fit, tr, frameLive, live)
 		}
 	}
 	name := filepath.Base(path)
@@ -172,9 +172,9 @@ func (d *daemon) restoreOutputs() {
 		}
 		frameLive := live && paint == p
 		if out == "*" {
-			d.surface.show(paint, fit, nil, frameLive)
+			d.surface.show(paint, fit, nil, frameLive, live)
 		} else {
-			d.surface.showOutput(out, paint, fit, nil, frameLive)
+			d.surface.showOutput(out, paint, fit, nil, frameLive, live)
 		}
 		restored = filepath.Base(p)
 	}
@@ -280,10 +280,10 @@ var _ = json.Marshal
 // cuts, never reveals.
 func (d *daemon) repaintOutputs(outputs []string, paint, fit string, live bool) {
 	if len(outputs) == 0 || contains(outputs, "*") {
-		d.surface.show(paint, fit, nil, live)
+		d.surface.show(paint, fit, nil, live, true)
 		return
 	}
 	for _, out := range outputs {
-		d.surface.showOutput(out, paint, fit, nil, live)
+		d.surface.showOutput(out, paint, fit, nil, live, true)
 	}
 }

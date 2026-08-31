@@ -98,9 +98,11 @@ func TestDepthTargets(t *testing.T) {
 	img := filepath.Join(home, "a.png")
 	vid := filepath.Join(home, "b.mp4")
 	live := filepath.Join(home, "c.png")
+	still := filepath.Join(home, "d-still.jpg")
 	writeFile(t, img, "img")
 	writeFile(t, vid, "vid")
 	writeFile(t, live, "live")
+	writeFile(t, still, "still")
 
 	d := &daemon{}
 	d.ryoWall = ryogamiFrame{
@@ -108,6 +110,9 @@ func TestDepthTargets(t *testing.T) {
 		Outputs: map[string]ryogamiFrameEntry{
 			"DP-1": {Path: vid},
 			"DP-2": {Path: live, Live: true},
+			// A video's extracted still: a plain image path, but the frame's
+			// video marker must keep depth away from it.
+			"DP-3": {Path: still, Video: true},
 		},
 	}
 	targets := d.depthTargets()

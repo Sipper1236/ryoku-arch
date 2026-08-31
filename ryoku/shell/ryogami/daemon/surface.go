@@ -15,6 +15,7 @@ type frameEntry struct {
 	Revision   int64       `json:"revision"`
 	Fit        string      `json:"fit"`
 	Live       bool        `json:"live"`
+	Video      bool        `json:"video,omitempty"`
 	Transition interface{} `json:"transition"`
 	Depth      string      `json:"depth"`
 	DepthRev   int64       `json:"depthRev"`
@@ -64,18 +65,21 @@ func fresh(rev int64, pic, fit string, tr interface{}) frameEntry {
 }
 
 // show is the broadcast set: replace the default and clear every override.
-func (w *wallSurface) show(pic, fit string, tr interface{}, live bool) {
+// video marks a frame whose path is a video's still: the shell's depth worker
+// must not treat it as a depth-eligible image (a video carries no cutout).
+func (w *wallSurface) show(pic, fit string, tr interface{}, live, video bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.seq++
 	w.def = fresh(w.seq, pic, fit, tr)
 	w.def.Live = live
+	w.def.Video = video
 	w.outputs = map[string]frameEntry{}
 	w.publishLocked()
 }
 
 // showOutput writes one per-output override, leaving the rest intact.
-func (w *wallSurface) showOutput(name, pic, fit string, tr interface{}, live bool) {
+func (w *wallSurface) showOutput(name, pic, fit string, tr interface{}, live, video bool) {
 	if name == "" {
 		return
 	}
@@ -84,6 +88,7 @@ func (w *wallSurface) showOutput(name, pic, fit string, tr interface{}, live boo
 	w.seq++
 	e := fresh(w.seq, pic, fit, tr)
 	e.Live = live
+	e.Video = video
 	w.outputs[name] = e
 	w.publishLocked()
 }
