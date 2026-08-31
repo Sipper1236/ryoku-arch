@@ -33,7 +33,10 @@
   context again (the daemon no longer execs matugen with a context the
   templates cannot resolve). Videos are catalogued from ~/Pictures/livewalls
   by default, and the picker belt caches its thumbnails instead of re-decoding
-  them on every drag (`modules/wallpaper/skwd/`, `ryogami/daemon/`,
+  them on every drag. Video hover/selection previews decode a small scan-time
+  clip (640w/24fps, built beside the thumbnails, VAAPI when available) instead
+  of the full source: a 4K60 HEVC-10 decode per hovered card is what froze the
+  selector (`modules/wallpaper/skwd/`, `ryogami/daemon/`,
   `ipc/ryogami.go`, `ipc/theming.go`, `wall-ui/`).
 
 - **Video wallpapers play through ryogami-live (the restored in-repo C player,

@@ -1244,7 +1244,7 @@ Scope {
         required property int index
         required property var model
 
-        property string videoPath: model.videoFile ? model.videoFile : ""
+        property string videoPath: model.videoPrev || model.videoFile || ""
         property bool hasVideo: videoPath.length > 0 && Config.videoPreviewEnabled
         property bool _previewArmed: false
         readonly property bool videoActive: _previewArmed && hasVideo && thumbGridView.hoveredIdx === index && !thumbGridView.contentMoving

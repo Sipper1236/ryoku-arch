@@ -26,6 +26,7 @@ type Entry struct {
 	Colors     *string `json:"colors"`
 	Weather    *string `json:"weather"`
 	VideoFile  string  `json:"video_file"`
+	VideoPrev  string  `json:"video_prev"`
 	WeID       string  `json:"we_id"`
 	AnalyzedBy *string `json:"analyzed_by"`
 	Filesize   int64   `json:"filesize"`

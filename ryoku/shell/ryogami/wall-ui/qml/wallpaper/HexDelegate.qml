@@ -24,7 +24,8 @@ Item {
     signal flipRequested(var data, real gx, real gy, var sourceItem)
     signal hoverSelected()
 
-    property string videoPath: itemData && itemData.videoFile ? itemData.videoFile : ""
+    // Preview players decode the small scan-time clip, never the full source.
+    property string videoPath: itemData ? (itemData.videoPrev || itemData.videoFile || "") : ""
     property bool hasVideo: videoPath.length > 0 && Config.videoPreviewEnabled
     property bool _previewArmed: false
     readonly property bool videoActive: _previewArmed && isSelected && hasVideo && !viewMoving

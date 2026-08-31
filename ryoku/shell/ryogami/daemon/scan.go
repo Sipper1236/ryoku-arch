@@ -147,6 +147,10 @@ func collectMedia(root, thumbDir, thumbSmDir, wpType string, exts map[string]boo
 // while favourites, tags, and apply counts carry over.
 func processItem(it scanned, prior map[string]Entry, onItem func(Entry)) Entry {
 	if p, ok := prior[it.key]; ok && p.Mtime == it.mtime {
+		// A warm entry may predate preview clips: backfill without a rescan.
+		if it.wpType == "video" && (p.VideoPrev == "" || !fileExists(p.VideoPrev)) {
+			p.VideoPrev = ensureVideoPreview(it)
+		}
 		return p
 	}
 
@@ -188,6 +192,9 @@ func processItem(it scanned, prior map[string]Entry, onItem func(Entry)) Entry {
 		e.ThumbSm = it.thumbSmPath
 	}
 
+	if it.wpType == "video" {
+		e.VideoPrev = ensureVideoPreview(it)
+	}
 	hue, sat, richness := extractColors(it.thumbPath)
 	e.Hue = int(hueBucket(hue, sat))
 	e.Sat = int(sat)
@@ -409,4 +416,46 @@ func hueBucket(hue, sat uint16) uint16 {
 		return 99
 	}
 	return uint16(hueToBucketIdx(hue))
+}
+
+// ensureVideoPreview builds the small clip the picker's hover/selection
+// players decode, beside the video's thumbnail (<stem>-prev.mp4). Preview
+// players used to decode the full source: a 4K60 HEVC-10 clip per hovered
+// card, which froze the whole selector. 640w/24fps H.264 decodes for free.
+// Regenerated when missing or older than the source; "" on failure, which
+// callers treat as "no preview" (the delegate falls back to the still thumb).
+func ensureVideoPreview(it scanned) string {
+	prev := strings.TrimSuffix(it.thumbPath, ".webp") + "-prev.mp4"
+	if fi, err := os.Stat(prev); err == nil && fi.ModTime().Unix() >= it.mtime {
+		return prev
+	}
+	if err := os.MkdirAll(filepath.Dir(prev), 0o755); err != nil {
+		return ""
+	}
+	tmp := tmpPath(prev)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	var cmd *exec.Cmd
+	if dev := vaapiRenderNode(); dev != "" {
+		cmd = exec.CommandContext(ctx, "ffmpeg", "-y", "-v", "error",
+			"-hwaccel", "vaapi", "-hwaccel_device", dev, "-hwaccel_output_format", "vaapi",
+			"-i", it.src,
+			"-vf", "fps=24,scale_vaapi=w=640:h=-2:format=nv12",
+			"-c:v", "h264_vaapi", "-qp", "27", "-bf", "0", "-an", tmp)
+	} else {
+		cmd = exec.CommandContext(ctx, "ffmpeg", "-y", "-v", "error", "-i", it.src,
+			"-vf", "scale=640:-2", "-r", "24",
+			"-c:v", "libx264", "-preset", "veryfast", "-crf", "27", "-bf", "0",
+			"-pix_fmt", "yuv420p", "-an", tmp)
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		os.Remove(tmp)
+		fmt.Fprintf(os.Stderr, "ryogami: preview failed for %s: %v: %s\n", it.name, err, strings.TrimSpace(string(out)))
+		return ""
+	}
+	if os.Rename(tmp, prev) != nil {
+		os.Remove(tmp)
+		return ""
+	}
+	return prev
 }

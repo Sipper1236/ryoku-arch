@@ -108,7 +108,7 @@ Item {
     readonly property real _blOutY: height - _rBL * _hf
 
     property bool suppressWidthAnim: false
-    property string videoPath: delegateItem.model.videoFile ? delegateItem.model.videoFile : ""
+    property string videoPath: delegateItem.model.videoPrev || delegateItem.model.videoFile || ""
     property bool hasVideo: videoPath.length > 0 && Config.videoPreviewEnabled
     property bool _previewArmed: false
     readonly property bool videoActive: _previewArmed && isCurrent && hasVideo && !(_listView && _listView.contentMoving)

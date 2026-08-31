@@ -64,6 +64,7 @@ QtObject {
         if (!name || !thumb) continue
         var key = r.key || name
         var videoFile = r.video_file || "", weId = r.we_id || ""
+        var videoPrev = r.video_prev || ""
         var mtime = r.mtime || 0
         var hue = r.hue != null ? r.hue : 99, sat = r.sat || 0
         var richness = r.richness != null ? r.richness : 0
@@ -73,7 +74,7 @@ QtObject {
           name: name, type: type, thumb: thumb,
           path: type === "static" ? service.wallpaperDir + "/" + name
               : (type === "video" ? (videoFile || service.videoDir + "/" + name) : ""),
-          weId: weId, videoFile: videoFile,
+          weId: weId, videoFile: videoFile, videoPrev: videoPrev,
           mtime: mtime, hue: hue, saturation: sat, richness: richness, applyCount: applyCount,
           placeholder: false
         })
@@ -179,6 +180,7 @@ QtObject {
       var key = data.key || name
       var weId = data.we_id || ""
       var videoFile = data.video_file || ""
+      var videoPrev = data.video_prev || ""
       var mtime = data.mtime || 0
       var hue = data.hue != null ? data.hue : 99
       var sat = data.sat || 0
@@ -195,7 +197,7 @@ QtObject {
       var item = {
         name: name, type: type, thumb: thumb,
         path: path,
-        weId: weId, videoFile: videoFile,
+        weId: weId, videoFile: videoFile, videoPrev: videoPrev,
         mtime: mtime, hue: hue, saturation: sat, richness: richness, applyCount: applyCount,
         placeholder: false
       }
@@ -518,7 +520,7 @@ QtObject {
 
       items.push({
         name: item.name, type: item.type, thumb: item.thumb, path: item.path,
-        weId: item.weId, videoFile: item.videoFile, mtime: item.mtime,
+        weId: item.weId, videoFile: item.videoFile, videoPrev: item.videoPrev || "", mtime: item.mtime,
         hue: hue, saturation: saturation,
         richness: (item.richness != null ? item.richness : 0),
         applyCount: (item.applyCount != null ? item.applyCount : 0),
