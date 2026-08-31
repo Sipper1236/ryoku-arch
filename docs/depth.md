@@ -86,8 +86,12 @@ provisioning a self-contained backend on demand.
 | `ryoku-depth install` | Provision the backend (a Ryoku-managed venv at `~/.local/state/ryoku/depth/venv` with `rembg[cpu]` + a prefetched model), streaming progress to stdout. Opt-in; never run automatically. |
 
 Backend resolution: a Python that can `import rembg`, the Ryoku-managed venv
-first, then a system `python3.11`-`3.13` (rembg needs that range, and the API is
-called so the CLI extra is not required). Rendering prefers the GPU (the ONNX
+first, then a system `python3.11`-`3.13` (rembg needs that range). When the
+system Python is out of range (Arch rolls ahead of onnxruntime's wheels, so a
+current box is on 3.14), `install` uses `uv` to provision a managed 3.13 for the
+venv, keeping the engine independent of the system interpreter (`uv` is a
+`ryoku-shell` dependency). The API is called directly, so the CLI extra is not
+required. Rendering prefers the GPU (the ONNX
 Runtime CUDA provider) when available and falls back to CPU, so it is fast on a
 GPU box and never fails on a CPU-only one; generation stays a one-shot, off-frame
 job (`beta19features/depth-stack-versus-lightweight-models.md`).
