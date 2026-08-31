@@ -558,14 +558,6 @@ Item {
         }
 
         FilterButton {
-            colors: filterBar.colors
-            icon: "\u{f0349}"
-            tooltip: "Tags"
-            isActive: filterBar.tagCloudOpen
-            onClicked: filterBar.tagCloudToggled()
-        }
-
-        FilterButton {
             visible: Config.wallhavenEnabled
             colors: filterBar.colors
             icon: "\u{f01da}"
