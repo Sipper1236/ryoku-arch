@@ -1001,6 +1001,7 @@ func (d *daemon) dispatch(line string) string {
 		// the worker no-ops when depth is off for it or the engine is absent.
 		// status reports generation progress and the current cutout to the UI.
 		// set-enabled records the per-wall opt-in (daemon-owned, persisted).
+		// clear deletes every saved cutout and the reuse index, freeing the space.
 		if len(args) >= 1 && args[0] == "refresh" {
 			d.depthForce.Store(true)
 			d.scheduleDepth()
@@ -1011,6 +1012,10 @@ func (d *daemon) dispatch(line string) string {
 		}
 		if len(args) >= 2 && args[0] == "set-enabled" {
 			d.depthSetEnabled(args[1] == "1" || args[1] == "true")
+			return "ok"
+		}
+		if len(args) >= 1 && args[0] == "clear" {
+			d.depthClearCache()
 			return "ok"
 		}
 		return "ok"

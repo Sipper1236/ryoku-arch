@@ -361,3 +361,25 @@ func (w *wallSurface) clearDepth() {
 		w.publishLocked()
 	}
 }
+
+// depthClearCache clears the on-screen overlay and deletes every generated cutout
+// and the reuse index from ~/Pictures/Depth, freeing the space the engine cached.
+// Depth stays enabled per wall, so a re-render regenerates the current wallpaper.
+func (d *daemon) depthClearCache() {
+	if d.wall != nil {
+		d.wall.clearDepth()
+	}
+	entries, err := os.ReadDir(depthDir())
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasSuffix(name, "-depth.png") || name == ".index.json" {
+			os.Remove(filepath.Join(depthDir(), name))
+		}
+	}
+}
