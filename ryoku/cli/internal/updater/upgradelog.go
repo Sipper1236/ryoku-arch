@@ -71,6 +71,80 @@ func renderUpgrade(phase string, argv []string) error {
 	return werr
 }
 
+// renderQuiet runs argv showing a single in-place spinner of its current line
+// rather than its full output, surfacing only warnings and errors. It suits a
+// noisy-but-uninteresting step like deploy.sh (dozens of "building/installed"
+// lines) whose phase header the caller already narrated. Exit status is passed
+// through; a pipe failure degrades to raw passthrough.
+func renderQuiet(argv []string) error {
+	for _, a := range argv {
+		if a == "sudo" {
+			_ = sys.Run("sudo", "-v")
+			break
+		}
+	}
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		return sys.Run(argv[0], argv[1:]...)
+	}
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, pw, pw
+	if err := cmd.Start(); err != nil {
+		pw.Close()
+		pr.Close()
+		return err
+	}
+	pw.Close()
+	frame, active := 0, false
+	clear := func() {
+		if active {
+			fmt.Fprint(os.Stdout, "\r\033[K")
+			active = false
+		}
+	}
+	sc := bufio.NewScanner(pr)
+	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	sc.Split(scanLinesCR)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+		switch {
+		case quietError(line):
+			clear()
+			fmt.Fprintln(os.Stdout, "  "+sys.Red("✗ ")+line)
+		case quietWarn(line):
+			clear()
+			fmt.Fprintln(os.Stdout, "  "+sys.Amber("! ")+line)
+		default:
+			f := string(spinFrames[frame%len(spinFrames)])
+			frame++
+			if w := sys.TermWidth() - 1; len(line)+4 > w && w > 4 {
+				line = line[:w-4]
+			}
+			fmt.Fprint(os.Stdout, "\r\033[K  "+sys.Brand(f)+" "+sys.Dim(line))
+			active = true
+		}
+	}
+	pr.Close()
+	werr := cmd.Wait()
+	clear()
+	return werr
+}
+
+func quietError(s string) bool {
+	l := strings.ToLower(s)
+	return strings.Contains(l, "error") || strings.Contains(l, "failed") ||
+		strings.Contains(l, "cannot ") || strings.HasPrefix(l, "fatal")
+}
+
+func quietWarn(s string) bool {
+	l := strings.ToLower(s)
+	return strings.HasPrefix(l, "warning") || strings.Contains(l, "not restarted") ||
+		strings.Contains(l, "skipped") || strings.Contains(l, ".pacnew")
+}
+
 // scanLinesCR splits on either newline or carriage return, so each redraw of a
 // progress bar arrives as its own token instead of one buffered mega-line.
 func scanLinesCR(data []byte, atEOF bool) (int, []byte, error) {

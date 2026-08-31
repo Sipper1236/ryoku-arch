@@ -123,10 +123,20 @@ func channelUpdate() error {
 
 	progress.at("deploy")
 	progress.logf("Deploying the desktop from the checkout")
-	if err := sys.Run(filepath.Join(repo, "ryoku", "shell", "deploy.sh")); err != nil {
+	if err := deployRun(filepath.Join(repo, "ryoku", "shell", "deploy.sh")); err != nil {
 		return fmt.Errorf("deploy from %s failed: %w", repo, err)
 	}
 	return nil
+}
+
+// deployRun renders deploy.sh as a quiet spinner on a real terminal (its
+// build/install chatter is not something a user needs to read), and streams it
+// raw for pipes, logs, and --verbose.
+func deployRun(path string) error {
+	if verboseLog || !sys.StdoutIsTTY() {
+		return sys.Run(path)
+	}
+	return renderQuiet([]string{path})
 }
 
 // syncChannel advances a clean checkout onto origin/<ch> when that is a lossless
