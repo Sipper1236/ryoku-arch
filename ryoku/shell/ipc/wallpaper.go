@@ -959,6 +959,7 @@ func (d *daemon) paintWorker() {
 					fmt.Fprintf(os.Stderr, "paintWorker matugen static: %v\n", err)
 				} else {
 					_ = exec.Command("hyprctl", "reload", "config-only").Run()
+					applyHyprBorder()
 					select {
 					case d.ledsSig <- struct{}{}:
 					default:
@@ -988,6 +989,7 @@ func (d *daemon) paintWorker() {
 			fmt.Fprintf(os.Stderr, "paintWorker matugen: %v\n", err)
 		}
 		_ = exec.Command("hyprctl", "reload", "config-only").Run()
+		applyHyprBorder()
 		select {
 		case d.ledsSig <- struct{}{}:
 		default:
