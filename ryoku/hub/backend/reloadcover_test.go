@@ -406,6 +406,7 @@ func TestPruneReloadCoverKeepsOnlyManagedSelection(t *testing.T) {
 	}
 }
 
+
 func TestPruneReloadCoverRejectsSymlinkedManagedDirectory(t *testing.T) {
 	_, data := reloadCoverTestHome(t)
 	external, files := replaceReloadCoverDirWithSymlink(t, data)

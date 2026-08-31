@@ -391,10 +391,12 @@ palette)
 	ryoku-shell matugen-preview "$img"
 	;;
 moewalls-search)
-	# Anime / aesthetic live wallpapers from moewalls.com. No API, but it runs
-	# WordPress, so its wp-json feed lists posts with a poster (featuredmedia); the
-	# looping preview.webm derives straight from that poster's path, no per-post
-	# fetch. No query browses the anime category. Same item shape as `search`.
+	# Anime / aesthetic live wallpapers from moewalls.com. Its wp-json API is
+	# Cloudflare-403'd now, so scrape the server-rendered listing (still 200):
+	# each post card carries a poster (/uploads/YYYY/MM/BASE-thumb-WxH.jpg), the
+	# post link, its title and a resolutions-WxH class; the looping preview.webm
+	# derives from the poster path (/uploads/preview/YYYY/BASE-preview.webm). No
+	# query browses the anime category. Same item shape as `search`.
 	query=""; page=1
 	while [ $# -gt 0 ]; do
 		case "$1" in
@@ -404,43 +406,51 @@ moewalls-search)
 		*) shift ;;
 		esac
 	done
-	mw="https://moewalls.com/wp-json/wp/v2/posts"
-	params=(-G "$mw" --data-urlencode "per_page=24" --data-urlencode "page=$page" --data-urlencode "_embed=1")
+	mw="https://moewalls.com"
 	if [ -n "$query" ]; then
-		params+=(--data-urlencode "search=$query")
+		q="$(jq -rn --arg q "$query" '$q|@uri')"
+		if [ "$page" -gt 1 ]; then url="$mw/page/$page/?s=$q"; else url="$mw/?s=$q"; fi
+	elif [ "$page" -gt 1 ]; then
+		url="$mw/anime/page/$page/"
 	else
-		params+=(--data-urlencode "categories=18") # anime
+		url="$mw/anime/"
 	fi
-	resp="$(curl -fsSL -A "$ua" "${params[@]}")"
-	# poster: /uploads/YYYY/MM/BASE-thumb.jpg -> preview: /uploads/preview/YYYY/BASE-preview.webm.
-	# resolution comes from the post's `resolutions-WxH` term (exposed in class_list),
-	# the master file's real size, so the grid label and enhance's verdict are honest.
-	items="$(jq -c '.[]
-		| (._embedded["wp:featuredmedia"][0].source_url // "") as $thumb
-		| ($thumb | sub("/uploads/(?<y>[0-9]{4})/[0-9]{2}/(?<b>[^/]+)-thumb\\.(jpe?g|png)"; "/uploads/preview/\(.y)/\(.b)-preview.webm")) as $vid
-		| ($vid | if . != $thumb then . else "" end) as $webm
-		| ((.class_list // []) | map(select(startswith("resolutions-")))[0] // "" | sub("^resolutions-"; "")) as $res
-		| {
-			id: (.id|tostring),
-			thumb: $thumb,
-			video: $webm,
-			dl: $webm,
-			resolution: $res,
-			name: (.title.rendered | gsub(" Live Wallpaper$"; "")),
-			moewalls_url: .link
-		}' <<<"$resp")"
+	# a same-origin Referer; the listing pages serve 200 where the API does not.
+	html="$(curl -fsSL -A "$ua" -e "$mw/" "$url")"
+	# one card per line (split on the article boundary), keep those with a poster.
+	items="$(printf '%s' "$html" | tr '\n' ' ' | sed -E 's/<article /\n<article /g' \
+		| grep -F 'g1-frame' \
+		| while IFS= read -r card; do
+			src="$(printf '%s' "$card" | grep -oE 'src="https://moewalls\.com/wp-content/uploads/[0-9]{4}/[0-9]{2}/[^"]*-thumb-[0-9]+x[0-9]+\.(jpe?g|png)"' | head -1 | sed -E 's/^src="//; s/"$//')"
+			[ -n "$src" ] || continue
+			href="$(printf '%s' "$card" | grep -oE 'class="g1-frame" href="https://moewalls\.com/[^"]*"' | head -1 | sed -E 's/.*href="//; s/"$//')"
+			title="$(printf '%s' "$card" | grep -oE '<a title="[^"]*" class="g1-frame"' | head -1 | sed -E 's/^<a title="//; s/" class="g1-frame"$//')"
+			res="$(printf '%s' "$card" | grep -oE 'resolutions-[0-9]+x[0-9]+' | head -1 | sed -E 's/resolutions-//')"
+			rel="${src#*/uploads/}"          # YYYY/MM/BASE-thumb-WxH.jpg
+			y="${rel%%/*}"                   # YYYY
+			base="${rel##*/}"; base="${base%-thumb-*}"  # BASE slug
+			webm="$mw/wp-content/uploads/preview/$y/$base-preview.webm"
+			if [ -n "$title" ]; then name="${title% Live Wallpaper}"; else name="$(printf '%s' "$base" | tr '-' ' ')"; fi
+			jq -cn --arg id "$base" --arg thumb "$src" --arg webm "$webm" \
+				--arg res "$res" --arg name "$name" --arg url "${href:-}" \
+				'{id:$id, thumb:$thumb, video:$webm, dl:$webm, resolution:$res, name:$name, moewalls_url:$url}'
+		done)"
 	# QML's Image loader sends no User-Agent, which Cloudflare 403s, so the grid
-	# cannot fetch the poster itself. Cache each poster here (with a browser UA) and
-	# hand the tile a local file path; the webm still streams remotely (its player
-	# sends its own UA). Posters download in parallel, then each item is emitted
-	# with a cached path, falling back to the remote URL if a fetch missed.
+	# cannot fetch the poster itself. Cache each poster here (browser UA + Referer)
+	# and hand the tile a local file path; the webm still streams remotely. Cap the
+	# parallelism so a page's worth of posters never bursts into a Cloudflare rate
+	# 403 (which read as "NO SIGNAL" across the whole grid).
 	cache="${XDG_CACHE_HOME:-$HOME/.cache}/ryoku/ryowalls/moewalls-thumbs"; mkdir -p "$cache"
 	while read -r u; do
 		f="$cache/${u##*/}"
-		[ -s "$f" ] || curl -fsSL -A "$ua" "$u" -o "$f" 2>/dev/null &
+		if [ ! -s "$f" ]; then
+			curl -fsSL -A "$ua" -e "$mw/" "$u" -o "$f" 2>/dev/null &
+			while [ "$(jobs -rp | wc -l)" -ge 4 ]; do wait -n || true; done
+		fi
 	done < <(printf '%s\n' "$items" | jq -r '.thumb | select(length > 0)' | sort -u)
-	wait
+	wait || true
 	printf '%s\n' "$items" | while IFS= read -r row; do
+		[ -n "$row" ] || continue
 		u="$(jq -r '.thumb' <<<"$row")"; f="$cache/${u##*/}"
 		if [ -n "$u" ] && [ -s "$f" ]; then
 			jq -c --arg f "file://$f" '.thumb = $f' <<<"$row"

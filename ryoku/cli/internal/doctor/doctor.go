@@ -173,6 +173,7 @@ func reconcilers() []reconciler {
 		{"power profiles vs AMD GPU", reconcilePpdAmdgpu},
 		{"display resolution", reconcileDisplayModes},
 		{"phantom Wayland output", reconcilePhantomOutput},
+		{"Kepler NVIDIA recovery", reconcileKeplerNvidia},
 		{"NVIDIA boot reliability", reconcileNvidiaModeset},
 		{"NVIDIA update guard hook", reconcileNvidiaGuardHook},
 		{"pending config (.pacnew)", reconcilePacnew},

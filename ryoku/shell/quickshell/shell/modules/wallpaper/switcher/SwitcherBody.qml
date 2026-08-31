@@ -106,8 +106,12 @@ Item {
     property bool started: false
 
     Component.onCompleted: {
+        // Single-output rigs have nothing to disambiguate: route them through
+        // the flagless "*" apply (matches the Super+W path) rather than
+        // --screen <name>, so they don't silently lose the recolor step that
+        // only runs on the default target.
         body.target = ShellState.wallpaperSwitcherTarget.length > 0 ? ShellState.wallpaperSwitcherTarget
-            : (body.screenName.length > 0 ? body.screenName : "*");
+            : (body.monitors.length > 1 && body.screenName.length > 0 ? body.screenName : "*");
         ShellState.wallpaperSwitcherTarget = "";
         body.originalWall = Walls.currentFor(body.target);
         body.originalTheme = Themes.active;

@@ -52,7 +52,7 @@ ShellRoot {
     }
 
     Timer {
-        interval: 320
+        interval: 520
         running: root.startClose && root.phase === "closing"
         onTriggered: {
             root.phase = "hold";
@@ -61,7 +61,7 @@ ShellRoot {
         }
     }
     Timer {
-        interval: 15000
+        interval: 16500
         running: root.phase !== "opening" && root.phase !== "failed"
         onTriggered: root.phase = "failed"
     }
@@ -71,7 +71,7 @@ ShellRoot {
         onTriggered: root.phase = "opening"
     }
     Timer {
-        interval: 390
+        interval: 560
         running: root.phase === "opening"
         onTriggered: Qt.quit()
     }

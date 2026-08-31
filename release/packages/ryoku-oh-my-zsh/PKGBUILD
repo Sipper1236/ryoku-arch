@@ -10,16 +10,16 @@ pkgdesc="Oh My Zsh framework for the Ryoku Zsh integration"
 arch=('any')
 url='https://github.com/ohmyzsh/ohmyzsh'
 license=('MIT')
-# The AUR package this replaces owns the same /usr/share/oh-my-zsh tree, and
-# CachyOS-era installs carry cachyos-zsh-config, which depends on
-# 'oh-my-zsh-git'. Without `provides`, the swap deadlocks a full upgrade:
-# pacman offers to remove oh-my-zsh-git, then refuses because the removal
-# breaks that dependency ("users are unable to update"). The triple lets
-# -Syu replace the AUR tree in one transaction while the dependency stays
-# satisfied.
-provides=('oh-my-zsh-git')
-conflicts=('oh-my-zsh-git')
-replaces=('oh-my-zsh-git')
+# Supersede the AUR builds that own /usr/share/oh-my-zsh: without this, a box
+# that already has oh-my-zsh-git installed aborts the update with hundreds of
+# "exists in filesystem" file conflicts, and replaces makes pacman swap them
+# out. Providing them matters just as much: CachyOS-era installs carry
+# cachyos-zsh-config, which depends on 'oh-my-zsh-git', so a conflict without
+# the provide deadlocks the whole upgrade (pacman offers the removal, then
+# refuses it because the removal breaks that dependency).
+provides=('oh-my-zsh' 'oh-my-zsh-git')
+conflicts=('oh-my-zsh' 'oh-my-zsh-git')
+replaces=('oh-my-zsh' 'oh-my-zsh-git')
 makedepends=('git')
 _omz_commit=4b657407c98bbc8830ae66c2ac7ff3d737c55a83
 source=("oh-my-zsh::git+$url.git#commit=$_omz_commit")
