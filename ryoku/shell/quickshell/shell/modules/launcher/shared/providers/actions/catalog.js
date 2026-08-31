@@ -13,7 +13,7 @@ var CATALOG = [
     { id: "toggle-game-mode", name: "Game Mode",          category: "System",     icon: "gamepad",     exec: ["ryoku-cmd-game-mode"] },
     { id: "mirror-displays",  name: "Mirror Displays",    category: "System",     icon: "monitor",     exec: ["ryoku-monitor", "toggle"] },
 
-    { id: "next-wallpaper",   name: "Next Wallpaper",     category: "Appearance", icon: "image",       exec: ["ryoku-shell", "wallpaper"] },
+    { id: "next-wallpaper",   name: "Next Wallpaper",     category: "Appearance", icon: "image",       exec: ["ryogami", "wallpaper", "next"] },
     { id: "pick-wallpaper",   name: "Wallpaper Picker",   category: "Appearance", icon: "image-multi", exec: ["ryoku-shell", "wallpaper-switcher"] },
     { id: "toggle-nightlight",name: "Night Light",        category: "Appearance", icon: "moon",        exec: ["ryoku-cmd-nightlight"] },
 

@@ -513,7 +513,7 @@ Singleton {
         }
         _writeTuneFor(path);
         status = "Setting wallpaper";
-        setProc.command = ["ryoku-shell", "wallpaper", "set", path];
+        setProc.command = ["ryogami", "wallpaper", "set", path];
         setProc.running = true;
     }
     Process {
@@ -524,7 +524,7 @@ Singleton {
             var p = (code === 0) ? bakeProc._out : bakeProc._orig;
             root._writeTuneFor(p);
             root.status = "Setting wallpaper";
-            setProc.command = ["ryoku-shell", "wallpaper", "set", p];
+            setProc.command = ["ryogami", "wallpaper", "set", p];
             setProc.running = true;
         }
     }
@@ -563,7 +563,7 @@ Singleton {
         onTriggered: {
             if (root.selected && root.selected.video) root._writeTuneFor(root.selected.video);
             repaintProc.running = false;
-            repaintProc.command = ["ryoku-shell", "wallpaper", "repaint"];
+            repaintProc.command = ["ryogami", "wallpaper", "repaint"];
             repaintProc.running = true;
         }
     }
@@ -578,7 +578,7 @@ Singleton {
         interval: 300
         onTriggered: {
             reloadProc.running = false;
-            reloadProc.command = ["ryoku-shell", "wallpaper", "live-reload"];
+            reloadProc.command = ["ryogami", "wallpaper", "live-reload"];
             reloadProc.running = true;
         }
     }

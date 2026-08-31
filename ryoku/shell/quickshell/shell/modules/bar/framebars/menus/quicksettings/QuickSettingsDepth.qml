@@ -50,7 +50,7 @@ Item {
     }
     Process {
         id: statusProc
-        command: ["ryoku-shell", "depth", "status"]
+        command: ["ryogami", "depth", "status"]
         stdout: StdioCollector {
             onStreamFinished: {
                 let d = {};

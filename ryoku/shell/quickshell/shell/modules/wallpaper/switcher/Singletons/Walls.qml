@@ -5,9 +5,10 @@ import Quickshell.Io
 
 // Wallpaper source for the switcher: runs index.sh (thumbnails + a dominant-hue
 // reading for every image and video), buckets each entry by colour, and applies
-// a pick through `ryoku-shell wallpaper set` so it shares the transition,
-// palette and state path with the Super+W keybind. Entries come back sorted by
-// colour, neutral last, so the grid reads as a rainbow before any filtering.
+// a pick through `ryogami wallpaper set` (the Ryogami daemon owns the wallpaper,
+// transitions, palette and per-output state now), matching the random keybind.
+// Entries come back sorted by colour, neutral last, so the grid reads as a
+// rainbow before any filtering.
 //
 // entry = { type ("image"|"live"), path, name, mtime, thumb, hue, sat, group }.
 Singleton {
@@ -118,7 +119,7 @@ Singleton {
     property string queuedApply: ""
     property string queuedScreen: ""
     function setCmd(path, screen) {
-        var c = ["ryoku-shell", "wallpaper", "set", path];
+        var c = ["ryogami", "wallpaper", "set", path];
         if (screen && screen !== "*")
             c = c.concat(["--screen", screen]);
         return c;

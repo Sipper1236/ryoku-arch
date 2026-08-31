@@ -274,7 +274,7 @@ enhance_video() {
 	# user moved off of is never yanked back; the straggler window is seconds
 	# wide, not the minutes-wide one the old detached worker had.
 	if still_current "$f"; then
-		(timeout 20 ryoku-shell wallpaper set "$out" >/dev/null 2>&1 </dev/null &)
+		(timeout 20 ryogami wallpaper set "$out" >/dev/null 2>&1 </dev/null &)
 	fi
 }
 

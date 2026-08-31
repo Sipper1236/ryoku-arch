@@ -110,7 +110,7 @@ func applyScheme(mode string) error {
 			return err
 		}
 		// the daemon derives (honouring the per-image tune); no re-animation.
-		_ = exec.Command("ryoku-shell", "wallpaper", "repaint").Run()
+		_ = exec.Command("ryogami", "wallpaper", "repaint").Run()
 	case "light", "dark", "mono":
 		pal, err := loadScheme(mode)
 		if err != nil {
@@ -210,7 +210,7 @@ func applyGnomeAccent(on bool) error {
 // theme.json is the durable truth, and a box with no live daemon picks the
 // choice up at the next login; the setters lean on this only for the live nudge.
 func repaintPalette() {
-	_ = exec.Command("ryoku-shell", "wallpaper", "repaint").Run()
+	_ = exec.Command("ryogami", "wallpaper", "repaint").Run()
 }
 
 // themeState persists the palette master: whether colours follow the wallpaper

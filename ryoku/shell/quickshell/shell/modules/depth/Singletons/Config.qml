@@ -92,7 +92,7 @@ Singleton {
     }
     Process {
         id: refreshProc
-        command: ["ryoku-shell", "depth", "refresh"]
+        command: ["ryogami", "depth", "refresh"]
     }
 
     Timer {
