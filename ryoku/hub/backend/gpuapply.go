@@ -313,7 +313,11 @@ func snapshot(desc string) {
 	if _, err := exec.LookPath("snapper"); err != nil {
 		return
 	}
-	run("snapper", "-c", "root", "create", "--description", desc)
+	// -c number tags the snapshot for snapper's number cleanup so it counts
+	// against NUMBER_LIMIT and prunes like update snapshots; without it these piled
+	// up unbounded. Enforce the cap right after creating.
+	run("snapper", "-c", "root", "create", "-c", "number", "--description", desc)
+	run("snapper", "-c", "root", "cleanup", "number")
 }
 
 func run(name string, args ...string) {

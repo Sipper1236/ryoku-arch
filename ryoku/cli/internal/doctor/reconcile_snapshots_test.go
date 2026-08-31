@@ -46,6 +46,20 @@ func TestParseLeakedTimelineSkipsNonNumbered(t *testing.T) {
 	}
 }
 
+func TestParseUntaggedRyoku(t *testing.T) {
+	csv := "number,cleanup,description\n" +
+		"0,,current\n" + // base snapshot, skipped
+		"25,,ryoku gpu passthrough enable\n" + // untagged ryoku -> retag
+		"44,,ryoku config import 2026\n" + // untagged ryoku -> retag
+		"90,,my manual keep\n" + // untagged but not ryoku -> leave alone
+		"91,number,ryoku-update\n" + // already tagged -> leave alone
+		"92,timeline,ryoku-update\n" // timeline, handled elsewhere
+	got := parseUntaggedRyoku(csv)
+	if want := []string{"25", "44"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("parseUntaggedRyoku = %v, want %v", got, want)
+	}
+}
+
 func TestChunk(t *testing.T) {
 	nums := make([]string, 45)
 	for i := range nums {
