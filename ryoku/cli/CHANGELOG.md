@@ -15,6 +15,15 @@
   (`internal/doctor/reconcile_gpu_pin.go`, `reconcile_ppd_amdgpu.go`).
 
 ### Fixed
+- **Doctor unpins window borders stuck on a stale colour.** While colours
+  follow the wallpaper (or a named scheme) the Hub's generated
+  hypr/settings.lua deliberately omits `col.active_border` so the palette
+  drives the border; a file generated before that rule pinned a fixed colour
+  forever, because it only regenerates on a Hub save ("the border is stuck on
+  red" while the palette renders fresh colours nobody applies). Doctor now
+  spots the stale pin and has the Hub re-emit the file from today's state,
+  then reloads Hyprland config-only
+  (`internal/doctor/reconcile_border_pin.go`).
 - **Updates, rollbacks and resets no longer reset the fastfetch readout (or
   any live-edited seed).** The Hub's Fastfetch editor and the store's readout
   styles edit `fastfetch/config.jsonc` in place, but a frozen copy captured by
