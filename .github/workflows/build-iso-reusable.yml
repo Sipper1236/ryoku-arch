@@ -180,9 +180,9 @@ jobs:
               # packages signed by newly-added packager keys and the upgrade
               # aborts. then full upgrade + install (never a partial -Sy alone).
               pacman -Sy --noconfirm archlinux-keyring
-              # hyprcursor (its hyprcursor-util) and xcur2png are ryoku-cursors'
-              # makedepends; the local cursors build below runs makepkg --nodeps,
-              # so they must already be on the host here or build() cannot run.
+              # hyprcursor (its hyprcursor-util) and xcur2png are the
+              # ryoku-cursors makedepends; the local cursors build below runs
+              # makepkg --nodeps, so they must be on the host or build() fails.
               pacman -Su --noconfirm --needed \
                 archiso git go base-devel cmake ninja \
                 qt6-base qt6-declarative qt6-shadertools qt6-multimedia \
