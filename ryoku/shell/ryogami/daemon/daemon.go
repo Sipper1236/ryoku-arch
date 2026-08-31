@@ -129,6 +129,7 @@ func runDaemon() error {
 		d.broadcast("ryogami.wall.scan_done", map[string]interface{}{})
 	}()
 	go d.watchConfig()
+	go d.watchLibrary()
 
 	for {
 		conn, err := ln.Accept()

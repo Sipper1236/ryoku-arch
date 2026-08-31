@@ -45,6 +45,16 @@
   that tried to turn it off (`modules/wallpaper/skwd/`, `ryogami/daemon/`,
   `ipc/ryogami.go`, `ipc/theming.go`, `wall-ui/`).
 
+- **Ryogami now notices wallpapers and videos dropped into the folders while
+  it runs.** The Go rewrite kept a config-file poller but no library watcher,
+  so a file added by hand to ~/Pictures/Wallpapers (or the livewalls dir)
+  never entered the catalog until a daemon restart, and the resident picker
+  showed a stale grid (the vendored QML inotify watcher was never instantiated,
+  needed an uninstalled `inotifywait`, and its handler was a stub). A stdlib
+  poll-watcher fingerprints the media dirs (path, mtime, size) every few
+  seconds and reuses the mtime-gated rescan on any add, remove or replace; its
+  `cache ready` broadcast reloads the open picker, so new art appears within
+  seconds with no restart (`ryogami/daemon/watch.go`).
 - **Video wallpapers play through ryogami-live (the restored in-repo C player,
   renamed from ryoku-livewall), not mpvpaper.** The software-decode daemon
   (`livewall/livewall.c`) paints wl_shm frames on its own background surface:
