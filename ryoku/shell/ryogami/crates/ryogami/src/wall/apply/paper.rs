@@ -11,7 +11,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Mutex as StdMutex, OnceLock};
 
-use ryogami_paper::Source;
+use ryogami_paper::{Source, Transition};
 
 use crate::config::{self, Config};
 use crate::render;
@@ -49,8 +49,14 @@ fn normalized(outputs: &[String]) -> Vec<String> {
 
 /// Show a static wallpaper on each target output, then release GL to idle: a
 /// settled static desktop holds no decoder or GL context, only the committed
-/// buffer.
-pub(super) async fn show_static(outputs: &[String], path: &str, fill: config::FillMode) {
+/// buffer. `transition` is the reveal to animate the switch with (`None` for a
+/// carried / restored frame, which must paint instantly).
+pub(super) async fn show_static(
+    outputs: &[String],
+    path: &str,
+    fill: config::FillMode,
+    transition: Option<Transition>,
+) {
     let Some(handle) = render::handle() else {
         return;
     };
@@ -58,13 +64,19 @@ pub(super) async fn show_static(outputs: &[String], path: &str, fill: config::Fi
     let pfill = render::paper_fill(fill);
     let src = render_source(path);
     for out in normalized(outputs) {
-        handle.show(&out, Source::Static(src.clone()), tier, pfill, true, 80);
+        handle.show(&out, Source::Static(src.clone()), tier, pfill, true, 80, transition.clone());
     }
     handle.idle_release();
 }
 
-/// Show a livewall on each target output. `entries` is `(connector, mute, volume)`.
-pub(super) async fn show_video(entries: &[(String, bool, u32)], path: &str, fill: config::FillMode) {
+/// Show a livewall on each target output. `entries` is `(connector, mute, volume)`;
+/// `transition` is the reveal to animate the switch with (`None` when not switching).
+pub(super) async fn show_video(
+    entries: &[(String, bool, u32)],
+    path: &str,
+    fill: config::FillMode,
+    transition: Option<Transition>,
+) {
     let Some(handle) = render::handle() else {
         return;
     };
@@ -72,7 +84,7 @@ pub(super) async fn show_video(entries: &[(String, bool, u32)], path: &str, fill
     let pfill = render::paper_fill(fill);
     let src = render_source(path);
     for (out, mute, volume) in entries {
-        handle.show(out, Source::Video(src.clone()), tier, pfill, *mute, *volume);
+        handle.show(out, Source::Video(src.clone()), tier, pfill, *mute, *volume, transition.clone());
     }
 }
 

@@ -37,9 +37,13 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_surface_v1::{Anchor, KeyboardInteractivity, ZwlrLayerSurfaceV1},
 };
 
+use std::time::{Duration, Instant};
+
 use crate::fill_mode::{FillMode, apply_fill_mode};
 use crate::image_paper::decode_image;
 use crate::render::{EglCore, OutputBlitter, wayland_display_ptr};
+use crate::transition_paper::catalog_shader;
+use crate::transitions::reveal::{RevealProgram, Transition};
 use crate::video_source::VideoSource;
 
 // ---------------------------------------------------------------------------
@@ -153,6 +157,9 @@ pub struct Desired {
     pub fill: FillMode,
     pub mute: bool,
     pub volume: u32,
+    /// The reveal to animate into this content, or `None` for an instant paint
+    /// (init / restore / carry-over). Consumed once, on the next realize.
+    pub transition: Option<Transition>,
 }
 
 /// Per-connector desired state — the pure bookkeeping the renderer consults to
@@ -224,6 +231,7 @@ pub enum RenderCommand {
         fill: FillMode,
         mute: bool,
         volume: u32,
+        transition: Option<Transition>,
     },
     StopOutput {
         connector: String,
@@ -273,6 +281,7 @@ impl RenderHandle {
         fill: FillMode,
         mute: bool,
         volume: u32,
+        transition: Option<Transition>,
     ) {
         self.send(RenderCommand::Show {
             connector: connector.to_string(),
@@ -281,6 +290,7 @@ impl RenderHandle {
             fill,
             mute,
             volume,
+            transition,
         });
     }
 
@@ -384,6 +394,9 @@ struct OutputSurface {
     height: u32,
     configured: bool,
     realized_wh: Option<(u32, u32)>,
+    /// What is currently painted here, so a later `show` of the same source at
+    /// the same size is a no-op but a switch re-realizes (and animates).
+    realized_source: Option<Source>,
     content: Content,
     frame_pending: bool,
 }
@@ -459,7 +472,7 @@ impl Renderer {
     /// fill and muted audio. Richer control (fill/audio) goes through the command
     /// channel; see [`RenderHandle::show`].
     pub fn show_output(&mut self, connector: &str, source: Source, tier: ResourceTier) {
-        self.apply_show(connector, source, tier, FillMode::default(), true, 80);
+        self.apply_show(connector, source, tier, FillMode::default(), true, 80, None);
     }
 
     /// Tear down a connector's surface + live decoder/GL entirely (used when
@@ -486,6 +499,7 @@ impl Renderer {
         fill: FillMode,
         mute: bool,
         volume: u32,
+        transition: Option<Transition>,
     ) {
         self.app.show(
             connector,
@@ -495,6 +509,7 @@ impl Renderer {
                 fill,
                 mute,
                 volume,
+                transition,
             },
         );
         // A new surface commits at size 0x0 and needs a configure round-trip
@@ -511,7 +526,8 @@ impl Renderer {
                 fill,
                 mute,
                 volume,
-            } => self.apply_show(&connector, source, tier, fill, mute, volume),
+                transition,
+            } => self.apply_show(&connector, source, tier, fill, mute, volume, transition),
             RenderCommand::StopOutput { connector } => self.stop_output(&connector),
             RenderCommand::StopAll => {
                 self.app.stop_all();
@@ -591,6 +607,66 @@ fn drain_fd(fd: RawFd) {
     }
 }
 
+/// Upload native-orientation RGBA (row 0 = top) as a GL texture. A context must
+/// be current; the reveal vertex stage flips sampling to top-left origin.
+fn upload_rgba(w: u32, h: u32, pixels: &[u8]) -> u32 {
+    unsafe {
+        let mut tex: u32 = 0;
+        gl::GenTextures(1, &mut tex);
+        gl::BindTexture(gl::TEXTURE_2D, tex);
+        gl::TexImage2D(
+            gl::TEXTURE_2D,
+            0,
+            gl::RGBA8 as i32,
+            w as i32,
+            h as i32,
+            0,
+            gl::RGBA,
+            gl::UNSIGNED_BYTE,
+            pixels.as_ptr().cast(),
+        );
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
+        gl::BindTexture(gl::TEXTURE_2D, 0);
+        tex
+    }
+}
+
+/// Decode a wallpaper's first frame to RGBA for a transition side. Images decode
+/// directly; a livewall side extracts one frame (the reveal only sweeps stills).
+fn decode_first_frame(path: &Path) -> Option<(u32, u32, Vec<u8>)> {
+    let p = path.to_string_lossy();
+    if Source::classify(&p).is_video() {
+        decode_video_first_frame(&p)
+    } else {
+        match decode_image(&p) {
+            Ok(v) => Some(v),
+            Err(e) => {
+                tracing::warn!(error = %e, path = %p, "transition side decode failed");
+                None
+            }
+        }
+    }
+}
+
+fn decode_video_first_frame(path: &str) -> Option<(u32, u32, Vec<u8>)> {
+    let output = std::process::Command::new("ffmpeg")
+        .args([
+            "-y", "-hwaccel", "auto", "-loglevel", "error", "-an", "-i", path, "-vframes", "1",
+            "-f", "image2pipe", "-c:v", "ppm", "pipe:1",
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let img = image::load_from_memory(&output.stdout).ok()?.to_rgba8();
+    let (w, h) = img.dimensions();
+    Some((w, h, img.into_raw()))
+}
+
 impl App {
     // --- scene management --------------------------------------------------
 
@@ -667,6 +743,7 @@ impl App {
                 out.content = Content::Empty;
                 out.frame_pending = false;
                 out.realized_wh = None;
+                out.realized_source = None;
             }
         }
     }
@@ -726,6 +803,7 @@ impl App {
             height: 0,
             configured: false,
             realized_wh: None,
+            realized_source: None,
             content: Content::Empty,
             frame_pending: false,
         });
@@ -764,10 +842,18 @@ impl App {
         if !self.outputs[idx].configured || sw == 0 || sh == 0 {
             return;
         }
-        if self.outputs[idx].realized_wh == Some((sw, sh))
-            && !matches!(self.outputs[idx].content, Content::Empty)
-        {
+        let empty = matches!(self.outputs[idx].content, Content::Empty);
+        let same_source = self.outputs[idx].realized_source.as_ref() == Some(&desired.source);
+        // Same source, same size, already painted: a spurious configure or a
+        // repeat show; nothing to do.
+        if same_source && self.outputs[idx].realized_wh == Some((sw, sh)) && !empty {
             return;
+        }
+        // Animate the reveal only into a real switch over existing content; the
+        // first paint (login / fresh output), a resize, and null transitions all
+        // paint instantly.
+        if desired.transition.is_some() && !empty && !same_source {
+            self.run_transition(idx, &desired);
         }
         match &desired.source {
             Source::Static(path) => self.realize_static(idx, path, desired.fill, desired.tier),
@@ -775,6 +861,112 @@ impl App {
                 self.realize_video(idx, path, desired.tier, desired.mute, desired.volume);
             }
         }
+    }
+
+    /// Animate `desired`'s reveal over the current content, presenting each
+    /// frame to the output's window surface, then return so the caller commits
+    /// the settled frame. Ping-pongs the old (currently realized) and new images
+    /// as two textures under the reveal shader, sweeping eased `progress` 0→1
+    /// over `duration_ms`. Best-effort: any failure just skips the animation and
+    /// the caller's realize paints the switch instantly. GL is spun up here if
+    /// idle; the daemon's `IdleRelease` after a static settle drops it again.
+    fn run_transition(&mut self, idx: usize, desired: &Desired) {
+        let Some(t) = desired.transition.as_ref() else {
+            return;
+        };
+        let Some(old_src) = self.outputs[idx].realized_source.clone() else {
+            return;
+        };
+        let (sw, sh) = (self.outputs[idx].width, self.outputs[idx].height);
+        let (rw, rh) = desired.tier.render_size(sw, sh);
+
+        // Both sides decode to CPU RGBA and fit the render buffer (a livewall
+        // side sweeps between still first frames). Done before GL so a decode
+        // failure costs no context.
+        let Some((ow, oh, opx)) = decode_first_frame(old_src.path()) else {
+            return;
+        };
+        let Some((nw, nh, npx)) = decode_first_frame(desired.source.path()) else {
+            return;
+        };
+        let (obw, obh, ofit) = apply_fill_mode(ow, oh, opx, rw, rh, desired.fill);
+        let (nbw, nbh, nfit) = apply_fill_mode(nw, nh, npx, rw, rh, desired.fill);
+
+        if self.egl.is_none() {
+            let dp = match wayland_display_ptr(&self.outputs[idx].surface) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!(error = %e, "transition: wayland display ptr");
+                    return;
+                }
+            };
+            match EglCore::new(dp) {
+                Ok(core) => self.egl = Some(core),
+                Err(e) => {
+                    tracing::warn!(error = %e, "transition: EGL init failed");
+                    return;
+                }
+            }
+        }
+        let egl = self.egl.as_ref().unwrap();
+        let blitter = match egl.make_blitter(&self.outputs[idx].surface, rw, rh) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::warn!(error = %e, "transition: blitter create failed");
+                return;
+            }
+        };
+        // make_blitter left the window context current: upload + compile here.
+        let tex_old = upload_rgba(obw, obh, &ofit);
+        let tex_new = upload_rgba(nbw, nbh, &nfit);
+        let program = match t.shader.as_deref().and_then(catalog_shader) {
+            Some(src) => RevealProgram::catalog(src),
+            None => RevealProgram::reveal(t, (rw as f32, rh as f32)),
+        };
+        let Ok(program) = program else {
+            tracing::warn!("transition: shader compile failed");
+            unsafe {
+                gl::DeleteTextures(1, &tex_old);
+                gl::DeleteTextures(1, &tex_new);
+            }
+            return;
+        };
+
+        let dur = t.duration_ms.max(1) as f32;
+        let start = Instant::now();
+        loop {
+            let x = (start.elapsed().as_millis() as f32 / dur).clamp(0.0, 1.0);
+            let p = crate::transitions::reveal::cubic_bezier_ease(t.bezier, x);
+            if !egl.make_current_window(&blitter) {
+                break;
+            }
+            unsafe {
+                gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+                gl::Viewport(0, 0, rw as i32, rh as i32);
+                gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+                gl::Clear(gl::COLOR_BUFFER_BIT);
+                program.set_progress(p);
+                gl::ActiveTexture(gl::TEXTURE0);
+                gl::BindTexture(gl::TEXTURE_2D, tex_old);
+                gl::ActiveTexture(gl::TEXTURE1);
+                gl::BindTexture(gl::TEXTURE_2D, tex_new);
+                gl::BindVertexArray(blitter.vao());
+                gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4);
+                gl::BindVertexArray(0);
+            }
+            egl.swap(&blitter);
+            if x >= 1.0 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(8));
+        }
+
+        unsafe {
+            gl::DeleteTextures(1, &tex_old);
+            gl::DeleteTextures(1, &tex_new);
+        }
+        program.delete();
+        drop(blitter);
     }
 
     fn realize_static(&mut self, idx: usize, path: &Path, fill: FillMode, tier: ResourceTier) {
@@ -824,6 +1016,7 @@ impl App {
             _keep: keep,
         });
         out.realized_wh = Some((sw, sh));
+        out.realized_source = Some(Source::Static(path.to_path_buf()));
         out.frame_pending = false;
         tracing::info!(output = %out.name, w = bw, h = bh, "static committed");
     }
@@ -887,6 +1080,7 @@ impl App {
         out.viewport.set_destination(sw as i32, sh as i32);
         out.content = Content::Video(VideoContent { source, blitter });
         out.realized_wh = Some((sw, sh));
+        out.realized_source = Some(Source::Video(path.to_path_buf()));
         tracing::info!(output = %out.name, w = rw, h = rh, "livewall started");
         self.schedule_frame(idx);
     }
@@ -908,6 +1102,7 @@ impl App {
         self.outputs[idx].content = Content::Empty;
         self.outputs[idx].frame_pending = false;
         self.outputs[idx].realized_wh = None;
+        self.outputs[idx].realized_source = None;
     }
 
     fn schedule_frame(&mut self, idx: usize) {
@@ -1138,6 +1333,7 @@ mod tests {
             fill: FillMode::Fill,
             mute: true,
             volume: 80,
+            transition: None,
         }
     }
 
@@ -1148,6 +1344,7 @@ mod tests {
             fill: FillMode::Fill,
             mute: true,
             volume: 80,
+            transition: None,
         }
     }
 

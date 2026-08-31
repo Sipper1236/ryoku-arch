@@ -2979,6 +2979,22 @@ fn pipeline_for(_name: &str) -> Pipeline {
     Pipeline::Single
 }
 
+/// The skwd catalog transition names, for the unified selection space (the
+/// daemon lists these alongside ryoku's reveal presets).
+#[must_use]
+pub fn catalog_names() -> Vec<&'static str> {
+    SHADER_CATALOG.iter().map(|(n, _)| *n).collect()
+}
+
+/// The fragment source for a named catalog transition, or `None` if unknown.
+#[must_use]
+pub fn catalog_shader(name: &str) -> Option<&'static str> {
+    SHADER_CATALOG
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, s)| *s)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

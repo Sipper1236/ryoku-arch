@@ -223,6 +223,25 @@ impl EglCore {
             tracing::warn!(error = ?e, "swap_buffers failed");
         }
     }
+
+    /// Bind an output window surface's child context so a transition can render
+    /// directly to the presented framebuffer (FBO 0).
+    pub(crate) fn make_current_window(&self, blitter: &OutputBlitter) -> bool {
+        EGL.make_current(
+            blitter.egl_display,
+            Some(blitter.egl_surface),
+            Some(blitter.egl_surface),
+            Some(blitter.egl_context),
+        )
+        .is_ok()
+    }
+
+    /// Present the current window frame.
+    pub(crate) fn swap(&self, blitter: &OutputBlitter) {
+        if let Err(e) = EGL.swap_buffers(blitter.egl_display, blitter.egl_surface) {
+            tracing::warn!(error = ?e, "transition swap_buffers failed");
+        }
+    }
 }
 
 impl Drop for EglCore {
@@ -334,6 +353,11 @@ impl OutputBlitter {
         self.width = w;
         self.height = h;
         self._wl_egl_surface.resize(w as i32, h as i32, 0, 0);
+    }
+
+    /// The child context's VAO (quad geometry), for a transition draw.
+    pub(crate) fn vao(&self) -> u32 {
+        self.vao
     }
 }
 

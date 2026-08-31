@@ -15,9 +15,11 @@ pub mod ipc;
 pub mod render;
 pub mod renderer;
 pub mod transition_paper;
+pub mod transitions;
 pub mod video_source;
 pub mod watchdog;
 pub mod wayland;
 
 pub use fill_mode::FillMode;
 pub use renderer::{RenderCommand, RenderHandle, Renderer, ResourceTier, Source, spawn_renderer};
+pub use transitions::Transition;

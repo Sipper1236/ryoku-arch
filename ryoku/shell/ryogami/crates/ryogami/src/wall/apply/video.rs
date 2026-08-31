@@ -109,13 +109,14 @@ pub(super) async fn apply_video_inner(
         .ok();
 
         // Start a livewall on each target output. Audio dedup (one audible output
-        // per group) is enforced below via `enforce_audio_dedup`. Transitions land
-        // in Task 4.
+        // per group) is enforced below via `enforce_audio_dedup`. A user switch
+        // reveals with a picked transition; a restore / live-reload paints instantly.
         let entries: Vec<(String, bool, u32)> = target_outs
             .iter()
             .map(|out| (out.clone(), mute_for(out), volume_for(out)))
             .collect();
-        show_video(&entries, path, config.display.fill_mode).await;
+        let reveal = crate::wall::transitions::transition_for(restoring);
+        show_video(&entries, path, config.display.fill_mode, reveal).await;
         info!(outputs = target_outs.len(), "apply_video: in-process livewall");
     }
 

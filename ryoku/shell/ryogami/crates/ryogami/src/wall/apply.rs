@@ -182,14 +182,15 @@ async fn apply_static_inner(
                     prev = %prev_path,
                     "static apply: carrying wildcard image to un-targeted monitors"
                 );
-                show_static(&carry_over, prev_path, config.display.fill_mode).await;
+                show_static(&carry_over, prev_path, config.display.fill_mode, None).await;
             }
         }
 
         // Render the target image and settle: `show_static` releases GL to idle,
-        // so a static desktop holds only the committed buffer. (Transitions land
-        // in Task 4.)
-        show_static(&target_outs, &render_to, config.display.fill_mode).await;
+        // so a static desktop holds only the committed buffer. A user switch
+        // reveals with a picked transition; a restore paints instantly.
+        let reveal = crate::wall::transitions::transition_for(restoring);
+        show_static(&target_outs, &render_to, config.display.fill_mode, reveal).await;
 
         if prev_was_we {
             kill_legacy_video_procs().await;

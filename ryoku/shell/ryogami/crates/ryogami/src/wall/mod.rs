@@ -6,6 +6,7 @@ pub mod clean_trash;
 pub mod optimized;
 pub mod thumb;
 pub mod watcher;
+mod transitions;
 
 pub mod effects;
 pub mod optimize;
