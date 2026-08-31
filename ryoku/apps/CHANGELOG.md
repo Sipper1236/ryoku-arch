@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed
+- `ryowalls/`: **A download that returns an error page or a Git LFS pointer no
+  longer poisons the wallpaper folder.** `curl` fetches those with a 200 and
+  exit 0, so ryowalls saved a few hundred bytes of ASCII as a `.png`; the
+  catalog could not thumbnail it and the picker silently dropped the row, so a
+  "saved" wallpaper never appeared. Every download verb now validates the file
+  is decodable media (`identify` for images, `ffprobe` for clips) and, on a bad
+  file, removes it and fails so the UI reports "Download failed" instead
+  (`ryowalls/bin/ryowalls`).
+
 ### Added
 - `fish/`, `bash/`, `zsh/`, `terminal-shell/`: **Fish, Bash, and Zsh now
   carry the same Ryoku terminal tools.** All three initialize Starship, zoxide,

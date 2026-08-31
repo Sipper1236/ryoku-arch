@@ -129,8 +129,38 @@ vid_res_map() {
 		'printf "%s\t%s\n" "$1" "$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 "$1" 2>/dev/null | head -1)"' _
 }
 
-# downloads land as-is now; enhancing is an explicit, on-demand action.
-finish() { printf '%s\n' "$1"; }
+# valid_media proves a downloaded file is decodable media, not an HTML error
+# page or a Git LFS pointer (a few hundred bytes of ASCII) that curl fetched
+# with a 200 and exit 0. Images go through `identify`, clips through ffprobe.
+valid_media() {
+	local f="$1" ext
+	[ -s "$f" ] || return 1
+	ext="$(printf '%s' "${f##*.}" | tr '[:upper:]' '[:lower:]')"
+	case "$ext" in
+	mp4 | webm | mkv | mov)
+		command -v ffprobe >/dev/null 2>&1 || return 0
+		ffprobe -v error -select_streams v:0 -show_entries stream=codec_type \
+			-of csv=p=0 "$f" 2>/dev/null | grep -q video
+		;;
+	*)
+		identify "${f}[0]" >/dev/null 2>&1
+		;;
+	esac
+}
+
+# finish prints the saved path for the UI, but first proves the download is real
+# media: a fetch that got an error page or an LFS pointer still exits 0 and
+# leaves a .png the catalog cannot thumbnail and the picker silently drops (the
+# "my saved wallpaper never shows up" report). A bad file is removed and finish
+# fails, so the UI reports "Download failed" instead of saving poison.
+finish() {
+	if ! valid_media "$1"; then
+		rm -f "$1"
+		echo "ryowalls: discarded a corrupt download (not decodable media): $1" >&2
+		return 1
+	fi
+	printf '%s\n' "$1"
+}
 
 # A killed enhance (Quickshell SIGTERMs the engine when the ryowalls window
 # closes) must never leave waifu2x/ffmpeg hammering the GPU with nothing on
