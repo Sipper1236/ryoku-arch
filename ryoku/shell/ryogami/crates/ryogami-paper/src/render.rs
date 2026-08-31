@@ -9,16 +9,25 @@ use crate::video_source::VideoSource;
 type EglInstance = khronos_egl::Instance<khronos_egl::Static>;
 const EGL: EglInstance = khronos_egl::Instance::new(khronos_egl::Static);
 
-pub struct SharedRenderer {
+/// The shared EGL/GL context: one `EGLDisplay`, one `EGLContext`, and the blit
+/// pipeline. Created once per renderer so the GPU-driver floor is paid a single
+/// time across every output. Per-output window surfaces (`OutputBlitter`) are
+/// child contexts sharing this one's objects. Reused by both the legacy
+/// `SharedRenderer` (standalone bin) and the in-process `renderer::Renderer`.
+pub(crate) struct EglCore {
     egl_display: khronos_egl::Display,
     egl_config: khronos_egl::Config,
-    primary_ctx: khronos_egl::Context,
-    primary_pbuffer: khronos_egl::Surface,
-    pub fbo_w: u32,
-    pub fbo_h: u32,
+    shared_ctx: khronos_egl::Context,
+    pbuffer: khronos_egl::Surface,
     blit_program: u32,
     quad_vbo: u32,
+}
+
+pub struct SharedRenderer {
     video: VideoSource,
+    pub fbo_w: u32,
+    pub fbo_h: u32,
+    core: EglCore,
 }
 
 pub struct OutputBlitter {
@@ -31,24 +40,8 @@ pub struct OutputBlitter {
     pub height: u32,
 }
 
-impl SharedRenderer {
-    pub fn new(
-        wayland_display_ptr: *mut c_void,
-        fbo_w: u32,
-        fbo_h: u32,
-        file_path: &str,
-        mpv_opts: &[(String, String)],
-    ) -> Result<Self> {
-        let initial_mute = mpv_opts
-            .iter()
-            .find(|(k, _)| k == "mute")
-            .map(|(_, v)| v == "yes" || v == "true")
-            .unwrap_or(true);
-        let initial_volume: u32 = mpv_opts
-            .iter()
-            .find(|(k, _)| k == "volume")
-            .and_then(|(_, v)| v.parse::<u32>().ok())
-            .unwrap_or(80);
+impl EglCore {
+    pub(crate) fn new(wayland_display_ptr: *mut c_void) -> Result<Self> {
         let egl_display = unsafe { EGL.get_display(wayland_display_ptr) }
             .ok_or_else(|| anyhow!("eglGetDisplay failed"))?;
         EGL.initialize(egl_display)
@@ -83,9 +76,9 @@ impl SharedRenderer {
             3,
             khronos_egl::NONE,
         ];
-        let primary_ctx = EGL
+        let shared_ctx = EGL
             .create_context(egl_display, egl_config, None, &ctx_attribs)
-            .map_err(|e| anyhow!("eglCreateContext primary: {e:?}"))?;
+            .map_err(|e| anyhow!("eglCreateContext shared: {e:?}"))?;
 
         let pb_attribs = [
             khronos_egl::WIDTH,
@@ -94,17 +87,12 @@ impl SharedRenderer {
             1,
             khronos_egl::NONE,
         ];
-        let primary_pbuffer = EGL
+        let pbuffer = EGL
             .create_pbuffer_surface(egl_display, egl_config, &pb_attribs)
             .map_err(|e| anyhow!("eglCreatePbufferSurface: {e:?}"))?;
 
-        EGL.make_current(
-            egl_display,
-            Some(primary_pbuffer),
-            Some(primary_pbuffer),
-            Some(primary_ctx),
-        )
-        .map_err(|e| anyhow!("eglMakeCurrent primary: {e:?}"))?;
+        EGL.make_current(egl_display, Some(pbuffer), Some(pbuffer), Some(shared_ctx))
+            .map_err(|e| anyhow!("eglMakeCurrent shared: {e:?}"))?;
 
         gl::load_with(|name| {
             let cname = CString::new(name).unwrap();
@@ -116,78 +104,31 @@ impl SharedRenderer {
         let blit_program = compile_blit_program()?;
         let quad_vbo = create_quad_vbo();
 
-        let mut video = VideoSource::new(file_path, fbo_w, fbo_h, initial_mute)
-            .with_context(|| format!("VideoSource for {file_path}"))?;
-        video.set_volume(initial_volume);
-        video.prime_first_frame(2000);
-        video.set_pause(false);
-
         Ok(Self {
             egl_display,
             egl_config,
-            primary_ctx,
-            primary_pbuffer,
-            fbo_w,
-            fbo_h,
+            shared_ctx,
+            pbuffer,
             blit_program,
             quad_vbo,
-            video,
         })
     }
 
-    pub fn render_mpv_to_fbo(&mut self) -> bool {
-        if EGL
-            .make_current(
-                self.egl_display,
-                Some(self.primary_pbuffer),
-                Some(self.primary_pbuffer),
-                Some(self.primary_ctx),
-            )
-            .is_err()
-        {
-            tracing::warn!("eglMakeCurrent primary failed");
-            return false;
-        }
-        let new_frame = self.video.render_to_fbo();
-        unsafe { gl::Finish() };
-        new_frame
+    /// Bind the shared context to its offscreen pbuffer so FBO/texture work has a
+    /// current context.
+    pub(crate) fn make_current_offscreen(&self) -> bool {
+        EGL.make_current(
+            self.egl_display,
+            Some(self.pbuffer),
+            Some(self.pbuffer),
+            Some(self.shared_ctx),
+        )
+        .is_ok()
     }
 
-    pub fn blit_to(&self, blitter: &OutputBlitter) {
-        if EGL
-            .make_current(
-                blitter.egl_display,
-                Some(blitter.egl_surface),
-                Some(blitter.egl_surface),
-                Some(blitter.egl_context),
-            )
-            .is_err()
-        {
-            tracing::warn!("eglMakeCurrent blitter failed");
-            return;
-        }
-        unsafe {
-            gl::Viewport(0, 0, blitter.width as i32, blitter.height as i32);
-            gl::ClearColor(0.0, 0.0, 0.0, 1.0);
-            gl::Clear(gl::COLOR_BUFFER_BIT);
-            gl::UseProgram(self.blit_program);
-            gl::ActiveTexture(gl::TEXTURE0);
-            gl::BindTexture(gl::TEXTURE_2D, self.video.fbo_texture);
-            gl::BindVertexArray(blitter.vao);
-            gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4);
-            gl::BindVertexArray(0);
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-            let err = gl::GetError();
-            if err != gl::NO_ERROR {
-                tracing::warn!(gl_error = err, "blit GL error");
-            }
-        }
-        if let Err(e) = EGL.swap_buffers(blitter.egl_display, blitter.egl_surface) {
-            tracing::warn!(error = ?e, "swap_buffers failed");
-        }
-    }
-
-    pub fn make_blitter(&self, surface: &WlSurface, w: u32, h: u32) -> Result<OutputBlitter> {
+    /// Create a per-output window surface (child context sharing this core's GL
+    /// objects) bound to `surface` at `w`x`h`.
+    pub(crate) fn make_blitter(&self, surface: &WlSurface, w: u32, h: u32) -> Result<OutputBlitter> {
         let ctx_attribs = [
             khronos_egl::CONTEXT_MAJOR_VERSION,
             3,
@@ -199,13 +140,13 @@ impl SharedRenderer {
             .create_context(
                 self.egl_display,
                 self.egl_config,
-                Some(self.primary_ctx),
+                Some(self.shared_ctx),
                 &ctx_attribs,
             )
-            .map_err(|e| anyhow!("eglCreateContext shared: {e:?}"))?;
+            .map_err(|e| anyhow!("eglCreateContext blitter: {e:?}"))?;
 
-        let wl_egl_surface = WlEglSurface::new(surface.id(), w as i32, h as i32)
-            .context("WlEglSurface::new")?;
+        let wl_egl_surface =
+            WlEglSurface::new(surface.id(), w as i32, h as i32).context("WlEglSurface::new")?;
         let egl_surface = unsafe {
             EGL.create_window_surface(
                 self.egl_display,
@@ -246,30 +187,116 @@ impl SharedRenderer {
             height: h,
         })
     }
-}
 
-impl OutputBlitter {
-    pub fn resize(&mut self, w: u32, h: u32) {
-        if w == self.width && h == self.height {
+    /// Blit a GL texture (an FBO colour attachment) to an output window surface
+    /// and present it.
+    pub(crate) fn blit_texture_to(&self, blitter: &OutputBlitter, texture: u32) {
+        if EGL
+            .make_current(
+                blitter.egl_display,
+                Some(blitter.egl_surface),
+                Some(blitter.egl_surface),
+                Some(blitter.egl_context),
+            )
+            .is_err()
+        {
+            tracing::warn!("eglMakeCurrent blitter failed");
             return;
         }
-        self.width = w;
-        self.height = h;
-        self._wl_egl_surface.resize(w as i32, h as i32, 0, 0);
+        unsafe {
+            gl::Viewport(0, 0, blitter.width as i32, blitter.height as i32);
+            gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+            gl::Clear(gl::COLOR_BUFFER_BIT);
+            gl::UseProgram(self.blit_program);
+            gl::ActiveTexture(gl::TEXTURE0);
+            gl::BindTexture(gl::TEXTURE_2D, texture);
+            gl::BindVertexArray(blitter.vao);
+            gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4);
+            gl::BindVertexArray(0);
+            gl::BindTexture(gl::TEXTURE_2D, 0);
+            let err = gl::GetError();
+            if err != gl::NO_ERROR {
+                tracing::warn!(gl_error = err, "blit GL error");
+            }
+        }
+        if let Err(e) = EGL.swap_buffers(blitter.egl_display, blitter.egl_surface) {
+            tracing::warn!(error = ?e, "swap_buffers failed");
+        }
+    }
+}
+
+impl Drop for EglCore {
+    fn drop(&mut self) {
+        let _ = self.make_current_offscreen();
+        unsafe {
+            if self.blit_program != 0 {
+                gl::DeleteProgram(self.blit_program);
+            }
+            if self.quad_vbo != 0 {
+                gl::DeleteBuffers(1, &self.quad_vbo);
+            }
+        }
+        let _ = EGL.make_current(self.egl_display, None, None, None);
+        let _ = EGL.destroy_surface(self.egl_display, self.pbuffer);
+        let _ = EGL.destroy_context(self.egl_display, self.shared_ctx);
     }
 }
 
 impl SharedRenderer {
+    pub fn new(
+        wayland_display_ptr: *mut c_void,
+        fbo_w: u32,
+        fbo_h: u32,
+        file_path: &str,
+        mpv_opts: &[(String, String)],
+    ) -> Result<Self> {
+        let initial_mute = mpv_opts
+            .iter()
+            .find(|(k, _)| k == "mute")
+            .map(|(_, v)| v == "yes" || v == "true")
+            .unwrap_or(true);
+        let initial_volume: u32 = mpv_opts
+            .iter()
+            .find(|(k, _)| k == "volume")
+            .and_then(|(_, v)| v.parse::<u32>().ok())
+            .unwrap_or(80);
+
+        let core = EglCore::new(wayland_display_ptr)?;
+
+        let mut video = VideoSource::new(file_path, fbo_w, fbo_h, initial_mute)
+            .with_context(|| format!("VideoSource for {file_path}"))?;
+        video.set_volume(initial_volume);
+        video.prime_first_frame(2000);
+        video.set_pause(false);
+
+        Ok(Self {
+            video,
+            fbo_w,
+            fbo_h,
+            core,
+        })
+    }
+
+    pub fn render_mpv_to_fbo(&mut self) -> bool {
+        if !self.core.make_current_offscreen() {
+            tracing::warn!("eglMakeCurrent primary failed");
+            return false;
+        }
+        let new_frame = self.video.render_to_fbo();
+        unsafe { gl::Finish() };
+        new_frame
+    }
+
+    pub fn blit_to(&self, blitter: &OutputBlitter) {
+        self.core.blit_texture_to(blitter, self.video.fbo_texture);
+    }
+
+    pub fn make_blitter(&self, surface: &WlSurface, w: u32, h: u32) -> Result<OutputBlitter> {
+        self.core.make_blitter(surface, w, h)
+    }
+
     pub fn load_path(&mut self, path: &str, mute: bool, volume: u32) -> Result<()> {
-        if EGL
-            .make_current(
-                self.egl_display,
-                Some(self.primary_pbuffer),
-                Some(self.primary_pbuffer),
-                Some(self.primary_ctx),
-            )
-            .is_err()
-        {
+        if !self.core.make_current_offscreen() {
             return Err(anyhow!("eglMakeCurrent for load_path"));
         }
         let mut new_video = VideoSource::new(path, self.fbo_w, self.fbo_h, mute)
@@ -299,15 +326,27 @@ impl SharedRenderer {
     }
 }
 
+impl OutputBlitter {
+    pub fn resize(&mut self, w: u32, h: u32) {
+        if w == self.width && h == self.height {
+            return;
+        }
+        self.width = w;
+        self.height = h;
+        self._wl_egl_surface.resize(w as i32, h as i32, 0, 0);
+    }
+}
+
 impl Drop for SharedRenderer {
     fn drop(&mut self) {
+        let _ = self.core.make_current_offscreen();
         unsafe {
             gl::DeleteFramebuffers(1, &self.video.fbo);
             gl::DeleteTextures(1, &self.video.fbo_texture);
         }
-        let _ = EGL.make_current(self.egl_display, None, None, None);
-        let _ = EGL.destroy_surface(self.egl_display, self.primary_pbuffer);
-        let _ = EGL.destroy_context(self.egl_display, self.primary_ctx);
+        // `video` drops before `core` (field order), so the YUV textures are
+        // freed while the context is still current; `core` then tears the
+        // context down.
     }
 }
 
@@ -322,7 +361,7 @@ impl Drop for OutputBlitter {
 const VERT_SRC: &[u8] = b"#version 330 core\nlayout(location=0) in vec2 a_pos;\nlayout(location=1) in vec2 a_tex;\nout vec2 v_tex;\nvoid main() { gl_Position = vec4(a_pos, 0.0, 1.0); v_tex = a_tex; }\n\0";
 const FRAG_SRC: &[u8] = b"#version 330 core\nin vec2 v_tex;\nout vec4 frag;\nuniform sampler2D u_tex;\nvoid main() { frag = texture(u_tex, vec2(v_tex.x, 1.0 - v_tex.y)); }\n\0";
 
-fn compile_blit_program() -> Result<u32> {
+pub(crate) fn compile_blit_program() -> Result<u32> {
     unsafe {
         let v = compile_shader(gl::VERTEX_SHADER, VERT_SRC)?;
         let f = compile_shader(gl::FRAGMENT_SHADER, FRAG_SRC)?;
@@ -361,7 +400,7 @@ unsafe fn compile_shader(kind: u32, src: &[u8]) -> Result<u32> {
     }
 }
 
-fn create_quad_vbo() -> u32 {
+pub(crate) fn create_quad_vbo() -> u32 {
     let verts: [f32; 16] = [
         -1.0, -1.0, 0.0, 0.0,
          1.0, -1.0, 1.0, 0.0,

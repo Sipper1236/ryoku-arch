@@ -1,5 +1,6 @@
 mod config;
 mod db;
+mod render;
 mod server;
 mod util;
 mod wall;

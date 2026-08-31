@@ -3,17 +3,8 @@
 use anyhow::Result;
 use clap::Parser;
 
-mod audio;
-mod fill_mode;
-mod image_paper;
-mod ipc;
-mod render;
-mod transition_paper;
-mod video_source;
-mod watchdog;
-mod wayland;
-
-use fill_mode::FillMode;
+use ryogami_paper::fill_mode::FillMode;
+use ryogami_paper::{Source, image_paper, transition_paper, watchdog, wayland};
 
 #[derive(Parser, Debug)]
 #[command(name = "ryogami-paper")]
@@ -78,7 +69,8 @@ fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
-    let mode = if is_image_path(&cli.file) { "image" } else { "video" };
+    let is_img = matches!(Source::classify(&cli.file), Source::Static(_));
+    let mode = if is_img { "image" } else { "video" };
     tracing::info!(
         file = %cli.file,
         output = %cli.output,
@@ -107,7 +99,7 @@ fn main() -> Result<()> {
         return transition_paper::run(target, from, &cli.file, &cli.shader, cli.duration_ms, &cli.thumbs, cli.persist, cli.fill_mode, cli.mute, cli.volume, layer);
     }
 
-    if mode == "image" {
+    if is_img {
         let target = if cli.output == "*" {
             image_paper::OutputTarget::All
         } else {
@@ -129,14 +121,6 @@ fn main() -> Result<()> {
         wayland::run(target, &cli.file, &mpv_opts, cli.persist, cli.fill_mode)
     }
 }
-
-fn is_image_path(p: &str) -> bool {
-    let lower = p.to_lowercase();
-    [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif", ".gif", ".avif"]
-        .iter()
-        .any(|ext| lower.ends_with(ext))
-}
-
 fn parse_mpv_opts(s: &str) -> Vec<(String, String)> {
     s.split(';')
         .filter(|p| !p.is_empty())
@@ -152,16 +136,6 @@ fn parse_mpv_opts(s: &str) -> Vec<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn is_image_path_matches_image_extensions() {
-        for p in ["a.jpg", "B.PNG", "c.webp", "/x/y.AVIF", "d.gif"] {
-            assert!(is_image_path(p), "{p} should be image");
-        }
-        for p in ["a.mp4", "b.webm", "noext", "c.txt"] {
-            assert!(!is_image_path(p), "{p} should not be image");
-        }
-    }
 
     #[test]
     fn parse_mpv_opts_splits_pairs_and_trims() {

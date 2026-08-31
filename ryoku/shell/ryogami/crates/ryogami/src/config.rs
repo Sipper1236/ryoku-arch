@@ -176,25 +176,15 @@ pub enum FillMode {
     Tile,
 }
 
-impl FillMode {
-    pub fn as_arg(self) -> &'static str {
-        match self {
-            FillMode::Fill => "fill",
-            FillMode::Fit => "fit",
-            FillMode::Stretch => "stretch",
-            FillMode::Center => "center",
-            FillMode::Tile => "tile",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct DisplayConfig {
     #[serde(default, rename = "fillMode")]
     pub fill_mode: FillMode,
 }
 
+/// Transition preset config, consumed by the Task 4 transition engine.
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct TransitionConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -751,12 +741,7 @@ mod tests {
     }
 
     #[test]
-    fn fill_mode_as_arg_covers_all_variants() {
-        assert_eq!(FillMode::Fill.as_arg(), "fill");
-        assert_eq!(FillMode::Fit.as_arg(), "fit");
-        assert_eq!(FillMode::Stretch.as_arg(), "stretch");
-        assert_eq!(FillMode::Center.as_arg(), "center");
-        assert_eq!(FillMode::Tile.as_arg(), "tile");
+    fn fill_mode_defaults_to_fill() {
         assert_eq!(FillMode::default(), FillMode::Fill);
     }
 

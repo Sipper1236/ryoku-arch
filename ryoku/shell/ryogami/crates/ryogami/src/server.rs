@@ -155,18 +155,6 @@ mod harness_tests {
     use super::*;
 
     #[tokio::test]
-    async fn paper_ready_ok_with_and_without_pid() {
-        let h = test_state();
-        assert!(h.dispatch("paper.ready", serde_json::json!({})).await.error.is_none());
-        assert!(
-            h.dispatch("paper.ready", serde_json::json!({ "pid": 999_999 }))
-                .await
-                .error
-                .is_none()
-        );
-    }
-
-    #[tokio::test]
     async fn status_reports_version_and_null_wallpaper() {
         let h = test_state();
         let r = h.dispatch("status", serde_json::json!({})).await.result.unwrap();

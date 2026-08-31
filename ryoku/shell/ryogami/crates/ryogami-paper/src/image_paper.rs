@@ -31,7 +31,7 @@ pub enum OutputTarget {
     Named(String),
 }
 
-fn decode_image(file_path: &str) -> Result<(u32, u32, Vec<u8>)> {
+pub(crate) fn decode_image(file_path: &str) -> Result<(u32, u32, Vec<u8>)> {
     let img = image::ImageReader::open(file_path)
         .with_context(|| format!("opening image: {file_path}"))?
         .with_guessed_format()

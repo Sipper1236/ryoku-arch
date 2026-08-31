@@ -1965,6 +1965,7 @@ dependencies = [
  "notify",
  "rayon",
  "rusqlite",
+ "ryogami-paper",
  "ryogami-proto",
  "serde",
  "serde_json",

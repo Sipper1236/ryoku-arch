@@ -9,6 +9,10 @@ authors.workspace = true
 name = "ryogami-paper"
 path = "src/main.rs"
 
+[lib]
+name = "ryogami_paper"
+path = "src/lib.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 tracing = { workspace = true }

@@ -59,14 +59,9 @@ pub(super) async fn apply_we_inner(
 
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         if screens.is_empty() || screens.iter().any(|o| o == "*") {
-            drop_persist_paper().await;
-            drop_video_persist_paper().await;
-            drop_steady_image_paper().await;
-            fleet().lock().await.replace_steady(Vec::new());
+            stop_all().await;
         } else {
-            drop_persist_papers_for(screens).await;
-            drop_video_persist_papers_for(screens).await;
-            drop_steady_image_papers_for(screens).await;
+            stop_outputs(screens).await;
         }
 
         let config_clone = config.clone();
@@ -191,14 +186,9 @@ pub(super) async fn apply_we_inner(
 
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     if screens.is_empty() || screens.iter().any(|o| o == "*") {
-        drop_persist_paper().await;
-        drop_video_persist_paper().await;
-        drop_steady_image_paper().await;
-        fleet().lock().await.replace_steady(Vec::new());
+        stop_all().await;
     } else {
-        drop_persist_papers_for(screens).await;
-        drop_video_persist_papers_for(screens).await;
-        drop_steady_image_papers_for(screens).await;
+        stop_outputs(screens).await;
     }
 
     save_state(&config.cache_dir(), "we", &preview_str, we_id).await;

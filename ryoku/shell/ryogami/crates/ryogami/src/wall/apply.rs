@@ -52,10 +52,7 @@ use video::*;
 
 mod paper;
 use paper::*;
-pub use paper::{
-    drop_persist_paper, drop_steady_image_paper, drop_video_persist_paper, on_wall_hide,
-    on_wall_show, preheat, ready_registry, signal_paper_ready,
-};
+pub use paper::{on_wall_hide, on_wall_show, preheat};
 
 pub async fn apply_static(
     path: &str,
@@ -70,7 +67,7 @@ pub async fn apply_static(
 async fn apply_static_inner(
     path: &str,
     outputs: &[String],
-    neighbors: &[String],
+    _neighbors: &[String], // Task 4: transition thumbnail neighbours
     all_screens: &[String],
     config: &Config,
     restoring: bool,
@@ -82,7 +79,6 @@ async fn apply_static_inner(
     let is_kde = is_kde();
     let resolved_path = resolve_static_or_optimized(path, config);
     let path = resolved_path.as_str();
-    let prev_image = read_prev_transition_image(&config.cache_dir()).await;
     let prev_was_we = linux_we_running().await;
 
     if !prev_was_we {
@@ -106,10 +102,7 @@ async fn apply_static_inner(
     }
 
     if config.wants_external_render() {
-        drop_video_persist_paper().await;
-        drop_persist_paper().await;
-        drop_steady_image_paper().await;
-        fleet().lock().await.replace_steady(Vec::new());
+        stop_all().await;
         let _ = tokio::fs::remove_file(config.video_dir().join("lockscreen-video.mp4")).await;
         run_external_apply(config, "static", path, path).await;
     } else if is_kde {
@@ -125,21 +118,12 @@ async fn apply_static_inner(
             config.volume(),
         )
         .await;
-        drop_video_persist_paper().await;
-        drop_persist_paper().await;
-        drop_steady_image_paper().await;
-        fleet().lock().await.replace_steady(Vec::new());
+        stop_all().await;
         apply_kde_static(path, outputs, config).await?;
     } else if config.paper.engine == config::PaperEngine::Awww {
-        drop_video_persist_paper().await;
-        drop_persist_paper().await;
-        drop_transition_overlays_for(&["*".to_string()]).await;
-        drop_steady_image_paper().await;
-        fleet().lock().await.replace_steady(Vec::new());
+        stop_all().await;
         apply_awww(path, outputs, config).await?;
     } else {
-        let still_bin = paper_still_bin();
-        let bin = paper_bin();
         let target_outs: Vec<String> = if outputs.is_empty() {
             vec!["*".to_string()]
         } else {
@@ -166,9 +150,7 @@ async fn apply_static_inner(
             pre_state
                 .get("*")
                 .and_then(|v| v.as_object())
-                .filter(|m| {
-                    m.get("type").and_then(|t| t.as_str()) == Some("static")
-                })
+                .filter(|m| m.get("type").and_then(|t| t.as_str()) == Some("static"))
                 .and_then(|m| m.get("path").and_then(|p| p.as_str()).map(String::from))
         } else {
             None
@@ -182,8 +164,8 @@ async fn apply_static_inner(
         )
         .await
         .ok();
-        drop_transition_overlays_for(&target_outs).await;
 
+        // Carry the previous wildcard image onto monitors this apply doesn't target.
         if let Some(prev_path) = prev_wildcard_static.as_deref()
             && !all_screens.is_empty()
         {
@@ -200,66 +182,19 @@ async fn apply_static_inner(
                     prev = %prev_path,
                     "static apply: carrying wildcard image to un-targeted monitors"
                 );
-                for out in &carry_over {
-                    if let Err(e) = spawn_steady_image_paper(
-                        &still_bin,
-                        out,
-                        prev_path,
-                        config.display.fill_mode,
-                    )
-                    .await
-                    {
-                        warn!(error = %e, output = %out, "carry-over steady spawn failed");
-                    }
-                }
+                show_static(&carry_over, prev_path, config.display.fill_mode).await;
             }
         }
 
-        let prev_for_transition = if restoring || !config.transition.enabled {
-            None
-        } else {
-            prev_image
-                .clone()
-                .filter(|p| Path::new(p).exists())
-                .or_else(|| render_prev.exists().then(|| render_prev.display().to_string()))
-                .filter(|p| *p != render_to)
-        };
-
-        if let Some(prev) = prev_for_transition.as_deref() {
-            let thumbs =
-                pick_thumbs(neighbors, &config.wallpaper_dir(), &[prev, render_to.as_str()], 20).await;
-            let shader = config.transition.shader.clone();
-            let dur_ms = config.transition.duration_ms;
-            for out in &target_outs {
-                if let Err(e) = spawn_transition_overlay(
-                    &bin,
-                    out,
-                    prev,
-                    &render_to,
-                    &shader,
-                    dur_ms,
-                    &thumbs,
-                    config.display.fill_mode,
-                )
-                .await
-                {
-                    warn!(error = %e, output = %out, "transition overlay spawn failed");
-                }
-            }
-        }
-
-        ensure_steady_image_paper(&still_bin, &target_outs, &render_to, config.display.fill_mode).await;
-        drop_video_persist_papers_for(&target_outs).await;
-        drop_persist_papers_for(&target_outs).await;
-        let prev_steady = std::mem::take(&mut fleet().lock().await.steady);
-        for mut c in prev_steady {
-            let _ = c.start_kill();
-        }
+        // Render the target image and settle: `show_static` releases GL to idle,
+        // so a static desktop holds only the committed buffer. (Transitions land
+        // in Task 4.)
+        show_static(&target_outs, &render_to, config.display.fill_mode).await;
 
         if prev_was_we {
             kill_legacy_video_procs().await;
         }
-        info!("apply_static: ryogami-paper-still + bottom-layer transition");
+        info!("apply_static: in-process static render");
     }
 
     let current_dir = config.cache_dir().join("wallpaper");
@@ -882,20 +817,8 @@ fn paper_bin() -> String {
     })
 }
 
-fn paper_still_bin() -> String {
-    std::env::var("RYOGAMI_PAPER_STILL_BIN").unwrap_or_else(|_| {
-        if let Ok(exe) = std::env::current_exe()
-            && let Some(dir) = exe.parent()
-        {
-            let local = dir.join("ryogami-paper-still");
-            if local.exists() {
-                return local.display().to_string();
-            }
-        }
-        "ryogami-paper-still".to_string()
-    })
-}
-
+/// Transition thumbnail pickers, consumed by the Task 4 transition engine.
+#[allow(dead_code)]
 async fn pick_thumbs(
     neighbors: &[String],
     wallpaper_dir: &Path,
@@ -914,6 +837,7 @@ async fn pick_thumbs(
     pick_random_thumbs(wallpaper_dir, exclude, n).await
 }
 
+#[allow(dead_code)]
 async fn pick_random_thumbs(wallpaper_dir: &Path, exclude: &[&str], n: usize) -> Vec<String> {
     let Ok(mut entries) = tokio::fs::read_dir(wallpaper_dir).await else {
         return Vec::new();
@@ -947,6 +871,8 @@ async fn pick_random_thumbs(wallpaper_dir: &Path, exclude: &[&str], n: usize) ->
     picks
 }
 
+/// Reads the last committed image path; consumed by the Task 4 transition engine.
+#[allow(dead_code)]
 pub async fn read_prev_transition_image(cache_dir: &Path) -> Option<String> {
     let state_path = cache_dir.join("last-wallpaper.json");
     let text = tokio::fs::read_to_string(&state_path).await.ok()?;

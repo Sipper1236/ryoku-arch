@@ -10,6 +10,7 @@ authors = ["liixini"]
 
 [workspace.dependencies]
 ryogami-proto = { path = "crates/ryogami-proto" }
+ryogami-paper = { path = "crates/ryogami-paper" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

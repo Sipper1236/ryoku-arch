@@ -13,8 +13,8 @@ const DEFAULT_FIT: &str = "Cover";
 
 /// Dispatch one wire command line and return its single-line reply. `subscribe
 /// <topic>` is handled at the connection layer (topic streaming). A leading `{`
-/// is the transitional out-of-process renderer's JSON readiness signal, folded
-/// away when the renderer moves in-process (Task 3).
+/// is an internal JSON-RPC request (wall/optimize/effects/state), kept for those
+/// subsystems that are still method-keyed.
 pub(super) async fn dispatch_command(line: &str, state: &SharedState) -> String {
     let cmd = line.trim();
     if cmd.starts_with('{') {
@@ -166,6 +166,7 @@ async fn wallpaper_resource(state: &SharedState, tokens: &[&str]) -> String {
         return "err wallpaper: resource expects low|medium|high".into();
     };
     *state.resource_tier.lock().await = tier;
+    crate::render::set_tier(tier);
     "ok".into()
 }
 
@@ -218,17 +219,10 @@ fn basename(path: &str) -> String {
 
 // --- internal RPC router -----------------------------------------------------
 //
-// The wall/optimize/effects subsystems are still keyed by method name; the line
-// verbs above call into this router (and the transitional renderer signals
-// `paper.ready` here as a JSON line).
+// The wall/optimize/effects/state subsystems are still keyed by method name; the
+// line verbs above call into this router.
 
 pub(super) async fn dispatch_request(req: &Request, state: &SharedState) -> Response {
-    if req.method == "paper.ready" {
-        if let Some(pid) = req.params.get("pid").and_then(serde_json::Value::as_u64) {
-            wall::apply::signal_paper_ready(pid as u32).await;
-        }
-        return Response::ok(req.id, serde_json::json!({"ok": true}));
-    }
     if req.method.starts_with("wall.") {
         if !state.config.read().await.features.wallpapers {
             return Response::err(req.id, -32601, "wallpapers module is disabled");

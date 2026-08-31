@@ -1,7 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use tokio::io::AsyncWriteExt;
-
 use crate::config::Config;
 
 use super::*;
@@ -13,59 +11,11 @@ pub async fn set_audio_for(
     outputs: Option<Vec<String>>,
 ) {
     let cache_dir = config.cache_dir();
-    let mut payload = serde_json::Map::new();
-    payload.insert("to".into(), serde_json::json!(""));
-    if let Some(m) = mute {
-        payload.insert("mute".into(), serde_json::json!(m));
-    }
-    if let Some(v) = volume {
-        payload.insert("volume".into(), serde_json::json!(v));
-    }
-    let line = format!("{}\n", serde_json::Value::Object(payload));
-
     let filter: Option<HashSet<String>> = outputs.map(|v| v.into_iter().collect());
-
-    {
-        let mut map = persist_papers().lock().await;
-        let keys: Vec<String> = map.keys().cloned().collect();
-        for out in keys {
-            if let Some(ref f) = filter
-                && !f.contains(&out)
-            {
-                continue;
-            }
-            if let Some(p) = map.get_mut(&out)
-                && p.stdin.write_all(line.as_bytes()).await.is_err()
-            {
-                tracing::warn!(output = %out, "set_audio: persist write failed");
-            }
-            if let Some(p) = map.get_mut(&out) {
-                let _ = p.stdin.flush().await;
-            }
-        }
-    }
-    {
-        let mut map = video_persist_papers().lock().await;
-        let keys: Vec<String> = map.keys().cloned().collect();
-        for out in keys {
-            if let Some(ref f) = filter
-                && !f.contains(&out)
-            {
-                continue;
-            }
-            if let Some(p) = map.get_mut(&out)
-                && p.stdin.write_all(line.as_bytes()).await.is_err()
-            {
-                tracing::warn!(output = %out, "set_audio: video persist write failed");
-            }
-            if let Some(p) = map.get_mut(&out) {
-                let _ = p.stdin.flush().await;
-            }
-        }
-    }
 
     if mute.is_some() || volume.is_some() {
         update_outputs_state_audio(&cache_dir, &filter, mute, volume).await;
+        push_audio_from_state(config, &filter).await;
 
         let we_affected = we_outputs_in_filter(&cache_dir, &filter).await;
         if we_affected {
@@ -105,6 +55,37 @@ pub async fn set_audio_for(
     }
 
     enforce_audio_dedup(config).await;
+}
+
+/// Push the persisted per-output audio state to the in-process renderer for the
+/// given filter (`None` = all). Only livewall (`video`) outputs carry audio.
+async fn push_audio_from_state(config: &Config, filter: &Option<HashSet<String>>) {
+    let Some(handle) = crate::render::handle() else {
+        return;
+    };
+    let state = read_outputs_state(&config.cache_dir()).await;
+    let Some(map) = state.as_object() else {
+        return;
+    };
+    for (out, entry) in map {
+        if let Some(f) = filter
+            && !f.contains(out)
+        {
+            continue;
+        }
+        if entry.get("type").and_then(serde_json::Value::as_str) != Some("video") {
+            continue;
+        }
+        let mute = entry
+            .get("mute")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(true);
+        let volume = entry
+            .get("volume")
+            .and_then(serde_json::Value::as_u64)
+            .map_or_else(|| config.volume(), |v| v.min(100) as u32);
+        handle.set_audio(out, mute, volume);
+    }
 }
 
 pub(super) async fn preserve_group_audio(config: &Config, prev_state: &serde_json::Value) {
@@ -199,39 +180,10 @@ pub(super) async fn preserve_group_audio(config: &Config, prev_state: &serde_jso
         return;
     }
 
-    let payload = serde_json::json!({"to": "", "mute": false});
-    let line = format!("{payload}\n");
     let unmute_set: HashSet<String> = to_unmute.iter().cloned().collect();
-
-    {
-        let mut map_p = persist_papers().lock().await;
-        let keys: Vec<String> = map_p.keys().cloned().collect();
-        for out in keys {
-            if !unmute_set.contains(&out) {
-                continue;
-            }
-            if let Some(p) = map_p.get_mut(&out) {
-                let _ = p.stdin.write_all(line.as_bytes()).await;
-                let _ = p.stdin.flush().await;
-            }
-        }
-    }
-    {
-        let mut map_p = video_persist_papers().lock().await;
-        let keys: Vec<String> = map_p.keys().cloned().collect();
-        for out in keys {
-            if !unmute_set.contains(&out) {
-                continue;
-            }
-            if let Some(p) = map_p.get_mut(&out) {
-                let _ = p.stdin.write_all(line.as_bytes()).await;
-                let _ = p.stdin.flush().await;
-            }
-        }
-    }
-
     let filter = Some(unmute_set.clone());
     update_outputs_state_audio(&cache_dir, &filter, Some(false), None).await;
+    push_audio_from_state(config, &filter).await;
 
     let any_we = to_unmute.iter().any(|out| {
         map.get(out)
@@ -308,39 +260,10 @@ pub async fn enforce_audio_dedup(config: &Config) {
         return;
     }
 
-    let payload = serde_json::json!({"to": "", "mute": true});
-    let line = format!("{payload}\n");
     let mute_set: HashSet<String> = to_mute.iter().cloned().collect();
-
-    {
-        let mut map_p = persist_papers().lock().await;
-        let keys: Vec<String> = map_p.keys().cloned().collect();
-        for out in keys {
-            if !mute_set.contains(&out) {
-                continue;
-            }
-            if let Some(p) = map_p.get_mut(&out) {
-                let _ = p.stdin.write_all(line.as_bytes()).await;
-                let _ = p.stdin.flush().await;
-            }
-        }
-    }
-    {
-        let mut map_p = video_persist_papers().lock().await;
-        let keys: Vec<String> = map_p.keys().cloned().collect();
-        for out in keys {
-            if !mute_set.contains(&out) {
-                continue;
-            }
-            if let Some(p) = map_p.get_mut(&out) {
-                let _ = p.stdin.write_all(line.as_bytes()).await;
-                let _ = p.stdin.flush().await;
-            }
-        }
-    }
-
     let filter = Some(mute_set.clone());
     update_outputs_state_audio(&cache_dir, &filter, Some(true), None).await;
+    push_audio_from_state(config, &filter).await;
 
     if is_kde() {
         let mute_map: HashMap<String, bool> =
