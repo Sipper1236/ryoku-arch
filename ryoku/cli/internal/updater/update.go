@@ -54,6 +54,11 @@ var (
 // the update island and Hub show real, determinate progress.
 func Update(args []string) error {
 	stage2 := len(args) >= 2 && args[0] == "--stage2"
+	for _, a := range args {
+		if a == "-v" || a == "--verbose" {
+			verboseLog = true
+		}
+	}
 
 	// One update at a time: a second run mid-transaction (a double-click, a timer
 	// racing a manual update) can corrupt pacman or the config swap. Best-effort
@@ -220,7 +225,7 @@ func snapshotDesc() string {
 // pre/post pair, so snap-pac's extra pair is pure noise in the list and the boot
 // menu. sudo resets the environment, so SNAP_PAC_SKIP rides inside via env(1).
 func runSystemUpgrade() error {
-	return runInhibited("System package upgrade", systemUpgradeArgs())
+	return runInhibited("System", "System package upgrade", systemUpgradeArgs())
 }
 
 // systemUpgradeArgs is the packaged-box upgrade command. --overwrite adopts the
@@ -235,7 +240,7 @@ func systemUpgradeArgs() []string {
 
 // runAURUpgrade runs `yay -Sua` under the same sleep inhibitor.
 func runAURUpgrade() error {
-	return runInhibited("AUR package upgrade", []string{"yay", "-Sua", "--noconfirm"})
+	return runInhibited("AUR", "AUR package upgrade", []string{"yay", "-Sua", "--noconfirm"})
 }
 
 // flatpakUpdatable reports whether a flatpak update is worth attempting at all:
@@ -255,18 +260,25 @@ func flatpakUpdatable() bool {
 // same sleep inhibitor as the package steps, since a suspend mid-deploy leaves a
 // half-written app tree.
 func runFlatpakUpgrade() error {
-	return runInhibited("Flatpak app upgrade", []string{"flatpak", "update", "--noninteractive", "--assumeyes"})
+	return runInhibited("Flatpak", "Flatpak app upgrade",
+		[]string{"flatpak", "update", "--noninteractive", "--assumeyes"})
 }
 
 // runInhibited runs argv while holding a logind sleep+idle block, so a suspend
 // mid-upgrade cannot interrupt a package transaction. Degrades to running argv
-// directly when systemd-inhibit is unavailable.
-func runInhibited(why string, argv []string) error {
+// directly when systemd-inhibit is unavailable. On a real terminal it renders a
+// curated view of the output (phase is the header label); for pipes, logs, and
+// --verbose it streams raw so nothing that scrapes the output breaks.
+func runInhibited(phase, why string, argv []string) error {
+	full := argv
 	if sys.Has("systemd-inhibit") {
-		head := []string{"--what=sleep:idle", "--who=ryoku update", "--why=" + why, "--mode=block"}
-		return sys.Run("systemd-inhibit", append(head, argv...)...)
+		head := []string{"systemd-inhibit", "--what=sleep:idle", "--who=ryoku update", "--why=" + why, "--mode=block"}
+		full = append(head, argv...)
 	}
-	return sys.Run(argv[0], argv[1:]...)
+	if verboseLog || !sys.StdoutIsTTY() {
+		return sys.Run(full[0], full[1:]...)
+	}
+	return renderUpgrade(phase, full)
 }
 
 // finishRun publishes the terminal "done" state, holds it briefly so a watching

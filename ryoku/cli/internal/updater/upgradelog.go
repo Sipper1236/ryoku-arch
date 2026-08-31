@@ -1,0 +1,336 @@
+package updater
+
+import (
+	"bufio"
+	"bytes"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"regexp"
+	"strings"
+
+	"ryoku-cli/internal/sys"
+)
+
+// The package manager firehose (database sync "up to date", "newer than"
+// downgrade warnings, the resolving/conflict-check chatter, per-file progress
+// bars, and the full wrapped package dump) buries the handful of lines a person
+// running `ryoku update` actually cares about: what is upgrading, how far along
+// it is, and any real warning or error. renderUpgrade runs an upgrade command
+// with its output piped and rebuilds it as a curated, styled view -- a phase
+// header, a one-line package summary, an in-place spinner, and untouched
+// surfacing of warnings and errors. It only runs on a real terminal (the caller
+// keeps raw passthrough for pipes, logs, and --verbose), so nothing that scrapes
+// pacman output breaks, and the command's exit status is passed straight back.
+
+// verboseLog forces raw package-manager output instead of the curated view; set
+// from `ryoku update --verbose` / `-v` for debugging a transaction.
+var verboseLog bool
+
+var (
+	pkgHeaderRe = regexp.MustCompile(`^Packages \((\d+)\)\s*(.*)$`)
+	stepRe      = regexp.MustCompile(`^\((\d+)/(\d+)\)\s+(.*)$`)
+	verStripRe  = regexp.MustCompile(`-[0-9][^-]*(-[^-\s]+)?$`)
+	spinFrames  = []rune("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+)
+
+// renderUpgrade runs argv, rendering a curated view of its output. phase is the
+// short label for the header ("System", "AUR", "Flatpak").
+func renderUpgrade(phase string, argv []string) error {
+	// pacman runs under sudo; prime the timestamp on the real terminal first so
+	// the piped transaction never blocks on an unseen password prompt.
+	for _, a := range argv {
+		if a == "sudo" {
+			_ = sys.Run("sudo", "-v")
+			break
+		}
+	}
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		return sys.Run(argv[0], argv[1:]...)
+	}
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, pw, pw
+	if err := cmd.Start(); err != nil {
+		pw.Close()
+		pr.Close()
+		return err
+	}
+	pw.Close()
+	r := newUpgradeRenderer(os.Stdout, phase, true)
+	sc := bufio.NewScanner(pr)
+	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	sc.Split(scanLinesCR)
+	for sc.Scan() {
+		r.feed(sc.Text())
+	}
+	pr.Close()
+	werr := cmd.Wait()
+	r.finish(werr == nil)
+	return werr
+}
+
+// scanLinesCR splits on either newline or carriage return, so each redraw of a
+// progress bar arrives as its own token instead of one buffered mega-line.
+func scanLinesCR(data []byte, atEOF bool) (int, []byte, error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	if i := bytes.IndexAny(data, "\r\n"); i >= 0 {
+		return i + 1, data[:i], nil
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
+type upgradeRenderer struct {
+	w        io.Writer
+	phase    string
+	animate  bool
+	frame    int
+	status   bool // an in-place status line is currently on screen
+	inPkgs   bool // collecting the wrapped "Packages (N) ..." block
+	pending  bool // package summary parsed, not yet printed (waiting for sizes)
+	count    int
+	size     string
+	ryoku    []string
+	upgraded int
+}
+
+func newUpgradeRenderer(w io.Writer, phase string, animate bool) *upgradeRenderer {
+	r := &upgradeRenderer{w: w, phase: phase, animate: animate}
+	r.perm(sys.Brand("▸ ") + sys.Bold(phase+" packages"))
+	return r
+}
+
+func (r *upgradeRenderer) feed(raw string) {
+	line := strings.TrimRight(raw, " \t")
+	trimmed := strings.TrimSpace(line)
+
+	// The wrapped package list runs from "Packages (N) ..." to the next blank
+	// line; collect names for the count highlight, print nothing inline.
+	if r.inPkgs {
+		if trimmed == "" {
+			// The size lines follow this blank line; defer the summary until the
+			// first real activity so it can include the net size.
+			r.inPkgs = false
+			return
+		}
+		r.collectPkgs(trimmed)
+		return
+	}
+	if m := pkgHeaderRe.FindStringSubmatch(line); m != nil {
+		fmt.Sscanf(m[1], "%d", &r.count)
+		r.inPkgs = true
+		r.pending = true
+		r.collectPkgs(m[2])
+		return
+	}
+	if v := sizeValue(line); v != "" {
+		r.size = v
+		return
+	}
+
+	c := classify(line, trimmed)
+	if c == clDrop {
+		return
+	}
+	r.flush() // print the deferred package summary before the first real activity
+	switch c {
+	case clDrop:
+		return
+	case clProgress:
+		if m := stepRe.FindStringSubmatch(trimmed); m != nil {
+			r.upgraded = countUpgrade(trimmed, r.upgraded)
+			r.spin(stepLabel(m[1], m[2], m[3]))
+		} else {
+			r.spin("working…")
+		}
+	case clWarn:
+		r.perm("  " + sys.Amber("! ") + sys.Dim(stripPrefix(trimmed, "warning:")))
+	case clError:
+		r.perm("  " + sys.Red("✗ ") + stripPrefix(trimmed, "error:"))
+	case clConflict:
+		r.perm("  " + sys.Red("  · ") + trimmed)
+	}
+}
+
+func (r *upgradeRenderer) finish(ok bool) {
+	r.clear()
+	r.flush()
+	if ok {
+		tail := ""
+		if r.upgraded > 0 {
+			tail = fmt.Sprintf(" · %d upgraded", r.upgraded)
+		} else if r.count > 0 {
+			tail = fmt.Sprintf(" · %d upgraded", r.count)
+		}
+		r.perm(sys.Green("✓ ") + r.phase + tail)
+		return
+	}
+	r.perm(sys.Red("✗ ") + r.phase + " upgrade failed")
+}
+
+// --- rendering primitives ---------------------------------------------------
+
+func (r *upgradeRenderer) perm(line string) {
+	if r.status {
+		fmt.Fprint(r.w, "\r\033[K")
+		r.status = false
+	}
+	fmt.Fprintln(r.w, line)
+}
+
+func (r *upgradeRenderer) spin(label string) {
+	if !r.animate {
+		return
+	}
+	frame := string(spinFrames[r.frame%len(spinFrames)])
+	r.frame++
+	line := "  " + sys.Brand(frame) + " " + label
+	if w := sys.TermWidth() - 1; len(label)+4 > w && w > 4 {
+		line = "  " + sys.Brand(frame) + " " + label[:w-4]
+	}
+	fmt.Fprint(r.w, "\r\033[K"+line)
+	r.status = true
+}
+
+func (r *upgradeRenderer) clear() {
+	if r.status {
+		fmt.Fprint(r.w, "\r\033[K")
+		r.status = false
+	}
+}
+
+func (r *upgradeRenderer) collectPkgs(s string) {
+	for _, f := range strings.Fields(s) {
+		if strings.HasPrefix(f, "ryoku") {
+			if name := verStripRe.ReplaceAllString(f, ""); name != "" {
+				r.ryoku = append(r.ryoku, name)
+			}
+		}
+	}
+}
+
+// flush prints the deferred one-line package summary once, after the sizes have
+// been parsed and before the first activity. A no-op until a package block was
+// seen, and only once.
+func (r *upgradeRenderer) flush() {
+	if !r.pending {
+		return
+	}
+	r.pending = false
+	if r.count == 0 {
+		return
+	}
+	line := fmt.Sprintf("  %s package%s", sys.Bold(fmt.Sprint(r.count)), plural(r.count))
+	if r.size != "" {
+		line += sys.Dim(" · " + r.size)
+	}
+	r.perm(line)
+	if len(r.ryoku) > 0 {
+		r.perm("  " + sys.Dim("includes ") + sys.Brand(strings.Join(r.ryoku, ", ")))
+	}
+}
+
+// --- classification ---------------------------------------------------------
+
+type lineClass int
+
+const (
+	clDrop lineClass = iota
+	clProgress
+	clWarn
+	clError
+	clConflict
+)
+
+func classify(line, trimmed string) lineClass {
+	switch {
+	case trimmed == "":
+		return clDrop
+	case strings.HasPrefix(trimmed, "error:"),
+		strings.Contains(trimmed, "failed to commit"),
+		strings.Contains(trimmed, "Errors occurred"):
+		return clError
+	case strings.Contains(trimmed, "exists in filesystem"),
+		strings.Contains(trimmed, "exists in filesystem)"):
+		return clConflict
+	// .pacnew/.pacsave notices are the one warning class a user must act on.
+	case strings.Contains(trimmed, ".pacnew"), strings.Contains(trimmed, ".pacsave"):
+		return clWarn
+	case strings.HasPrefix(trimmed, "warning:"):
+		if strings.Contains(trimmed, " is newer than ") {
+			return clDrop // local-newer downgrade chatter from mixed repos
+		}
+		return clWarn
+	case stepRe.MatchString(trimmed),
+		strings.HasPrefix(trimmed, ":: "),
+		hasBar(trimmed),
+		strings.HasPrefix(trimmed, "resolving dependencies"),
+		strings.HasPrefix(trimmed, "looking for conflicting"):
+		return clProgress
+	case isUpToDate(trimmed):
+		return clDrop
+	}
+	// Unknown, non-empty, non-noise: fold into the spinner rather than let an
+	// unrecognised line break the curated view or leak the firehose.
+	return clProgress
+}
+
+func isUpToDate(s string) bool { return strings.HasSuffix(s, " is up to date") }
+
+func hasBar(s string) bool {
+	return strings.Contains(s, "[") && (strings.Contains(s, "#") || strings.Contains(s, "-")) &&
+		strings.Contains(s, "]") || strings.HasSuffix(s, "%")
+}
+
+func sizeValue(line string) string {
+	for _, k := range []string{"Net Upgrade Size:", "Total Download Size:", "Total Installed Size:"} {
+		if i := strings.Index(line, k); i >= 0 {
+			return strings.TrimSpace(line[i+len(k):])
+		}
+	}
+	return ""
+}
+
+func stepLabel(x, y, rest string) string {
+	verb := strings.Fields(rest)
+	if len(verb) == 0 {
+		return fmt.Sprintf("%s/%s", x, y)
+	}
+	return fmt.Sprintf("%s (%s/%s)", strings.TrimSuffix(strings.Join(verb, " "), "..."), x, y)
+}
+
+// countUpgrade tracks the highest "(x/y) upgrading/installing" index seen, the
+// closest cheap proxy for how many packages were applied.
+func countUpgrade(step string, cur int) int {
+	if !strings.Contains(step, "upgrading") && !strings.Contains(step, "installing") &&
+		!strings.Contains(step, "reinstalling") {
+		return cur
+	}
+	m := stepRe.FindStringSubmatch(step)
+	if m == nil {
+		return cur
+	}
+	n := 0
+	fmt.Sscanf(m[1], "%d", &n)
+	if n > cur {
+		return n
+	}
+	return cur
+}
+
+func stripPrefix(s, prefix string) string {
+	return strings.TrimSpace(strings.TrimPrefix(s, prefix))
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
