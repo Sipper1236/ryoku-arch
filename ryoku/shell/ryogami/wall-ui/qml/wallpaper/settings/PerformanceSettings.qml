@@ -130,7 +130,7 @@ Row {
                 title: "Instant playback"
                 description: "Start video previews immediately on hover instead of after a short delay."
                 checked: Config.videoPreviewInstant
-                enabled: Config.videoPreviewEnabled
+
                 onToggle: function(v) { if (root.saveConfigKey) root.saveConfigKey("features.videoPreviewInstant", v) }
             }
         }

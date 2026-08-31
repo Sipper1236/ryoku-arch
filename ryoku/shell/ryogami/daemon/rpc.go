@@ -189,17 +189,18 @@ func (d *daemon) dispatchRequest(req *request) response {
 		return ok(req.ID, map[string]interface{}{"ready": true, "count": len(d.store.list(false))})
 
 	case "wall.toggle":
-		visible := d.ui.toggle()
-		d.broadcast("ryogami.wall.toggle", map[string]interface{}{"visible": visible})
-		return ok(req.ID, map[string]interface{}{"toggled": true, "visible": visible})
+		if d.ui.ensure() {
+			d.broadcast("ryogami.wall.toggle", map[string]interface{}{})
+		}
+		return ok(req.ID, map[string]interface{}{"toggled": true})
 
 	case "wall.show":
-		d.ui.launch()
-		d.broadcast("ryogami.wall.show", map[string]interface{}{})
+		if d.ui.ensure() {
+			d.broadcast("ryogami.wall.show", map[string]interface{}{})
+		}
 		return ok(req.ID, map[string]interface{}{"ok": true})
 
 	case "wall.hide":
-		d.ui.kill()
 		d.broadcast("ryogami.wall.hide", map[string]interface{}{})
 		return ok(req.ID, map[string]interface{}{"ok": true})
 

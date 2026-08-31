@@ -81,6 +81,34 @@ ShellRoot {
         id: colors
     }
 
+    // The picker preloads hidden at daemon boot and stays resident (like the
+    // shell's overview): Super+W only flips the surface through the daemon's
+    // wallpaperToggle event, so a press never pays a cold QML boot. A crashed
+    // instance relaunched by the verb starts visible (RYOGAMI_START_VISIBLE).
+    property bool _startVisible: Quickshell.env("RYOGAMI_START_VISIBLE") === "1"
+    property bool _pendingShow: false
+
+    function _setShowing(on) {
+        if (wallpaperSelectorLoader.item)
+            wallpaperSelectorLoader.item.showing = on
+        else
+            root._pendingShow = on
+    }
+
+    function _toggleShowing() {
+        if (wallpaperSelectorLoader.item)
+            wallpaperSelectorLoader.item.showing = !wallpaperSelectorLoader.item.showing
+        else
+            root._pendingShow = true
+    }
+
+    Connections {
+        target: DaemonClient
+        function onWallpaperToggle() { root._toggleShowing() }
+        function onWallpaperShow() { root._setShowing(true) }
+        function onWallpaperHide() { root._setShowing(false) }
+    }
+
     Loader {
         id: wallpaperSelectorLoader
         active: false
@@ -91,7 +119,8 @@ ShellRoot {
                 root._logWithRam("qml loaded in " + qmlLoadMs + " ms")
             }
             item.colors = Qt.binding(() => colors)
-            item.showing = true
+            item.showing = root._startVisible || root._pendingShow
+            root._pendingShow = false
             item.uiReady.connect(function() {
                 if (!root.selectorTimingPending) return
                 var elapsed = Date.now() - root.selectorOpenRequestedMs
@@ -106,15 +135,6 @@ ShellRoot {
         id: timingLogProcess
         command: ["bash", "-lc", "true"]
         onExited: root._flushTimingLogQueue()
-    }
-
-    Connections {
-        target: wallpaperSelectorLoader.item
-        function onShowingChanged() {
-            if (!wallpaperSelectorLoader.item) return
-            if (!wallpaperSelectorLoader.item.showing)
-                Qt.quit()
-        }
     }
 
     IpcHandler {

@@ -36,7 +36,13 @@
   them on every drag. Video hover/selection previews decode a small scan-time
   clip (640w/24fps, built beside the thumbnails, VAAPI when available) instead
   of the full source: a 4K60 HEVC-10 decode per hovered card is what froze the
-  selector (`modules/wallpaper/skwd/`, `ryogami/daemon/`,
+  selector. The picker itself now runs resident like the shell's overview: one
+  quickshell instance preloads hidden at daemon boot and Super+W flips its
+  surface over the event hub (~190 ms, livewall playing or not), where it used
+  to cold-boot and kill a whole process per press, so rapid presses raced the
+  spawn cycle and broke the selection. The Instant playback toggle is no
+  longer disabled while previews are off, which silently swallowed the click
+  that tried to turn it off (`modules/wallpaper/skwd/`, `ryogami/daemon/`,
   `ipc/ryogami.go`, `ipc/theming.go`, `wall-ui/`).
 
 - **Video wallpapers play through ryogami-live (the restored in-repo C player,

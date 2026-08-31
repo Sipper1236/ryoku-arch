@@ -69,8 +69,11 @@ func (d *daemon) wallpaperVerb(line string) string {
 		d.restoreOutputs()
 		return "ok"
 	case "ui":
-		visible := d.ui.toggle()
-		d.broadcast("ryogami.wall.toggle", map[string]interface{}{"visible": visible})
+		// Resident picker: flip its surface over the event hub; a dead or
+		// not-yet-started instance cold-launches already visible instead.
+		if d.ui.ensure() {
+			d.broadcast("ryogami.wall.toggle", map[string]interface{}{})
+		}
 		return "ok"
 	case "resource":
 		f := strings.Fields(rest)

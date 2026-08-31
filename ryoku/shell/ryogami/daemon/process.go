@@ -57,7 +57,10 @@ func (m *managedProcess) runningLocked() bool {
 	return true
 }
 
-func (m *managedProcess) launch() {
+// launch starts the resident picker; extraEnv rides on top of the daemon's
+// environment (RYOGAMI_START_VISIBLE=1 makes a cold instance show itself, the
+// recovery path when the resident one has died).
+func (m *managedProcess) launch(extraEnv ...string) {
 	if headless() {
 		return
 	}
@@ -69,7 +72,7 @@ func (m *managedProcess) launch() {
 	// A leftover instance from a previous daemon holds the surface; clear it.
 	_ = exec.Command("pkill", "-f", "quickshell .*"+m.qml).Run()
 	cmd := exec.Command("quickshell", "-p", m.qml)
-	cmd.Env = append(os.Environ(), m.envK+"="+filepath.Dir(m.qml))
+	cmd.Env = append(append(os.Environ(), m.envK+"="+filepath.Dir(m.qml)), extraEnv...)
 	cmd.Stdin = nil
 	if log := managedLogPath("wall-ui"); log != "" {
 		if f, err := os.OpenFile(log, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err == nil {
@@ -94,13 +97,14 @@ func (m *managedProcess) kill() {
 	}
 }
 
-func (m *managedProcess) toggle() bool {
+// ensure reports whether the resident instance is up, cold-starting a visible
+// one when it is not (the daemon just booted, or the picker crashed).
+func (m *managedProcess) ensure() bool {
 	if m.running() {
-		m.kill()
-		return false
+		return true
 	}
-	m.launch()
-	return m.running()
+	m.launch("RYOGAMI_START_VISIBLE=1")
+	return false
 }
 
 func managedLogPath(label string) string {

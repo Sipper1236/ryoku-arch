@@ -103,8 +103,15 @@ func runDaemon() error {
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 		<-sig
 		d.video.Stop()
+		d.ui.kill()
 		os.Exit(0)
 	}()
+
+	// The picker runs resident like the shell's overview: one quickshell
+	// instance preloads hidden at boot and Super+W only flips its surface, so
+	// a press never pays a cold QML boot and rapid presses cannot race a
+	// kill/spawn cycle.
+	go d.ui.launch()
 
 	// Publish the empty snapshot so a subscriber before the first set sees a
 	// defined frame, then restore the last wallpaper and rescan the catalog.
