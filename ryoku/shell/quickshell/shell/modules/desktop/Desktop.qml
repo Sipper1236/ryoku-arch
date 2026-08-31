@@ -169,16 +169,42 @@ Scope {
             guides.flash(v, h);
         }
 
-        // The wallpaper is painted in a separate Wayland surface, which Qt cannot
-        // sample across scene graphs. Mirror the same image into this scene as an
-        // offscreen texture so ShaderEffectSource can capture the pixels beneath a
-        // frosted widget. WidgetGlass hides this source after taking its crop.
+        // The base wallpaper painter. The daemon publishes the frame and this
+        // scene renders it; decoding is capped at the surface resolution so an
+        // 8K source costs a screen-sized texture instead of a full-resolution
+        // decode (which both lagged every switch and overran the image
+        // allocation cap on very large files, leaving the desktop black).
+        Image {
+            id: backdrop
+            anchors.fill: parent
+            source: root.wallpaperUrl
+            cache: false
+            asynchronous: true
+            sourceSize.width: Math.ceil(width * dpr)
+            sourceSize.height: Math.ceil(height * dpr)
+            readonly property real dpr: (root.screen && root.screen.devicePixelRatio) ? root.screen.devicePixelRatio : 1
+            fillMode: {
+                switch (root.wallpaperFit) {
+                case "Contain": return Image.PreserveAspectFit;
+                case "Fill": return Image.Stretch;
+                case "ScaleDown": return Image.PreserveAspectFit;
+                default: return Image.PreserveAspectCrop;
+                }
+            }
+        }
+
+        // Mirror of the same image for glass widgets: Qt cannot sample another
+        // scene graph, so ShaderEffectSource captures the pixels beneath a
+        // frosted widget from this offscreen copy. WidgetGlass hides this
+        // source after taking its crop.
         Image {
             id: glassBackdrop
             anchors.fill: parent
             source: root.wallpaperUrl
             cache: false
             asynchronous: true
+            sourceSize.width: Math.ceil(width * backdrop.dpr)
+            sourceSize.height: Math.ceil(height * backdrop.dpr)
             visible: (Config.calendarEnabled && Config.calendarStyle === "glass")
                 || (Config.musicEnabled && Config.musicStyle === "glass")
             fillMode: {

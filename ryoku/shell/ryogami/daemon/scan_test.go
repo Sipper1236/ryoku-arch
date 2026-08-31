@@ -209,8 +209,8 @@ func TestScanGeneratesThumb(t *testing.T) {
 	}
 
 	e := got["sub--b.png"]
-	wantThumb := filepath.Join(cache, "thumbs", "sub--b.png.webp")
-	wantSm := filepath.Join(cache, "thumbs-sm", "sub--b.png.webp")
+	wantThumb := filepath.Join(cache, "wallpaper", "thumbs", "sub--b.png.webp")
+	wantSm := filepath.Join(cache, "wallpaper", "thumbs-sm", "sub--b.png.webp")
 	if e.Thumb != wantThumb {
 		t.Errorf("thumb path: got %q want %q", e.Thumb, wantThumb)
 	}
@@ -239,7 +239,7 @@ func TestScanSkipsFreshThumb(t *testing.T) {
 	if _, err := ScanDirs(wall, wall, cache, nil, func(Entry) {}); err != nil {
 		t.Fatal(err)
 	}
-	thumb := filepath.Join(cache, "thumbs", "a.png.webp")
+	thumb := filepath.Join(cache, "wallpaper", "thumbs", "a.png.webp")
 	future := time.Now().Add(time.Hour)
 	if err := os.Chtimes(thumb, future, future); err != nil {
 		t.Fatal(err)

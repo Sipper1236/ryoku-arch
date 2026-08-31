@@ -51,9 +51,12 @@ type scanned struct {
 // with prior state (favourites, tags, apply counts survive a rescan). onItem
 // fires after each newly generated thumbnail (the cache.item event).
 func ScanDirs(wallDir, videoDir, cacheDir string, prior map[string]Entry, onItem func(Entry)) (map[string]Entry, error) {
-	thumbsDir := filepath.Join(cacheDir, "thumbs")
-	thumbsSmDir := filepath.Join(cacheDir, "thumbs-sm")
-	videoThumbsDir := filepath.Join(cacheDir, "video-thumbs")
+	// The Rust daemon kept thumbnails under cacheDir/wallpaper/, and the
+	// machine's already-generated cache lives there; matching the layout keeps
+	// that cache warm across the rewrite.
+	thumbsDir := filepath.Join(cacheDir, "wallpaper", "thumbs")
+	thumbsSmDir := filepath.Join(cacheDir, "wallpaper", "thumbs-sm")
+	videoThumbsDir := filepath.Join(cacheDir, "wallpaper", "video-thumbs")
 	for _, d := range []string{thumbsDir, thumbsSmDir, videoThumbsDir} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return nil, fmt.Errorf("create %s: %w", d, err)
