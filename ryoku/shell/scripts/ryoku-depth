@@ -243,6 +243,29 @@ PY
     return 1
 }
 
+cmd_remove() {
+    local m="${1:-}"
+    [[ -n $m ]] || {
+        printf 'usage: ryoku-depth remove <model>\n' >&2
+        return 2
+    }
+    is_curated "$m" || {
+        printf 'ryoku-depth: not a curated model: %s\n' "$m" >&2
+        return 2
+    }
+    local f found=0
+    while IFS= read -r -d '' f; do
+        rm -f "$f"
+        found=1
+    done < <(find "$models" -name "$m.onnx" -print0 2>/dev/null)
+    if [[ $found -eq 1 ]]; then
+        printf 'removed %s\n' "$m"
+    else
+        printf '%s was not installed\n' "$m"
+    fi
+    return 0
+}
+
 case "${1:-}" in
 check) cmd_check ;;
 models)
@@ -257,8 +280,12 @@ install)
     shift
     cmd_install "$@"
     ;;
+remove)
+    shift
+    cmd_remove "$@"
+    ;;
 *)
-    printf 'usage: ryoku-depth check | models | cutout <in> <out.png> [--model <id>] | install [model...]\n' >&2
+    printf 'usage: ryoku-depth check | models | cutout <in> <out.png> [--model <id>] | install [model...] | remove <model>\n' >&2
     exit 2
     ;;
 esac
