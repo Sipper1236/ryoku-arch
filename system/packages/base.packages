@@ -5,7 +5,7 @@
 # Core system
 base
 base-devel
-# rust: the shell's wallpaper daemon (awww) and other AUR dependencies are Rust
+# rust: the depth cutout worker and several AUR dependencies are Rust
 # programs, so the toolchain is part of the base set (not the optional dev
 # toolchains in dev.packages), and every Ryoku machine can always build them.
 rust

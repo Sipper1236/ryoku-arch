@@ -141,12 +141,13 @@ depends=(
   # the daemon runs it on every wallpaper change to derive colors.json and
   # retint kitty / Hyprland / the shell (the "match wallpaper" colors).
   'matugen'
-  # animated wallpaper daemon the shell drives (`awww img` / `awww-daemon`).
-  # ships from [ryoku], not the AUR, so a fresh install and `ryoku update` always
-  # carry it: an AUR-only optdepend left boxes with no wallpaper daemon out of the
-  # box (no image at all, and ryowalls could list images but set none). See
-  # release/packages/awww/PKGBUILD.
-  'awww'
+  # ryogami: the wallpaper daemon the shell drives (`ryogami wallpaper ...`) over
+  # ryogami.sock -- catalog, thumbnails, applies, transitions, live video and the
+  # depth surface. Ships from [ryoku], so a fresh install and `ryoku update` always
+  # carry it; it supersedes awww (the retired swww fork the shell no longer drives).
+  # ryoku doctor enables its user unit and retires any old awww-daemon. See
+  # release/packages/ryogami/PKGBUILD.
+  'ryogami'
   # live (video) wallpapers: the daemon grabs one frame with ffmpeg to derive the
   # wallpaper palette. official repo, so a hard depend reaches existing boxes.
   'ffmpeg'

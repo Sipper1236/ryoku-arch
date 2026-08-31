@@ -26,10 +26,9 @@ catppuccin-cursors-mocha
 # fail to build; best-effort, like every package in this set.
 apple_cursor
 
-# Wallpaper daemon (awww / awww-daemon): now ships first-class from the [ryoku]
-# repo as a hard ryoku-desktop dependency, not the AUR. The AUR build was skipped
-# on offline installs and best-effort on failure, so a fresh box could come up
-# with no wallpaper daemon at all; see release/packages/awww/PKGBUILD.
+# Wallpaper daemon: Ryogami now ships first-class from the [ryoku] repo as a hard
+# ryoku-desktop dependency (see release/packages/ryogami/PKGBUILD). It supersedes
+# awww (the retired swww fork); no wallpaper daemon comes from the AUR anymore.
 
 # NVIDIA digital vibrance for the pill mixer's DISPLAY saturation fader, on
 # Wayland (ioctls on /dev/nvidia-modeset). AUR-only; a no-op on non-NVIDIA GPUs.
