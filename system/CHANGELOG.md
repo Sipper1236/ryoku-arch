@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **`ryoku update` no longer deadlocks on the Oh My Zsh swap.** CachyOS-era
+  installs carry `cachyos-zsh-config`, which depends on `oh-my-zsh-git`;
+  ryoku-oh-my-zsh conflicted with that package without providing it, so pacman
+  offered the removal and then refused it ("removing oh-my-zsh-git breaks
+  dependency"), failing every full upgrade. The package now provides,
+  conflicts with and replaces `oh-my-zsh-git`, so -Syu swaps the AUR tree in
+  one transaction (`release/packages/ryoku-oh-my-zsh/PKGBUILD`).
+
 - **ryoku-gpu grows `check-pin` and marks forced pins.** `check-pin` audits the
   written gpu.lua against today's policy in one verdict line (`ok` | `forced` |
   `stale-pin SLOT`), living beside the policy it audits so the ryoku doctor
