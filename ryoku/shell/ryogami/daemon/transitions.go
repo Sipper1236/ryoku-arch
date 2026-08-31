@@ -144,6 +144,9 @@ type pickedTransition struct {
 	EdgeSoftness float64    `json:"edgeSoftness"`
 	DurationMs   int        `json:"durationMs"`
 	Seed         float64    `json:"seed"`
+	// Shader names a skwd catalog transition; when set, the backdrop loads
+	// skwd/<shader>.frag.qsb and ignores the mask-kind fields above.
+	Shader string `json:"shader,omitempty"`
 }
 
 // pickTransition returns a random preset resolved for one switch, never repeating
@@ -163,19 +166,42 @@ func (d *daemon) pickTransition() *pickedTransition {
 	return resolveTransition(transitionPresets[i])
 }
 
-// transitionFor is the preset a wallpaper op reveals with. Two paths must not
-// animate and always return nil: init, which paints the saved wallpaper onto a
-// fresh backdrop at login, and live-reload, which relaunches the current clip
-// after a settings change. A user-driven switch (set / next / random) reveals
-// with the user's wallpaper.transition_preset: the "random" sentinel (the
-// default) keeps the no-repeat picker, a named preset resolves that entry, and
-// an unknown or absent value falls back to the picker rather than failing the
-// switch. One rule for both backends, so a still and a clip switch alike.
+// transitionFor is the animation a wallpaper op reveals with. Two paths must
+// not animate and always return nil: init, which paints the saved wallpaper
+// onto a fresh backdrop at login, and live-reload, which relaunches the current
+// clip after a settings change. A user-driven switch follows the picker's
+// transition block (the skwd keys in ryogami-wall/config.json): off means a
+// plain cut, "random" is a no-repeat pick over the 38-shader skwd catalog, a
+// catalog name pins that shader, and the "ryoku" sentinel (or an unknown value)
+// falls back to the shell's 22-preset reveal engine, which
+// wallpaper.transition_preset in shell.json can pin further.
 func (d *daemon) transitionFor(mode string) *pickedTransition {
 	if mode == "init" || mode == "live-reload" {
 		return nil
 	}
-	if p, ok := lookupTransitionPreset(wallpaperTransitionPreset()); ok {
+	prefs := readWallUITransition()
+	if !prefs.Enabled {
+		return nil
+	}
+	switch {
+	case prefs.Shader == transitionRandom:
+		return &pickedTransition{
+			Name:       "skwd",
+			Kind:       "skwd",
+			Shader:     d.pickSkwdShader(),
+			DurationMs: prefs.DurationMs,
+			Seed:       rand.Float64(),
+		}
+	case knownSkwdShader(prefs.Shader):
+		return &pickedTransition{
+			Name:       "skwd",
+			Kind:       "skwd",
+			Shader:     prefs.Shader,
+			DurationMs: prefs.DurationMs,
+			Seed:       rand.Float64(),
+		}
+	}
+	if p, okPreset := lookupTransitionPreset(wallpaperTransitionPreset()); okPreset {
 		return resolveTransition(p)
 	}
 	return d.pickTransition()
@@ -285,4 +311,76 @@ func originForPreset(p transitionPreset) (x, y float64) {
 		return 1.0, 1.0
 	}
 	return 0.5, 0.5
+}
+
+// The skwd shader catalog: the 38 GLSL transitions ported from skwd-paper,
+// compiled beside the shell's Backdrop (modules/wallpaper/skwd/<name>.frag.qsb).
+// Names match upstream's SHADER_CATALOG verbatim, so the picker's shader
+// dropdown and a config.json written for skwd both keep meaning.
+var skwdShaders = []string{
+	"pixelate", "iris", "liquid-ripple", "wave-warp", "glitch",
+	"voronoi-shatter", "heat-melt", "plasma-flow", "ink-splash", "smoke",
+	"chromatic-bloom", "inkwell-drop", "pixelfade-wave", "soft-warp-fade",
+	"zoom-blur-pull", "flyeye", "mosaic-tumble", "crosswarp", "morph",
+	"bounce", "circle-crop", "colour-distance", "crazy-parametric",
+	"directional", "directional-scaled", "edge-transition", "glitch-displace",
+	"overexposure", "polka-dots-curtain", "puzzle-right", "static-fade",
+	"crosshatch", "directional-wipe", "fadecolor", "parametric-glitch",
+	"perlin", "polar-function", "randomsquares",
+}
+
+// wallUITransition is the picker's transition preference block from
+// ~/.config/ryogami-wall/config.json, the same keys skwd-wall writes
+// (transition.enabled / transition.shader / transition.durationMs).
+type wallUITransition struct {
+	Enabled    bool
+	Shader     string
+	DurationMs int
+}
+
+func readWallUITransition() wallUITransition {
+	out := wallUITransition{Enabled: true, Shader: "random", DurationMs: 600}
+	base := os.Getenv("XDG_CONFIG_HOME")
+	if base == "" {
+		base = filepath.Join(home(), ".config")
+	}
+	var m struct {
+		Transition struct {
+			Enabled    *bool  `json:"enabled"`
+			Shader     string `json:"shader"`
+			DurationMs int    `json:"durationMs"`
+		} `json:"transition"`
+	}
+	loadJSON(filepath.Join(base, "ryogami-wall", "config.json"), &m)
+	if m.Transition.Enabled != nil {
+		out.Enabled = *m.Transition.Enabled
+	}
+	if m.Transition.Shader != "" {
+		out.Shader = m.Transition.Shader
+	}
+	if m.Transition.DurationMs >= 50 && m.Transition.DurationMs <= 10000 {
+		out.DurationMs = m.Transition.DurationMs
+	}
+	return out
+}
+
+// pickSkwdShader is the no-repeat random pick over the skwd catalog, sharing
+// the daemon's last-index guard with the preset picker.
+func (d *daemon) pickSkwdShader() string {
+	n := len(skwdShaders)
+	i := rand.IntN(n)
+	if n > 1 && i == d.lastTransition {
+		i = (i + 1 + rand.IntN(n-1)) % n
+	}
+	d.lastTransition = i
+	return skwdShaders[i]
+}
+
+func knownSkwdShader(name string) bool {
+	for _, s := range skwdShaders {
+		if s == name {
+			return true
+		}
+	}
+	return false
 }

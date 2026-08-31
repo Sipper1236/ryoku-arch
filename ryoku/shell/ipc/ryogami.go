@@ -144,10 +144,12 @@ func missingDepth(f ryogamiFrame) bool {
 }
 
 // consumeRyogamiFrames mirrors ryogami's wallpaper topic into d.ryoWall and
-// wakes the depth worker when the picture on screen changed or lost its cutout.
-// The worker only reuses or clears on such a wake (it never auto-recuts), so a
-// spurious wake settles immediately: an unchanged publish is suppressed by
-// ryogami's topic and the chain goes quiet.
+// wakes the workers: a changed picture reschedules the depth cutout AND the
+// palette pass (the dynamic matugen pipeline follows the wallpaper), while a
+// frame that merely lost its cutout re-arms depth alone. The depth worker only
+// reuses or clears on such a wake (it never auto-recuts), so a spurious wake
+// settles immediately: an unchanged publish is suppressed by ryogami's topic
+// and the chain goes quiet.
 func (d *daemon) consumeRyogamiFrames(r io.Reader) {
 	sc := bufio.NewScanner(r)
 	for sc.Scan() {
@@ -156,11 +158,15 @@ func (d *daemon) consumeRyogamiFrames(r io.Reader) {
 			continue
 		}
 		d.ryoWallMu.Lock()
-		wake := !sameWallSources(d.ryoWall, f) || missingDepth(f)
+		srcChanged := !sameWallSources(d.ryoWall, f)
+		wakeDepth := srcChanged || missingDepth(f)
 		d.ryoWall = f
 		d.ryoWallMu.Unlock()
-		if wake {
+		if wakeDepth {
 			d.scheduleDepth()
+		}
+		if srcChanged {
+			d.scheduleTheme()
 		}
 	}
 }

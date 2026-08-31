@@ -99,7 +99,51 @@ Column {
     SettingsCard {
         colors: root.colors
         title: "Transitions"
-        subtitle: "Every switch reveals through one of 22 built-in shader presets (wipes, blooms, ripples, glitches). The default rotates them randomly with no repeats; pin one preset in Ryoku Settings (wallpaper.transition_preset)."
+        subtitle: "The 38 skwd shader transitions, rendered by the shell on every switch. Random rotates them with no repeats; picking a shader pins it. The shell's own 22 reveal presets stay reachable by setting transition.shader to \"ryoku\"."
+
+        RowToggle {
+            colors: root.colors
+            title: "Enable transitions"
+            description: "Animate wallpaper switches; off means a plain cut."
+            checked: Config.transitionEnabled
+            onToggle: function(v) { Config.saveKey("transition.enabled", v) }
+        }
+
+        RowInput {
+            colors: root.colors
+            title: "Duration (ms)"
+            description: "Transition length in milliseconds."
+            value: Config.transitionDurationMs
+            min: 100; max: 10000
+            onCommit: function(v) { Config.saveKey("transition.durationMs", v) }
+        }
+
+        RowToggle {
+            colors: root.colors
+            title: "Random shader per transition"
+            description: "Pick a different shader for every transition."
+            checked: Config.transitionShader === "random"
+            onToggle: function(v) {
+                if (v) {
+                    if (Config.transitionShader !== "random" && root.saveConfigKey)
+                        root.saveConfigKey("transition.lastShader", Config.transitionShader)
+                    if (root.saveConfigKey) root.saveConfigKey("transition.shader", "random")
+                } else {
+                    var fallback = (Config._data.transition && Config._data.transition.lastShader) || "morph"
+                    if (fallback === "random") fallback = "morph"
+                    if (root.saveConfigKey) root.saveConfigKey("transition.shader", fallback)
+                }
+            }
+        }
+
+        ShaderPicker {
+            colors: root.colors
+            model: root._shaderOptions.filter(function(s) { return s.key !== "random" })
+            value: Config.transitionShader
+            enabled: Config.transitionEnabled && Config.transitionShader !== "random"
+            opacity: (Config.transitionEnabled && Config.transitionShader !== "random") ? 1.0 : 0.4
+            onSelected: function(key) { if (root.saveConfigKey) root.saveConfigKey("transition.shader", key) }
+        }
     }
 
 }

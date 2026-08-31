@@ -82,7 +82,18 @@ func (c config) videoDir() string {
 	if p := resolvePath(c.Paths.VideoWallpaper); p != "" {
 		return p
 	}
+	// Ryoku keeps clips in ~/Pictures/livewalls (the switcher and the old live
+	// stack both scanned it); fall back to the shared wallpaper dir only when
+	// that folder is absent, mirroring upstream's shared-dir default.
+	if live := filepath.Join(home(), "Pictures", "livewalls"); dirExists(live) {
+		return live
+	}
 	return c.wallpaperDir()
+}
+
+func dirExists(p string) bool {
+	st, err := os.Stat(p)
+	return err == nil && st.IsDir()
 }
 
 func (c config) cacheDir() string {

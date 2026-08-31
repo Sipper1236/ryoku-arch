@@ -274,6 +274,8 @@ Rectangle {
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
                 cache: true
+                sourceSize.width: Math.ceil(width)
+                sourceSize.height: Math.ceil(height)
                 visible: status === Image.Ready
                 layer.enabled: true
                 layer.effect: MultiEffect {

@@ -1313,7 +1313,7 @@ Scope {
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             smooth: true
-            cache: false
+            cache: true
             sourceSize.width: Config.gridThumbWidth
             sourceSize.height: Config.gridThumbHeight
             opacity: status === Image.Ready ? 1 : 0

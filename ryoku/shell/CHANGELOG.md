@@ -21,6 +21,20 @@
   them into the published frame and drops a cutout whose wallpaper already left
   the slot (`ipc/ryogami.go`, `ipc/depth.go`, `ryogami/src/server/routing.rs`).
 
+- **The skwd transition catalog, the wallpaper palette, live-wall detection,
+  and picker scrolling are all in.** Every switch now animates through the 38
+  GLSL transitions ported verbatim from skwd-paper (crosswarp, voronoi-shatter,
+  heat-melt, perlin and the rest), driven by the picker's own
+  `transition.enabled/shader/durationMs` keys with skwd's random default and
+  600 ms duration; the shell's 22 reveal presets stay reachable through
+  `transition.shader: "ryoku"`. The dynamic matugen pipeline is rewired: the
+  shell's ryogami bridge schedules the palette pass on every switch, so
+  colors.json and the app templates render through the shell's enriched
+  context again (the daemon no longer execs matugen with a context the
+  templates cannot resolve). Videos are catalogued from ~/Pictures/livewalls
+  by default, and the picker belt caches its thumbnails instead of re-decoding
+  them on every drag (`modules/wallpaper/skwd/`, `ryogami/daemon/`,
+  `ipc/ryogami.go`, `ipc/theming.go`, `wall-ui/`).
 
 - **The full skwd wallpaper stack now runs in the Go daemon: transitions,
   effects, pipelines, and a video engine.** Every static switch reveals through

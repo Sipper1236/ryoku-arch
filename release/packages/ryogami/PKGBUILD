@@ -19,7 +19,7 @@ url="https://ryoku.dev"
 license=('MIT')
 # runtime tools the daemon shells out to: imagemagick + ffmpeg (thumbnails and
 # colour extraction), matugen (palette on apply), quickshell (the wall-ui).
-depends=('imagemagick' 'ffmpeg' 'matugen' 'quickshell')
+depends=('imagemagick' 'ffmpeg' 'mpvpaper' 'quickshell')
 makedepends=('go')
 source=()
 

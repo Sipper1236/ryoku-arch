@@ -158,36 +158,51 @@ func (d *daemon) scheduleTheme() {
 	}
 }
 
-// paintWorker: regen the palette for the selected named theme, reload hypr
-// (config-only, monitors untouched), wake the LED worker. Ryogami owns the
-// dynamic wallpaper->palette path now (it writes ~/.cache/ryoku/colors.json on
-// apply), so ryoku-shell drives only the fixed named theme it still owns, so the
-// two never write colors.json on the same trigger. Runs for the life of the
-// daemon.
+// paintWorker: regen the palette for whatever is on screen, reload hypr
+// (config-only, monitors untouched), wake the LED worker. The wallpaper source
+// is the ryogami frame the bridge mirrors (watchRyogami schedules a pass on
+// every switch), matugenApply authors ~/.cache/ryoku/colors.json and fans the
+// palette into the app templates, and a fixed named theme overrides the
+// dynamic path entirely so the two never write colors.json on the same
+// trigger. Runs for the life of the daemon.
 func (d *daemon) paintWorker() {
 	for range d.paintSig {
 		// Self-heal a stale signature before any hyprctl fork: if Hyprland
 		// restarted under this persisted daemon, re-bind so the border reload
 		// and the cursor recolour reach the live compositor (see hyprsig.go).
 		ensureLiveHyprSignature()
-		// The surfaces floating on the picture need its luminance map either way.
-		// Best-effort off the legacy state file Ryogami no longer writes; absent,
-		// the last map stands.
-		writeWallpaperTone(readState())
+		// The surfaces floating on the picture need its luminance map either
+		// way, named theme or not.
+		writeWallpaperTone(d.currentWall())
 		// A fixed named theme owns the palette: fan its curated palette into the
 		// same app templates and reload, so apps follow the shell rail's master.
-		// No named theme selected means the wallpaper path owns it -- Ryogami's
-		// now, so ryoku-shell idles.
-		if !staticThemeActive() {
+		if staticThemeActive() {
+			if name := staticThemeName(); name != "" {
+				if err := d.matugenApplyStatic(name); err != nil {
+					fmt.Fprintf(os.Stderr, "paintWorker matugen static: %v\n", err)
+					continue
+				}
+				_ = exec.Command("hyprctl", "reload", "config-only").Run()
+				select {
+				case d.ledsSig <- struct{}{}:
+				default:
+				}
+			}
 			continue
 		}
-		name := staticThemeName()
-		if name == "" {
+		pic := d.currentWall()
+		if pic == "" || !isFile(pic) {
 			continue
 		}
-		if err := d.matugenApplyStatic(name); err != nil {
-			fmt.Fprintf(os.Stderr, "paintWorker matugen static: %v\n", err)
+		// The dynamic pipeline owns the palette only while Match wallpaper is on
+		// and no fixed named theme is selected; otherwise it idles so it never
+		// fights the static palette. matugenApply samples a still from a video
+		// itself.
+		if !matugenFollows() {
 			continue
+		}
+		if err := d.matugenApply(pic); err != nil {
+			fmt.Fprintf(os.Stderr, "paintWorker matugen: %v\n", err)
 		}
 		_ = exec.Command("hyprctl", "reload", "config-only").Run()
 		select {

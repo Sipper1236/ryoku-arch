@@ -144,10 +144,13 @@ Item {
 
     // Configure the shader + animation for the current transition and run it. A null
     // transition (init / live still-frame) or reduce-motion collapses to a plain
-    // eased crossfade (instant when motion is reduced).
+    // eased crossfade (instant when motion is reduced). A skwd catalog transition
+    // (t.shader set) loads its own ported fragment shader and eases inside it, so
+    // progress runs linear over the configured duration.
     function startReveal() {
         const t = view.transition;
         if (Motion.reduce || !t) {
+            reveal.fragmentShader = "reveal.frag.qsb";
             reveal.kind = 0;
             reveal.angle = 0;
             reveal.waveAmp = 0;
@@ -160,6 +163,15 @@ Item {
             revealAnim.restart();
             return;
         }
+        if (t.shader) {
+            reveal.fragmentShader = "skwd/" + t.shader + ".frag.qsb";
+            reveal.seed = t.seed !== undefined ? t.seed : Math.random();
+            revealAnim.easing.type = Easing.Linear;
+            revealAnim.duration = t.durationMs > 0 ? t.durationMs : 600;
+            revealAnim.restart();
+            return;
+        }
+        reveal.fragmentShader = "reveal.frag.qsb";
         reveal.kind = view.kindCode(t.kind);
         reveal.angle = t.angle !== undefined ? t.angle : 0;
         reveal.waveAmp = t.waveAmp !== undefined ? t.waveAmp : 0;

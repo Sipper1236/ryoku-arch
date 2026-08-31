@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -51,9 +50,9 @@ func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mut
 	d.saveOutputs(outputs, wpType, path, mute)
 	key := strings.TrimSuffix(name, filepath.Ext(name))
 	d.store.mutate(keyFor(d.store, name, key), func(e *Entry) { e.ApplyCount++ })
-	if !live {
-		go d.runMatugen(path)
-	}
+	// The palette follows through ryoku-shell: its ryogami bridge watches the
+	// frame and drives the matugen pipeline (the enriched template context the
+	// deployed templates need), so the daemon never execs matugen itself.
 	d.broadcast("ryogami.wall.applied", map[string]interface{}{
 		"type": wpType, "name": name, "path": path, "we_id": "", "key": key,
 	})
@@ -149,32 +148,6 @@ func (d *daemon) restoreOutputs() {
 func fileExists(p string) bool {
 	st, err := os.Stat(p)
 	return err == nil && st.Mode().IsRegular()
-}
-
-// runMatugen regenerates the palette from the applied wallpaper with the
-// configured scheme, matching the Rust daemon's invocation; failures are the
-// template's problem, never the apply's.
-func (d *daemon) runMatugen(path string) {
-	cfg := d.config()
-	if !cfg.matugenEnabled() {
-		return
-	}
-	matugenCfg := filepath.Join(home(), ".config", "matugen", "config.toml")
-	if !fileExists(matugenCfg) {
-		return
-	}
-	args := []string{
-		"-c", matugenCfg,
-		"image", path,
-		"-t", cfg.Matugen.SchemeType,
-		"-m", cfg.Matugen.Mode,
-		"--source-color-index", fmt.Sprint(cfg.Matugen.ColorIndex),
-	}
-	cmd := exec.Command("matugen", args...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ryogami: matugen failed: %v: %s\n", err, strings.TrimSpace(string(out)))
-	}
 }
 
 // outputsState answers wall.outputs from the persisted map, adding the mute
