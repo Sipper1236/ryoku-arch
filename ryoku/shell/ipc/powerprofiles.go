@@ -55,6 +55,9 @@ func (d *daemon) startPowerProfiles() {
 		topic: d.registerTopic("powerprofiles"),
 	}
 	d.pp = p
+	// Capture the saved choice before wiring signals: a boot-time
+	// PropertiesChanged could rewrite the store before restore reads it.
+	saved := readPersistedProfile()
 
 	if err := conn.AddMatchSignal(
 		dbus.WithMatchObjectPath(dbus.ObjectPath(ppPath)),
@@ -69,6 +72,7 @@ func (d *daemon) startPowerProfiles() {
 		for range sigs {
 			p.publish()
 			p.scheduleApply()
+			p.maybePersistActive()
 		}
 		if p.applyTimer != nil {
 			p.applyTimer.Stop()
@@ -84,6 +88,15 @@ func (d *daemon) startPowerProfiles() {
 		}
 		return nil, p.setProfile(a.Profile)
 	})
+
+	// Restore the profile the user last chose. power-profiles-daemon resets to a
+	// platform default on reboot (and can boot differently on AC vs battery), so
+	// without this the desktop forgets a balanced/performance pick every restart.
+	if saved != "" && saved != p.activeProfile() {
+		if err := p.setProfile(saved); err != nil {
+			log.Printf("ryoku-shell: restore power profile %q: %v", saved, err)
+		}
+	}
 
 	p.publish()
 }
@@ -144,6 +157,67 @@ func (p *powerProfilesState) setProfile(name string) error {
 	}
 	return p.obj.Call("org.freedesktop.DBus.Properties.Set", 0,
 		ppIface, "ActiveProfile", dbus.MakeVariant(name)).Err
+}
+
+// persistedProfilePath is the daemon-owned store for the user's last explicit
+// power-profile choice, kept beside power.json but separate so a ryoku-power
+// write of the CPU knobs never clobbers it (and vice versa).
+func persistedProfilePath() string {
+	dir := ryokuConfigDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, "power-profile.json")
+}
+
+// persistProfile records an explicit user profile choice so it can be restored
+// after a reboot. Only the user path calls this; autoprofile's transient
+// on-battery switch must not overwrite the saved preference.
+func (p *powerProfilesState) persistProfile(name string) {
+	if name == "" {
+		return
+	}
+	if path := persistedProfilePath(); path != "" {
+		_ = writeJSONFile(path, map[string]string{"profile": name})
+	}
+}
+
+// maybePersistActive saves the current profile as the user's choice, unless it is
+// the transient power-saver autoprofile sets while on battery -- that switch must
+// not become the remembered preference. Runs on every PropertiesChanged, so it
+// captures a profile set through any path: the bar's power widget shells out to
+// `powerprofilesctl set` directly, not this daemon's setProfile.
+func (p *powerProfilesState) maybePersistActive() {
+	active := p.activeProfile()
+	if active == "" {
+		return
+	}
+	if active == ppSaver {
+		if st := readPowerState(); st.present && st.discharging && perfFlag("autoPowerSaverOnBattery") {
+			return
+		}
+	}
+	p.persistProfile(active)
+}
+
+// readPersistedProfile returns the user's last saved profile, or "" when none is
+// stored or it is unreadable.
+func readPersistedProfile() string {
+	path := persistedProfilePath()
+	if path == "" {
+		return ""
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var s struct {
+		Profile string `json:"profile"`
+	}
+	if json.Unmarshal(b, &s) != nil {
+		return ""
+	}
+	return s.Profile
 }
 
 // profileNames extracts profile names from the raw Profiles property value
