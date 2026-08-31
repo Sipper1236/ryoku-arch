@@ -21,6 +21,19 @@
   them into the published frame and drops a cutout whose wallpaper already left
   the slot (`ipc/ryogami.go`, `ipc/depth.go`, `ryogami/src/server/routing.rs`).
 
+- **Super+W opens the ryogami wallpaper picker, the vendored skwd-wall
+  full-screen browser.** The picker QML (by liixini, MIT) is vendored under
+  `ryogami/wall-ui/`, renamed to speak ryogami.sock (`ryogami.wall.*` events,
+  `RYOGAMI_*` env, `~/.config/ryogami-wall/`), and shipped by the ryogami
+  package to `/usr/share/ryogami` (dev deploys stage it under XDG data and point
+  the unit at it). The daemon now serves its wire contract: connections stay
+  open across requests, JSON requests get full result payloads, a JSON
+  `subscribe` streams `ryogami.*` events on the same socket, and the new
+  `ryogami wallpaper ui` verb toggles the picker for the keybind. The
+  frame-blob wallpaper menu stays reachable from the bar logo
+  (`ryogami/wall-ui/`, `ryogami/src/server/{connection,routing}.rs`,
+  `hyprland/modules/binds.lua`).
+
 - **Hard reload accepts still, animated, and muted video media while retaining the bundled wordmark fallback and unchanged iris/readiness lifecycle.** Reload covers read the selected media descriptor from `brand.json`; a persisted custom-media On/Off gate releases all custom decoders when Off and restores the saved asset when On (`quickshell/reload-cover/`).
 
 - **The desktop visualizer can stack several looks, use exact gradients, and wrap

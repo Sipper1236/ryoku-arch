@@ -4,6 +4,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
 use tokio::sync::{Mutex, RwLock, broadcast, mpsc};
 use tracing::{debug, info, warn};
+use ryogami_proto::{Event, Request, Response};
 
 use crate::db;
 use crate::wall::cache::CacheState;
@@ -70,8 +71,16 @@ pub async fn run() -> anyhow::Result<()> {
     state.wall_surface.publish_current().await;
 
     {
-        let extra_env = build_host_env(&config).await;
-        state.host.lock().await.launch_with_env(&extra_env);
+        // The host is the skwd suite's second shell (launcher, bar, power); on
+        // Ryoku those surfaces belong to ryoku-shell and the host QML is not
+        // shipped, so skip cleanly instead of spawning a doomed quickshell.
+        let host_qml = resolve_host_qml();
+        if host_qml.exists() {
+            let extra_env = build_host_env(&config).await;
+            state.host.lock().await.launch_with_env(&extra_env);
+        } else {
+            info!("host shell absent at {}; skipping (ryoku-shell owns the desktop)", host_qml.display());
+        }
     }
 
     let _watcher_handle: Option<notify::RecommendedWatcher> = if !config.features.wallpapers {
@@ -405,7 +414,7 @@ async fn run_watcher_loop(
 }
 
 async fn handle_client(stream: tokio::net::UnixStream, state: SharedState) -> anyhow::Result<()> {
-    let (reader, mut writer) = stream.into_split();
+    let (reader, writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
 
     let mut first = String::new();
@@ -417,16 +426,104 @@ async fn handle_client(stream: tokio::net::UnixStream, state: SharedState) -> an
         return Ok(());
     }
 
-    // A long-lived subscription streams one topic; anything else is a one-shot
-    // command line (dispatch, reply, close) -- mirrors ryoku's Go handle().
+    // A long-lived topic subscription streams one topic (the shell's wallpaper
+    // frame); everything else enters the request loop, which serves line verbs,
+    // JSON-RPC requests, and, after a JSON `subscribe`, pushed events on the
+    // same connection: the contract the wall-ui client expects.
     if let Some(name) = cmd.strip_prefix("subscribe ") {
         return serve_subscription(reader, writer, &state, name.trim()).await;
     }
+    serve_requests(reader, writer, &state, first).await
+}
 
-    let reply = dispatch_command(cmd, &state).await;
-    writer.write_all(reply.as_bytes()).await?;
-    writer.write_all(b"\n").await?;
-    Ok(())
+/// Serve one client connection: each line is a verb or JSON request answered in
+/// order. A JSON `subscribe` request additionally streams broadcast events whose
+/// name matches one of the requested prefixes, interleaved between replies, so
+/// the wall-ui holds one socket for calls and change notifications alike. A
+/// plain one-shot client (the CLI, the Go shell daemon) sends its line, reads
+/// the reply, and closes; EOF ends the loop either way.
+async fn serve_requests(
+    mut reader: BufReader<tokio::net::unix::OwnedReadHalf>,
+    mut writer: tokio::net::unix::OwnedWriteHalf,
+    state: &SharedState,
+    mut line: String,
+) -> anyhow::Result<()> {
+    let mut events: Option<broadcast::Receiver<String>> = None;
+    let mut prefixes: Vec<String> = Vec::new();
+    loop {
+        let cmd = line.trim();
+        if !cmd.is_empty() {
+            let reply = if cmd.starts_with('{') {
+                match subscribe_request(cmd) {
+                    Some(req) => {
+                        prefixes = subscribe_prefixes(&req);
+                        events = Some(state.event_tx.subscribe());
+                        serde_json::to_string(&Response::ok(
+                            req.id,
+                            serde_json::json!({ "subscribed": prefixes }),
+                        ))
+                        .unwrap_or_default()
+                    }
+                    None => dispatch_json(cmd, state).await,
+                }
+            } else {
+                dispatch_command(cmd, state).await
+            };
+            writer.write_all(reply.as_bytes()).await?;
+            writer.write_all(b"\n").await?;
+        }
+        line.clear();
+        match &mut events {
+            None => {
+                if reader.read_line(&mut line).await? == 0 {
+                    return Ok(());
+                }
+            }
+            Some(rx) => loop {
+                tokio::select! {
+                    read = reader.read_line(&mut line) => match read {
+                        Ok(0) => return Ok(()),
+                        Ok(_) => break,
+                        Err(e) => return Err(e.into()),
+                    },
+                    recv = rx.recv() => match recv {
+                        Ok(ev) => {
+                            if event_matches(&ev, &prefixes) {
+                                writer.write_all(ev.as_bytes()).await?;
+                                writer.write_all(b"\n").await?;
+                            }
+                        }
+                        Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(broadcast::error::RecvError::Closed) => return Ok(()),
+                    },
+                }
+            },
+        }
+    }
+}
+
+fn subscribe_request(cmd: &str) -> Option<Request> {
+    let req = serde_json::from_str::<Request>(cmd).ok()?;
+    (req.method == "subscribe").then_some(req)
+}
+
+/// The prefixes a `subscribe` request wants; an absent or empty list means every
+/// ryogami event (what the wall-ui sends).
+fn subscribe_prefixes(req: &Request) -> Vec<String> {
+    let listed: Vec<String> = req
+        .params
+        .get("prefixes")
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|p| p.as_str().map(str::to_string)).collect())
+        .unwrap_or_default();
+    if listed.is_empty() { vec!["ryogami.".to_string()] } else { listed }
+}
+
+fn event_matches(ev: &str, prefixes: &[String]) -> bool {
+    match serde_json::from_str::<Event>(ev) {
+        Ok(e) => prefixes.iter().any(|p| e.event.starts_with(p.as_str())),
+        Err(_) => false,
+    }
 }
 
 /// Stream one topic to a subscriber until it disconnects or half-closes. The

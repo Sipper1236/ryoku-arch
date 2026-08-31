@@ -184,6 +184,24 @@ else
   say "skipped ryogami (rust/cargo absent; wallpaper daemon not rebuilt)"
 fi
 
+# Stage the wall-ui, the vendored skwd-wall picker the daemon spawns through
+# quickshell over ryogami.sock. Pure QML, so it deploys even without cargo; the
+# unit rewrite below points the daemon at this copy (the package resolver
+# default is /usr/share/ryogami instead).
+datadir="${XDG_DATA_HOME:-$HOME/.local/share}"
+rm -rf "$datadir/ryogami/wall-ui"
+mkdir -p "$datadir/ryogami/wall-ui"
+cp -a "$here/ryogami/wall-ui/." "$datadir/ryogami/wall-ui/"
+say "installed wall-ui -> $datadir/ryogami/wall-ui"
+# Seed the picker's own config once; user edits persist across deploys. The
+# empty object takes every built-in default (wallpapers in ~/Pictures/Wallpapers)
+# and the marker skips the first-run onboarding on a box that already has walls.
+if [[ ! -f "$cfg/ryogami-wall/config.json" ]]; then
+  mkdir -p "$cfg/ryogami-wall"
+  printf '{}\n' > "$cfg/ryogami-wall/config.json"
+fi
+[[ -e "$cfg/ryogami-wall/.bootstrapped" ]] || : > "$cfg/ryogami-wall/.bootstrapped"
+
 # Build the Ryoku Hub backend (a separate Go binary; the hub's quickshell config
 # shells out to it for the keybind legend and its TOML config).
 say "building ryoku-hub"
@@ -547,8 +565,12 @@ mkdir -p "$cfg/systemd/user"; cp -a "$here/systemd/user/." "$cfg/systemd/user/"
 sed -i -e "s|^ExecStart=.*|ExecStart=$bindir/ryoku-shell daemon|" \
   -e "s|^ExecStartPre=.*|ExecStartPre=-$bindir/ryoku-shell quit|" "$cfg/systemd/user/ryoku-shell.service"
 # ryogami.service ships ExecStart=/usr/bin/ryogami (the package path); point the
-# dev-deployed unit at ~/.local/bin, mirroring the ryoku-shell rewrite above.
-sed -i "s|^ExecStart=.*|ExecStart=$bindir/ryogami|" "$cfg/systemd/user/ryogami.service"
+# dev-deployed unit at ~/.local/bin, mirroring the ryoku-shell rewrite above,
+# and at the staged wall-ui QML (the unit file is re-copied every deploy, so the
+# injected line never stacks).
+sed -i -e "s|^ExecStart=.*|ExecStart=$bindir/ryogami|" \
+  -e "/^\[Service\]/a Environment=RYOGAMI_SHELL_QML=$datadir/ryogami/wall-ui/shell.qml" \
+  "$cfg/systemd/user/ryogami.service"
 systemctl --user daemon-reload 2>/dev/null || true
 # ryoku-ai-usage.service ships three ExecStart=-/usr/bin/<collector> lines (the
 # package path); rewrite them to ~/.local/bin so the dev-deployed collectors

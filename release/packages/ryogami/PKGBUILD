@@ -19,7 +19,7 @@ license=('MIT')
 # runtime libs the renderer links: ffmpeg (libav* decode), wayland (client +
 # egl), mesa + libglvnd (EGL/GL), alsa-lib (cpal livewall audio). matugen
 # generates the palette on wallpaper apply.
-depends=('ffmpeg' 'wayland' 'mesa' 'libglvnd' 'alsa-lib' 'matugen')
+depends=('ffmpeg' 'wayland' 'mesa' 'libglvnd' 'alsa-lib' 'matugen' 'quickshell')
 # the rust toolchain builds it; clang drives ffmpeg-the-third's bindgen and git
 # fetches its git dependency. the rest are the dev headers the crates link
 # against, resolved through pkgconf.
@@ -41,4 +41,13 @@ package() {
   # exactly where ExecStart already points (/usr/bin/ryogami).
   install -Dm644 "$_repo/ryoku/shell/systemd/user/ryogami.service" \
     "$pkgdir/usr/lib/systemd/user/ryogami.service"
+  # the wall-ui picker (vendored skwd-wall, MIT): the quickshell config the
+  # daemon spawns; /usr/share/ryogami/shell.qml is the resolver's packaged
+  # default, so no env override is needed on an installed box.
+  install -d "$pkgdir/usr/share/ryogami"
+  cp -a "$_repo/ryoku/shell/ryogami/wall-ui/." "$pkgdir/usr/share/ryogami/"
+  install -Dm644 "$_repo/ryoku/shell/ryogami/wall-ui/data/ryogami-wall.desktop" \
+    "$pkgdir/usr/share/applications/ryogami-wall.desktop"
+  install -Dm644 "$_repo/ryoku/shell/ryogami/wall-ui/LICENSE" \
+    "$pkgdir/usr/share/licenses/ryogami/LICENSE"
 }

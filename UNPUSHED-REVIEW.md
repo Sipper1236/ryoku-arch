@@ -3,6 +3,12 @@
 Everything below lives in the one shared repo (`/home/nero/Work/ryoku-arch/.git`).
 Nothing was pushed. Nothing was deleted. This file is untracked; delete it when done.
 
+> **Update (later on 2026-08-31):** `feat/depth` and `feat/ryogami` are now
+> MERGED into local `unstable-dev` (merge 7cac647a9): depth stayed in Go,
+> ryogami kept the wallpaper surface, and a Go-to-ryogami bridge was added
+> (`ipc/ryogami.go`, ryogami `depth set`/`depth clear`). The conflict hazard
+> below is resolved. Deployed and smoke-tested on this machine. Still unpushed.
+
 This folder (`ryoku-unstable`) is a worktree on local `unstable-dev` (c646128d9),
 the common ancestor of the two big feature tips. It replaces the deleted
 `ryoku-arch-unstable` worktree, whose branch and 28 unpushed commits were intact.

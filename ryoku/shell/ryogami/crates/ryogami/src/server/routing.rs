@@ -7,18 +7,11 @@ use crate::wall::{self, optimize};
 
 use super::*;
 
-/// Dispatch one wire command line and return its single-line reply. `subscribe
-/// <topic>` is handled at the connection layer (topic streaming). A leading `{`
-/// is an internal JSON-RPC request (wall/optimize/effects/state), kept for those
-/// subsystems that are still method-keyed.
+/// Dispatch one wire verb line and return its single-line reply. `subscribe
+/// <topic>` is handled at the connection layer (topic streaming); a leading `{`
+/// is routed to dispatch_json there instead.
 pub(super) async fn dispatch_command(line: &str, state: &SharedState) -> String {
     let cmd = line.trim();
-    if cmd.starts_with('{') {
-        return match serde_json::from_str::<Request>(cmd) {
-            Ok(req) => reply_of(dispatch_request(&req, state).await),
-            Err(e) => format!("err parse: {e}"),
-        };
-    }
     match cmd.split_whitespace().next().unwrap_or("") {
         "wallpaper" => wallpaper_command(cmd, state).await,
         "depth" => depth_command(cmd, state).await,
@@ -27,6 +20,21 @@ pub(super) async fn dispatch_command(line: &str, state: &SharedState) -> String 
     }
 }
 
+/// A `{...}` line is a JSON-RPC request (wall/optimize/effects/state). The reply
+/// is the full serialized Response, so a client sees `wall.list` payloads and
+/// error details, not a flattened ok/err.
+pub(super) async fn dispatch_json(line: &str, state: &SharedState) -> String {
+    match serde_json::from_str::<Request>(line) {
+        Ok(req) => {
+            let resp = dispatch_request(&req, state).await;
+            serde_json::to_string(&resp).unwrap_or_else(|e| format!("err serialize: {e}"))
+        }
+        Err(e) => format!("err parse: {e}"),
+    }
+}
+
+/// Flatten a Response into the ok/err a line verb answers with (the verb
+/// callers below reuse RPC handlers but keep the plain wire contract).
 fn reply_of(resp: Response) -> String {
     match resp.error {
         Some(e) => format!("err {}", e.message),
@@ -60,11 +68,29 @@ async fn wallpaper_command(line: &str, state: &SharedState) -> String {
         "repaint" => wallpaper_repaint(state).await,
         "live-reload" => wallpaper_live_reload(state).await,
         "restore" => wallpaper_restore(state).await,
+        "ui" => wallpaper_ui(state).await,
         "audio" => wallpaper_audio(state, &tokens, &screen).await,
         "resource" => wallpaper_resource(state, &tokens).await,
         "" => "err wallpaper: missing mode".into(),
         other => format!("err wallpaper: unknown mode: {other}"),
     }
+}
+
+/// Toggle the wall-ui picker (the vendored skwd-wall fork), mirroring the
+/// `wall.toggle` RPC so a keybind or the CLI can open it without a JSON client.
+async fn wallpaper_ui(state: &SharedState) -> String {
+    let mut ui = state.ui.lock().await;
+    ui.toggle();
+    let running = ui.is_running();
+    drop(ui);
+    let config = state.config.read().await.clone();
+    if running {
+        wall::apply::on_wall_show(&config).await;
+    } else {
+        wall::apply::on_wall_hide().await;
+    }
+    let _ = broadcast_event(&state.event_tx, "ryogami.wall.toggle", serde_json::json!({"visible": running}));
+    "ok".into()
 }
 
 async fn wallpaper_set(state: &SharedState, path: &str, screen: &str) -> String {

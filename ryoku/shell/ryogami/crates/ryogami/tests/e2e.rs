@@ -72,8 +72,8 @@ fn read_frame(reader: &mut BufReader<UnixStream>) -> serde_json::Value {
     serde_json::from_str(line.trim()).expect("frame is not JSON")
 }
 
-// One command per connection: the daemon dispatches a line, replies, and closes
-// (mirrors ryoku's Go handle()). Each command therefore needs a fresh socket.
+// One-shot helper: send a line, read one reply. The daemon holds the connection
+// open for more requests, but closing early is a supported client style.
 fn send_command(sock: &Path, line: &str) -> String {
     let cmd = connect(sock);
     cmd.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
@@ -243,4 +243,56 @@ fn wallpaper_next_advances_to_a_different_wallpaper() {
     let picked = next_frame["default"]["path"].as_str().unwrap();
     assert_eq!(picked, b_str, "next advanced to the following wallpaper");
     assert_ne!(picked, a_str, "next picked a different wallpaper than current");
+}
+
+#[test]
+fn json_requests_and_events_share_one_connection() {
+    // The wall-ui contract: a persistent connection answers JSON requests with
+    // full Response payloads, and after a JSON `subscribe` it also pushes
+    // broadcast events (ryogami.wall.*) interleaved between replies.
+    let d = start_daemon();
+    let walls = d.root.join("Pictures").join("Wallpapers");
+    std::fs::create_dir_all(&walls).unwrap();
+    let img = walls.join("a.png");
+    std::fs::write(&img, b"a").unwrap();
+    let img_str = img.display().to_string();
+
+    let conn = connect(&d.sock);
+    conn.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let mut w = conn.try_clone().unwrap();
+    let mut r = BufReader::new(conn);
+    let mut read_json = |r: &mut BufReader<UnixStream>| -> serde_json::Value {
+        let mut line = String::new();
+        assert!(r.read_line(&mut line).expect("read reply") > 0, "eof");
+        serde_json::from_str(line.trim()).expect("reply is not JSON")
+    };
+
+    // 1) A JSON request gets the full Response, result payload included.
+    w.write_all(b"{\"method\":\"status\",\"id\":7}\n").unwrap();
+    w.flush().unwrap();
+    let status = read_json(&mut r);
+    assert_eq!(status["id"].as_i64(), Some(7), "response echoes the request id");
+    assert!(status.get("result").is_some(), "status carries a result payload");
+
+    // 2) Same connection, second request: the daemon does not hang up.
+    w.write_all(b"{\"method\":\"wall.list\",\"id\":8}\n").unwrap();
+    w.flush().unwrap();
+    let list = read_json(&mut r);
+    assert_eq!(list["id"].as_i64(), Some(8));
+    assert!(list["result"].get("wallpapers").is_some(), "wall.list returns the wallpapers array");
+
+    // 3) Subscribe, then trigger an apply elsewhere: the event is pushed here.
+    w.write_all(b"{\"method\":\"subscribe\",\"params\":{\"prefixes\":[\"ryogami.\"]},\"id\":9}\n").unwrap();
+    w.flush().unwrap();
+    let sub = read_json(&mut r);
+    assert_eq!(sub["id"].as_i64(), Some(9));
+    assert!(sub["result"].get("subscribed").is_some(), "subscribe acks its prefixes");
+
+    // wall.toggle always broadcasts ryogami.wall.toggle (headless skips the
+    // actual quickshell spawn), so the push path is provable without a renderer.
+    let toggled = send_command(&d.sock, "{\"method\":\"wall.toggle\",\"id\":10}");
+    assert!(toggled.contains("\"toggled\""), "toggle replied: {toggled}");
+    let ev = read_json(&mut r);
+    assert_eq!(ev["event"].as_str(), Some("ryogami.wall.toggle"), "pushed event");
+    assert!(ev["data"].get("visible").is_some(), "toggle event carries visible");
 }
