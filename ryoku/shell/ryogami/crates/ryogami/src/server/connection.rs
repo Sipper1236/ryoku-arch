@@ -44,6 +44,7 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     let (wall_surface, topics) = WallSurface::new();
+    let (depth, depth_rx) = wall::depth::DepthHandle::new();
     let state = SharedState {
         config: Arc::new(RwLock::new(config.clone())),
         db: Arc::new(Mutex::new(db::open().expect("failed to open database"))),
@@ -59,11 +60,13 @@ pub async fn run() -> anyhow::Result<()> {
         runner: Arc::new(crate::util::RealRunner),
         topics,
         wall_surface,
+        depth,
         resource_tier: Arc::new(Mutex::new(ResourceTier::default())),
         event_tx: event_tx.clone(),
     };
     // Publish the empty snapshot so a subscriber before the first set sees a frame.
     state.wall_surface.publish_current().await;
+    tokio::spawn(wall::depth::depth_worker(state.clone(), depth_rx));
 
     {
         let extra_env = build_host_env(&config).await;

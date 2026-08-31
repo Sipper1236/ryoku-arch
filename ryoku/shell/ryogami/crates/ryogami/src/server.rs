@@ -62,6 +62,8 @@ pub struct SharedState {
     /// The `wallpaper` state topic + registry ryoku's QML subscribes to.
     pub topics: Topics,
     pub wall_surface: Arc<WallSurface>,
+    /// Coalescing off-frame depth-cutout worker; scheduled on every apply.
+    pub depth: crate::wall::depth::DepthHandle,
     /// Render fidelity, set by `wallpaper resource`; read by the renderer.
     pub resource_tier: Arc<Mutex<ResourceTier>>,
     /// Internal event bus (progress/watcher signals); not on the wire.
@@ -145,6 +147,7 @@ pub(crate) fn test_state() -> TestHarness {
         topics,
         wall_surface,
         resource_tier: Arc::new(Mutex::new(ResourceTier::default())),
+        depth: crate::wall::depth::DepthHandle::new().0,
         event_tx,
     };
     TestHarness { state }

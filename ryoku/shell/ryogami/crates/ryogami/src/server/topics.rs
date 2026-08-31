@@ -177,19 +177,57 @@ impl WallSurface {
         self.publish_locked(&st).await;
     }
 
-    /// Re-emit the current frame without advancing revisions. A byte-identical
-    /// frame is suppressed by the topic.
-    pub async fn republish(&self) {
-        let st = self.state.lock().await;
-        self.publish_locked(&st).await;
-    }
-
     /// A snapshot of the current frame, for status queries.
     pub async fn snapshot(&self) -> WallFrame {
         let st = self.state.lock().await;
         WallFrame {
             default: st.def.to_frame(),
             outputs: st.outputs.iter().map(|(k, v)| (k.clone(), v.to_frame())).collect(),
+        }
+    }
+
+    /// Publish a slot's cutout unless a switch mid-generation already moved it to
+    /// another wallpaper. `rev` is the cutout's mtime, so a regenerated file at
+    /// the same path still busts the image cache.
+    pub async fn set_depth(&self, slot: &str, source: &str, out: &str, rev: i64) {
+        let mut st = self.state.lock().await;
+        {
+            let entry = if slot.is_empty() {
+                &mut st.def
+            } else {
+                match st.outputs.get_mut(slot) {
+                    Some(e) => e,
+                    None => return,
+                }
+            };
+            if entry.path != source {
+                return;
+            }
+            entry.depth_path = out.to_string();
+            entry.depth_rev = rev;
+        }
+        self.publish_locked(&st).await;
+    }
+
+    /// Drop every slot's cutout (depth disabled or the engine gone), publishing
+    /// once if anything changed.
+    pub async fn clear_depth(&self) {
+        let mut st = self.state.lock().await;
+        let mut changed = false;
+        if !st.def.depth_path.is_empty() {
+            st.def.depth_path.clear();
+            st.def.depth_rev = 0;
+            changed = true;
+        }
+        for e in st.outputs.values_mut() {
+            if !e.depth_path.is_empty() {
+                e.depth_path.clear();
+                e.depth_rev = 0;
+                changed = true;
+            }
+        }
+        if changed {
+            self.publish_locked(&st).await;
         }
     }
 }

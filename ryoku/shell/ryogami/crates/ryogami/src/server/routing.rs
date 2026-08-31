@@ -75,6 +75,7 @@ async fn wallpaper_set(state: &SharedState, path: &str, screen: &str) -> String 
         state.wall_surface.show_output(screen, path, DEFAULT_FIT, None).await;
     }
     *state.current_wallpaper.lock().await = Some(basename(path));
+    state.depth.schedule(false);
     spawn_static_render(state, path, screen).await;
     "ok".into()
 }
@@ -138,6 +139,7 @@ async fn wallpaper_restore(state: &SharedState) -> String {
                 state.wall_surface.show(&p.display().to_string(), DEFAULT_FIT, None).await;
             }
             *state.current_wallpaper.lock().await = Some(name);
+            state.depth.schedule(false);
             "ok".into()
         }
         Ok(_) => "ok".into(),
@@ -174,19 +176,16 @@ async fn depth_command(line: &str, state: &SharedState) -> String {
     let tokens: Vec<&str> = line.split_whitespace().collect();
     match tokens.get(1).copied() {
         Some("refresh") => {
-            // The depth worker (Task 5) generates cutouts; today refresh re-emits
-            // the current frame so a subscriber re-reads depth in place.
-            state.wall_surface.republish().await;
+            // A forced regenerate: enable / model change / explicit user refresh
+            // all want a fresh cut even when a reusable one exists.
+            state.depth.schedule(true);
             "ok".into()
         }
-        Some("status") => {
-            let frame = state.wall_surface.snapshot().await;
-            serde_json::json!({
-                "depth": frame.default.depth,
-                "depthRev": frame.default.depth_rev,
-            })
-            .to_string()
-        }
+        Some("status") => serde_json::json!({
+            "busy": state.depth.is_busy(),
+            "path": wall::depth::default_cutout(state).await,
+        })
+        .to_string(),
         _ => "err depth expects refresh|status".into(),
     }
 }
@@ -306,12 +305,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn depth_status_reports_default_entry() {
+    async fn depth_status_reports_busy_and_path() {
+        // The contract QuickSettingsDepth.qml parses: {busy, path}.
         let h = test_state();
         let out = dispatch_command("depth status", &h.state).await;
         let v: serde_json::Value = serde_json::from_str(&out).unwrap();
-        assert_eq!(v["depth"], "");
-        assert_eq!(v["depthRev"], 0);
+        assert_eq!(v["busy"], false);
+        assert_eq!(v["path"], "");
+    }
+
+    #[tokio::test]
+    async fn depth_refresh_is_accepted() {
+        let h = test_state();
+        assert_eq!(dispatch_command("depth refresh", &h.state).await, "ok");
     }
 
     #[tokio::test]
