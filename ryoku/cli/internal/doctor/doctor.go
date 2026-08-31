@@ -169,6 +169,8 @@ func reconcilers() []reconciler {
 		{"QMK/VIA keyboard lighting provider", reconcileQMK},
 		{"display backlight", reconcileBacklight},
 		{"discrete GPU idle drain", reconcileDgpuPanel},
+		{"stale GPU render pin", reconcileGpuPin},
+		{"power profiles vs AMD GPU", reconcilePpdAmdgpu},
 		{"display resolution", reconcileDisplayModes},
 		{"phantom Wayland output", reconcilePhantomOutput},
 		{"NVIDIA boot reliability", reconcileNvidiaModeset},

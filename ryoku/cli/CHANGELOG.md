@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added
+- **Doctor clears stale GPU render pins and audits power-profiles-daemon's
+  amdgpu actions.** A laptop pinned by an older `ryoku-gpu persist` policy kept
+  rendering the whole desktop on the discrete GPU, which then could never
+  runtime-suspend (~10 W and a hot idle floor on a static wallpaper); doctor
+  now asks `ryoku-gpu check-pin` and clears a pin today's policy would not
+  write, keeping deliberate `RYOKU_GPU_FORCE=1` overrides. A second report-only
+  check warns when ppd's optional `amdgpu_dpm` / `amdgpu_panel_power` actions
+  are enabled against the AMD GPU that composites the desktop: the first turns
+  power-saver into whole-desktop lag, the second washes panel colours
+  (`internal/doctor/reconcile_gpu_pin.go`, `reconcile_ppd_amdgpu.go`).
+
 ### Fixed
 - **The spicetify remedy names the right fix for a flatpak Spotify.** A root-owned
   system flatpak (`/var/lib/flatpak`) cannot be patched without root; the Canvas
