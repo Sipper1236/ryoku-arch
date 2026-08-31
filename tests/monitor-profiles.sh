@@ -263,6 +263,9 @@ cat >"$tmp/evil.json" <<'JSON'
 JSON
 RYOKU_MONITOR_JSON="$tmp/evil.json" RYOKU_MONITORS_CONF="$tmp/evil.lua" \
   RYOKU_MONITORS_DIR="$tmp/none-evil" RYOKU_MONITORS_APPLIED="$tmp/evil-applied.json" RYOKU_MONITOR_VM=0 "$mon" autoscale >/dev/null 2>&1 || true
-luac -p "$tmp/evil.lua" 2>/dev/null || fail "a quoted monitor name produced invalid Lua in monitors.lua"
+luac_bin="$(command -v luac || command -v luac5.4 || command -v luac5.3 || true)"
+if [[ -n $luac_bin ]]; then
+  "$luac_bin" -p "$tmp/evil.lua" 2>/dev/null || fail "a quoted monitor name produced invalid Lua in monitors.lua"
+fi
 
 echo "monitor-profiles: all checks passed"

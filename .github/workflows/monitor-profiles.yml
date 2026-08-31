@@ -29,12 +29,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install jq
+      - name: Install jq and lua
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y jq
+          sudo apt-get install -y jq lua5.4
 
       - name: Run monitor-profiles test
         shell: bash
