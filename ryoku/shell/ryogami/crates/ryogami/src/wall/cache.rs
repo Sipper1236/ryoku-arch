@@ -528,7 +528,7 @@ pub async fn recompute_colors(
 
     let _ = broadcast_event(
         &event_tx,
-        "skwd.wall.recompute_colors.progress",
+        "ryogami.wall.recompute_colors.progress",
         serde_json::json!({"progress": 0, "total": total}),
     );
 
@@ -557,7 +557,7 @@ pub async fn recompute_colors(
         if (i + 1) % 50 == 0 || i + 1 == total {
             let _ = broadcast_event(
                 &event_tx,
-                "skwd.wall.recompute_colors.progress",
+                "ryogami.wall.recompute_colors.progress",
                 serde_json::json!({"progress": i + 1, "total": total}),
             );
         }
@@ -566,7 +566,7 @@ pub async fn recompute_colors(
     info!("recompute_colors: re-extracted {updated}/{total} entries");
     let _ = broadcast_event(
         &event_tx,
-        "skwd.wall.recompute_colors.complete",
+        "ryogami.wall.recompute_colors.complete",
         serde_json::json!({"updated": updated, "total": total}),
     );
     updated
@@ -703,7 +703,7 @@ fn broadcast_cache_event(
     total: usize,
 ) -> Result<usize, broadcast::error::SendError<String>> {
     let evt = ryogami_proto::Event {
-        event: "skwd.wall.cache".to_string(),
+        event: "ryogami.wall.cache".to_string(),
         data: serde_json::json!({
             "status": status,
             "progress": progress,
@@ -727,7 +727,7 @@ fn broadcast_item_event(
     richness: i64,
 ) -> Result<usize, broadcast::error::SendError<String>> {
     let evt = ryogami_proto::Event {
-        event: "skwd.wall.cached".to_string(),
+        event: "ryogami.wall.cached".to_string(),
         data: serde_json::json!({
             "key": key,
             "type": wp_type,
@@ -744,8 +744,8 @@ fn broadcast_item_event(
     let json = serde_json::to_string(&evt).unwrap_or_default();
     let result = tx.send(json);
     match &result {
-        Ok(n) => debug!("[cache] broadcast skwd.wall.cached name={name} receivers={n}"),
-        Err(_) => warn!("[cache] broadcast skwd.wall.cached name={name} FAILED (no receivers)"),
+        Ok(n) => debug!("[cache] broadcast ryogami.wall.cached name={name} receivers={n}"),
+        Err(_) => warn!("[cache] broadcast ryogami.wall.cached name={name} FAILED (no receivers)"),
     }
     result
 }
@@ -835,7 +835,7 @@ mod tests {
         assert_eq!(read_we_title(root.path()), "Unknown");
     }
 
-    // Contract: skwd-wall's WallpaperSelectorService.qml handler for skwd.wall.cached reads
+    // Contract: ryogami's WallpaperSelectorService.qml handler for ryogami.wall.cached reads
     // these exact data fields. Pin them so a rename doesn't silently break live cache updates.
     #[tokio::test]
     async fn cached_event_payload_contract() {
@@ -843,7 +843,7 @@ mod tests {
         broadcast_item_event(&tx, "static:x", "static", "x", "/t.webp", "v.mp4", "we9", 111, 50, 60, 3).unwrap();
         let raw = rx.recv().await.unwrap();
         let evt: serde_json::Value = serde_json::from_str(&raw).unwrap();
-        assert_eq!(evt["event"], "skwd.wall.cached");
+        assert_eq!(evt["event"], "ryogami.wall.cached");
         let d = &evt["data"];
         assert_eq!(d["key"], "static:x");
         assert_eq!(d["type"], "static");

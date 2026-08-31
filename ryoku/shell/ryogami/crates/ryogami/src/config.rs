@@ -226,8 +226,8 @@ fn default_transition_duration_ms() -> u64 {
 #[serde(rename_all = "kebab-case")]
 pub enum PaperEngine {
     #[default]
-    #[serde(alias = "skwd-paper", alias = "internal", alias = "skwd_paper")]
-    SkwdPaper,
+    #[serde(alias = "ryogami-paper", alias = "internal", alias = "ryogami_paper")]
+    RyogamiPaper,
     Awww,
 }
 
@@ -547,7 +547,7 @@ impl Config {
         resolve_path(self.paths.cache.as_deref()).unwrap_or_else(|| {
             std::env::var("XDG_CACHE_HOME")
                 .map_or_else(|_| home().join(".cache"), PathBuf::from)
-                .join("skwd-wall")
+                .join("ryogami")
         })
     }
 
@@ -620,23 +620,23 @@ impl Config {
     }
 
     pub fn data_dir() -> PathBuf {
-        if let Ok(p) = std::env::var("SKWD_DATA_DIR") {
+        if let Ok(p) = std::env::var("RYOGAMI_DATA_DIR") {
             return PathBuf::from(p);
         }
         let local = PathBuf::from("data");
         if local.join("config.json.example").exists() {
             return std::fs::canonicalize(&local).unwrap_or(local);
         }
-        PathBuf::from("/usr/share/skwd-wall/data")
+        PathBuf::from("/usr/share/ryogami/data")
     }
 }
 
 pub fn config_dir() -> PathBuf {
-    std::env::var("SKWD_WALL_CONFIG").map_or_else(
+    std::env::var("RYOGAMI_WALL_CONFIG").map_or_else(
         |_| {
             std::env::var("XDG_CONFIG_HOME")
                 .map_or_else(|_| home().join(".config"), PathBuf::from)
-                .join("skwd-wall")
+                .join("ryogami")
         },
         PathBuf::from,
     )
@@ -647,11 +647,11 @@ pub fn config_path() -> PathBuf {
 }
 
 pub fn shell_config_path() -> PathBuf {
-    std::env::var("SKWD_CONFIG").map_or_else(
+    std::env::var("RYOGAMI_CONFIG").map_or_else(
         |_| {
             std::env::var("XDG_CONFIG_HOME")
                 .map_or_else(|_| home().join(".config"), PathBuf::from)
-                .join("skwd")
+                .join("ryogami")
                 .join("data")
         },
         PathBuf::from,

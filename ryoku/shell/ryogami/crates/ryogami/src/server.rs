@@ -23,10 +23,12 @@ use crate::db;
 mod process;
 mod routing;
 mod connection;
+mod topics;
 use process::*;
 use routing::*;
 pub use connection::run;
 pub use process::ManagedProcess;
+pub use topics::{ResourceTier, Topics, WallSurface};
 
 const CONFIG_RELOAD_DELAY_MS: u64 = 200;
 
@@ -57,6 +59,13 @@ pub struct SharedState {
     pub suppress_set: SuppressSet,
     pub random_rotation: Arc<Mutex<Option<RandomRotation>>>,
     pub runner: Arc<dyn crate::util::CommandRunner>,
+    /// The `wallpaper` state topic + registry ryoku's QML subscribes to.
+    pub topics: Topics,
+    pub wall_surface: Arc<WallSurface>,
+    /// Render fidelity, set by `wallpaper resource`; read by the renderer.
+    pub resource_tier: Arc<Mutex<ResourceTier>>,
+    /// Internal event bus (progress/watcher signals); not on the wire.
+    pub event_tx: broadcast::Sender<String>,
 }
 
 pub fn broadcast_event(
@@ -101,8 +110,6 @@ pub async fn auto_optimize_if_enabled(
 #[cfg(test)]
 pub(crate) struct TestHarness {
     pub state: SharedState,
-    pub event_tx: broadcast::Sender<String>,
-    pub subscriptions: Arc<Mutex<Vec<String>>>,
 }
 
 #[cfg(test)]
@@ -113,7 +120,7 @@ impl TestHarness {
             params,
             id: 1,
         };
-        dispatch_request(&req, &self.event_tx, &self.subscriptions, &self.state).await
+        dispatch_request(&req, &self.state).await
     }
 }
 
@@ -121,12 +128,13 @@ impl TestHarness {
 pub(crate) fn test_state() -> TestHarness {
     let (event_tx, _events) = broadcast::channel::<String>(256);
     let config = Config::default();
+    let (wall_surface, topics) = WallSurface::new();
     let state = SharedState {
         config: Arc::new(RwLock::new(config.clone())),
         db: Arc::new(Mutex::new(db::open_in_memory().expect("in-memory db"))),
         db_shared: Arc::new(Mutex::new(db::open_in_memory().expect("in-memory db_shared"))),
-        ui: Arc::new(Mutex::new(ManagedProcess::new_dry("wall-ui", "SKWD_WALL_INSTALL", PathBuf::new()))),
-        host: Arc::new(Mutex::new(ManagedProcess::new_dry("host", "SKWD_HOST_INSTALL", PathBuf::new()))),
+        ui: Arc::new(Mutex::new(ManagedProcess::new_dry("wall-ui", "RYOGAMI_WALL_INSTALL", PathBuf::new()))),
+        host: Arc::new(Mutex::new(ManagedProcess::new_dry("host", "RYOGAMI_HOST_INSTALL", PathBuf::new()))),
         current_wallpaper: Arc::new(Mutex::new(None)),
         cache_state: Arc::new(Mutex::new(CacheState::default())),
         optimize_state: Arc::new(Mutex::new(OptimizeState::default())),
@@ -134,12 +142,12 @@ pub(crate) fn test_state() -> TestHarness {
         suppress_set: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
         random_rotation: Arc::new(Mutex::new(None)),
         runner: Arc::new(crate::util::FakeRunner::new()),
-    };
-    TestHarness {
-        state,
+        topics,
+        wall_surface,
+        resource_tier: Arc::new(Mutex::new(ResourceTier::default())),
         event_tx,
-        subscriptions: Arc::new(Mutex::new(Vec::new())),
-    }
+    };
+    TestHarness { state }
 }
 
 #[cfg(test)]
@@ -156,18 +164,6 @@ mod harness_tests {
                 .error
                 .is_none()
         );
-    }
-
-    #[tokio::test]
-    async fn subscribe_registers_trimmed_prefixes() {
-        let h = test_state();
-        let resp = h
-            .dispatch("subscribe", serde_json::json!({ "events": ["skwd.wall.*", "state.changed"] }))
-            .await;
-        assert!(resp.error.is_none());
-        let subs = h.subscriptions.lock().await;
-        assert!(subs.contains(&"skwd.wall.".to_string()));
-        assert!(subs.contains(&"state.changed".to_string()));
     }
 
     #[tokio::test]

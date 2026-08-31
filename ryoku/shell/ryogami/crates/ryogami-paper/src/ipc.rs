@@ -6,7 +6,7 @@ use std::time::Duration;
 
 fn socket_path() -> PathBuf {
     let runtime = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".into());
-    PathBuf::from(runtime).join("skwd").join("daemon.sock")
+    PathBuf::from(runtime).join("ryogami.sock")
 }
 
 pub fn signal_ready() {

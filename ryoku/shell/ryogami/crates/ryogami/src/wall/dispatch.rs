@@ -36,7 +36,7 @@ pub async fn dispatch(req: &Request, event_tx: &broadcast::Sender<String>, state
             } else {
                 apply::on_wall_hide().await;
             }
-            let _ = broadcast_event(event_tx, "skwd.wall.toggle", serde_json::json!({"visible": running}));
+            let _ = broadcast_event(event_tx, "ryogami.wall.toggle", serde_json::json!({"visible": running}));
             Response::ok(req.id, serde_json::json!({"toggled": true, "visible": running}))
         }
 
@@ -44,14 +44,14 @@ pub async fn dispatch(req: &Request, event_tx: &broadcast::Sender<String>, state
             state.ui.lock().await.launch();
             let config = state.config.read().await.clone();
             apply::on_wall_show(&config).await;
-            let _ = broadcast_event(event_tx, "skwd.wall.show", serde_json::json!({}));
+            let _ = broadcast_event(event_tx, "ryogami.wall.show", serde_json::json!({}));
             Response::ok(req.id, serde_json::json!({"ok": true}))
         }
 
         "hide" => {
             state.ui.lock().await.kill();
             apply::on_wall_hide().await;
-            let _ = broadcast_event(event_tx, "skwd.wall.hide", serde_json::json!({}));
+            let _ = broadcast_event(event_tx, "ryogami.wall.hide", serde_json::json!({}));
             Response::ok(req.id, serde_json::json!({"ok": true}))
         }
 
@@ -183,7 +183,7 @@ pub async fn dispatch(req: &Request, event_tx: &broadcast::Sender<String>, state
 
                     let _ = broadcast_event(
                         event_tx,
-                        "skwd.wall.applied",
+                        "ryogami.wall.applied",
                         serde_json::json!({"type": wp_type, "name": &name, "path": path, "we_id": we_id, "key": key}),
                     );
 
@@ -457,7 +457,7 @@ pub async fn dispatch(req: &Request, event_tx: &broadcast::Sender<String>, state
 
             let _ = broadcast_event(
                 event_tx,
-                "skwd.wall.file_removed",
+                "ryogami.wall.file_removed",
                 serde_json::json!({
                     "name": name, "type": wp_type
                 }),
@@ -635,7 +635,7 @@ pub async fn dispatch(req: &Request, event_tx: &broadcast::Sender<String>, state
                             *current_wp.lock().await = Some(name.clone());
                             let _ = broadcast_event(
                                 &tx,
-                                "skwd.wall.applied",
+                                "ryogami.wall.applied",
                                 serde_json::json!({"type": kind, "name": &name, "path": &path_str, "random": true}),
                             );
                             super::overview_backdrop::refresh_for(&cfg).await;
@@ -658,7 +658,7 @@ pub async fn dispatch(req: &Request, event_tx: &broadcast::Sender<String>, state
             }
             let _ = broadcast_event(
                 event_tx,
-                "skwd.wall.random_started",
+                "ryogami.wall.random_started",
                 serde_json::json!({
                     "interval": interval_secs,
                     "types": &types,
@@ -680,7 +680,7 @@ pub async fn dispatch(req: &Request, event_tx: &broadcast::Sender<String>, state
             let mut rot = state.random_rotation.lock().await;
             if let Some(prev) = rot.take() {
                 prev.handle.abort();
-                let _ = broadcast_event(event_tx, "skwd.wall.random_stopped", serde_json::json!({}));
+                let _ = broadcast_event(event_tx, "ryogami.wall.random_stopped", serde_json::json!({}));
                 Response::ok(req.id, serde_json::json!({"stopped": true}))
             } else {
                 Response::ok(req.id, serde_json::json!({"stopped": false, "reason": "not running"}))
@@ -850,7 +850,7 @@ mod tests {
         assert_eq!(e.code, -32601);
     }
 
-    // Contract: skwd-wall's WallpaperSelectorService.qml reads these exact fields off each
+    // Contract: ryogami's WallpaperSelectorService.qml reads these exact fields off each
     // wall.list item. A rename/drop here silently breaks the wallpaper grid.
     #[tokio::test]
     async fn wall_list_item_contract_matches_frontend() {

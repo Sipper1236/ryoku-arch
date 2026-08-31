@@ -220,7 +220,7 @@ impl App {
             &surface,
             Some(&output),
             Layer::Background,
-            "skwd-paper".to_string(),
+            "ryogami-paper".to_string(),
             &self.qh,
             (),
         );

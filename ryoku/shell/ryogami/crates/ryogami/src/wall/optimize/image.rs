@@ -216,7 +216,7 @@ pub async fn start(
                     drop(conn);
 
                     if opt.old_name != opt.new_name {
-                        let _ = event_tx.send(make_event("skwd.wall.file_renamed", serde_json::json!({
+                        let _ = event_tx.send(make_event("ryogami.wall.file_renamed", serde_json::json!({
                             "old_name": opt.old_name, "new_name": opt.new_name
                         })));
                         crate::wall::apply::repoint_optimized_wallpaper(
@@ -433,7 +433,7 @@ fn parse_dims_csv(text: &str) -> (u32, u32) {
 
 async fn broadcast_progress(tx: &broadcast::Sender<String>, state: &Arc<Mutex<OptimizeState>>) {
     let s = state.lock().await;
-    let _ = tx.send(make_event("skwd.wall.optimize.progress", serde_json::json!({
+    let _ = tx.send(make_event("ryogami.wall.optimize.progress", serde_json::json!({
         "running": s.running,
         "progress": s.progress,
         "total": s.total,
@@ -445,7 +445,7 @@ async fn broadcast_progress(tx: &broadcast::Sender<String>, state: &Arc<Mutex<Op
 }
 
 fn broadcast_finished(tx: &broadcast::Sender<String>, s: &OptimizeState) {
-    let _ = tx.send(make_event("skwd.wall.optimize.finished", serde_json::json!({
+    let _ = tx.send(make_event("ryogami.wall.optimize.finished", serde_json::json!({
         "optimized": s.succeeded,
         "skipped": s.skipped,
         "failed": s.failed,
@@ -525,8 +525,8 @@ mod tests {
         assert_eq!(parse_dims_csv("100"), (100, 0));
     }
 
-    // Contract: skwd-wall's ImageOptimizeService.qml reads these exact fields off the
-    // skwd.wall.optimize.progress event (note the camelCase `currentFile`).
+    // Contract: ryogami's ImageOptimizeService.qml reads these exact fields off the
+    // ryogami.wall.optimize.progress event (note the camelCase `currentFile`).
     #[tokio::test]
     async fn optimize_progress_event_contract() {
         let (tx, mut rx) = broadcast::channel(8);
@@ -542,7 +542,7 @@ mod tests {
         }
         broadcast_progress(&tx, &state).await;
         let evt: serde_json::Value = serde_json::from_str(&rx.recv().await.unwrap()).unwrap();
-        assert_eq!(evt["event"], "skwd.wall.optimize.progress");
+        assert_eq!(evt["event"], "ryogami.wall.optimize.progress");
         let d = &evt["data"];
         assert_eq!(d["running"], true);
         assert_eq!(d["progress"], 3);

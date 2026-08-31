@@ -12,7 +12,7 @@ fn xdg_data_home() -> PathBuf {
 }
 
 pub fn db_path() -> PathBuf {
-    xdg_data_home().join("skwd-daemon").join("daemon.sqlite")
+    xdg_data_home().join("ryogami").join("daemon.sqlite")
 }
 
 fn qml_db_path() -> PathBuf {

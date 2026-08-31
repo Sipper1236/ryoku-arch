@@ -361,7 +361,7 @@ impl App {
             &surface,
             Some(&output),
             wlr_layer,
-            "skwd-paper-transition".to_string(),
+            "ryogami-paper-transition".to_string(),
             &self.qh,
             (),
         );

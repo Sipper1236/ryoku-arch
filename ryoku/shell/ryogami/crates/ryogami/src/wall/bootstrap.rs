@@ -60,17 +60,17 @@ async fn seed_shell_config() {
         return;
     }
 
-    let candidates: Vec<PathBuf> = std::env::var("SKWD_INSTALL")
+    let candidates: Vec<PathBuf> = std::env::var("RYOGAMI_INSTALL")
         .ok()
         .map(|p| PathBuf::from(p).join("data/config.json.example"))
         .into_iter()
         .chain(std::iter::once(PathBuf::from(
-            "/usr/share/skwd/data/config.json.example",
+            "/usr/share/ryogami/data/config.json.example",
         )))
         .collect();
 
     let Some(src) = candidates.into_iter().find(|p| p.exists()) else {
-        info!("bootstrap: no skwd shell config example found, skipping seed");
+        info!("bootstrap: no ryogami shell config example found, skipping seed");
         return;
     };
 

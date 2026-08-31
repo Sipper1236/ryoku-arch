@@ -7,7 +7,7 @@ use super::VIDEO_EXTS;
 
 pub fn cache_dir() -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
-    Some(PathBuf::from(home).join(".cache/skwd/optimized"))
+    Some(PathBuf::from(home).join(".cache/ryogami/optimized"))
 }
 
 pub fn cache_key(path: &Path) -> std::io::Result<String> {
@@ -31,7 +31,7 @@ fn is_video(path: &str) -> bool {
 }
 
 pub fn optimized_or(path: &str) -> String {
-    if std::env::var("SKWD_NO_OPTIMIZED").is_ok() {
+    if std::env::var("RYOGAMI_NO_OPTIMIZED").is_ok() {
         return path.to_string();
     }
     if !is_video(path) {

@@ -33,7 +33,7 @@ fn read_one(reader: &mut impl BufRead) -> Response {
 #[test]
 fn newline_framed_request_response_roundtrip() {
     let dir = tempfile::tempdir().unwrap();
-    let sock = dir.path().join("daemon.sock");
+    let sock = dir.path().join("ryogami.sock");
     let listener = UnixListener::bind(&sock).unwrap();
     let server = thread::spawn(move || echo_server(&listener));
 
@@ -65,7 +65,7 @@ fn newline_framed_request_response_roundtrip() {
 #[test]
 fn blank_lines_are_skipped_between_messages() {
     let dir = tempfile::tempdir().unwrap();
-    let sock = dir.path().join("daemon.sock");
+    let sock = dir.path().join("ryogami.sock");
     let listener = UnixListener::bind(&sock).unwrap();
     let server = thread::spawn(move || echo_server(&listener));
 
@@ -94,7 +94,7 @@ fn blank_lines_are_skipped_between_messages() {
 #[test]
 fn malformed_json_yields_parse_error_response() {
     let dir = tempfile::tempdir().unwrap();
-    let sock = dir.path().join("daemon.sock");
+    let sock = dir.path().join("ryogami.sock");
     let listener = UnixListener::bind(&sock).unwrap();
     let server = thread::spawn(move || echo_server(&listener));
 

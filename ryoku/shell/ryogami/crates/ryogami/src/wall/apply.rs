@@ -259,7 +259,7 @@ async fn apply_static_inner(
         if prev_was_we {
             kill_legacy_video_procs().await;
         }
-        info!("apply_static: skwd-paper-still + bottom-layer transition");
+        info!("apply_static: ryogami-paper-still + bottom-layer transition");
     }
 
     let current_dir = config.cache_dir().join("wallpaper");
@@ -863,36 +863,36 @@ async fn read_we_project_type(item_dir: &Path) -> (String, String) {
 
 pub async fn kill_orphan_paper_procs() {
     let _ = run_sh(
-        "pkill -9 -x skwd-paper 2>/dev/null; pkill -9 -x skwd-paper-still 2>/dev/null; true",
+        "pkill -9 -x ryogami-paper 2>/dev/null; pkill -9 -x ryogami-paper-still 2>/dev/null; true",
     )
     .await;
 }
 
 fn paper_bin() -> String {
-    std::env::var("SKWD_PAPER_BIN").unwrap_or_else(|_| {
+    std::env::var("RYOGAMI_PAPER_BIN").unwrap_or_else(|_| {
         if let Ok(exe) = std::env::current_exe()
             && let Some(dir) = exe.parent()
         {
-            let local = dir.join("skwd-paper");
+            let local = dir.join("ryogami-paper");
             if local.exists() {
                 return local.display().to_string();
             }
         }
-        "skwd-paper".to_string()
+        "ryogami-paper".to_string()
     })
 }
 
 fn paper_still_bin() -> String {
-    std::env::var("SKWD_PAPER_STILL_BIN").unwrap_or_else(|_| {
+    std::env::var("RYOGAMI_PAPER_STILL_BIN").unwrap_or_else(|_| {
         if let Ok(exe) = std::env::current_exe()
             && let Some(dir) = exe.parent()
         {
-            let local = dir.join("skwd-paper-still");
+            let local = dir.join("ryogami-paper-still");
             if local.exists() {
                 return local.display().to_string();
             }
         }
-        "skwd-paper-still".to_string()
+        "ryogami-paper-still".to_string()
     })
 }
 
@@ -1340,7 +1340,7 @@ mod tests {
         assert_eq!(res.get("DP-1"), Some(&true));
     }
 
-    // Contract: skwd-wall's DaemonClient.qml (wall.outputs) reads type/path/we_id/mute off each
+    // Contract: ryogami's DaemonClient.qml (wall.outputs) reads type/path/we_id/mute off each
     // outputs.json entry. save_outputs_state is what writes them.
     #[tokio::test]
     async fn save_outputs_state_entry_contract() {

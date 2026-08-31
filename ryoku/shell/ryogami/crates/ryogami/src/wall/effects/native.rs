@@ -547,7 +547,7 @@ mod tests {
         assert!(preview_path(Path::new("/c"), Path::new("/"), "x").is_err());
     }
 
-    // Contract: skwd-wall's EffectsPanel.qml reads id/label/description/params off each
+    // Contract: ryogami's EffectsPanel.qml reads id/label/description/params off each
     // effects.list item, and id/label/type off each param.
     #[test]
     fn list_item_and_param_contract() {

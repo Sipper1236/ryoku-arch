@@ -6,7 +6,7 @@ use tokio::process::Command;
 
 use crate::config::Config;
 
-const NAMESPACE: &str = "skwd-paper-backdrop";
+const NAMESPACE: &str = "ryogami-paper-backdrop";
 
 pub fn backdrop_path(config: &Config) -> PathBuf {
     config.cache_dir().join("wallpaper").join("overview-backdrop.jpg")
@@ -131,7 +131,7 @@ pub async fn refresh(source: &str, config: &Config) {
 
 async fn kill_existing() -> anyhow::Result<()> {
     let _ = Command::new("pkill")
-        .args(["-f", &format!("skwd-paper-still .*--namespace {NAMESPACE}")])
+        .args(["-f", &format!("ryogami-paper-still .*--namespace {NAMESPACE}")])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -161,12 +161,12 @@ async fn respawn(blurred: &Path) -> anyhow::Result<()> {
 fn which_paper_still() -> String {
     if let Ok(exe) = std::env::current_exe()
         && let Some(dir) = exe.parent() {
-            let local = dir.join("skwd-paper-still");
+            let local = dir.join("ryogami-paper-still");
             if local.exists() {
                 return local.to_string_lossy().to_string();
             }
         }
-    "skwd-paper-still".to_string()
+    "ryogami-paper-still".to_string()
 }
 
 #[cfg(test)]

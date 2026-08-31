@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 pub fn socket_path() -> PathBuf {
     let runtime_dir = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".into());
-    PathBuf::from(runtime_dir).join("skwd").join("daemon.sock")
+    PathBuf::from(runtime_dir).join("ryogami.sock")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,6 +43,29 @@ pub struct Event {
 pub enum ServerMessage {
     Response(Response),
     Event(Event),
+}
+
+/// One ENTRY in the published `wallpaper` topic frame. The serde tags are the
+/// contract ryoku's QML parses verbatim (`WallpaperFrame.qml`): renaming or
+/// dropping a key silently breaks the shell.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct WallFrameEntry {
+    pub path: String,
+    pub revision: i64,
+    pub fit: String,
+    pub live: bool,
+    pub transition: Option<serde_json::Value>,
+    pub depth: String,
+    #[serde(rename = "depthRev")]
+    pub depth_rev: i64,
+}
+
+/// The coalesced full-state `wallpaper` frame: a default plus per-output
+/// overrides. A backdrop applies `outputs[its connector]` or the default.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct WallFrame {
+    pub default: WallFrameEntry,
+    pub outputs: std::collections::BTreeMap<String, WallFrameEntry>,
 }
 
 impl Request {
@@ -184,8 +207,8 @@ mod tests {
     #[test]
     fn socket_path_derives_from_runtime_dir() {
         let p = socket_path();
-        assert!(p.ends_with("skwd/daemon.sock"));
+        assert!(p.ends_with("ryogami.sock"));
         let base = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".into());
-        assert_eq!(p, PathBuf::from(base).join("skwd").join("daemon.sock"));
+        assert_eq!(p, PathBuf::from(base).join("ryogami.sock"));
     }
 }

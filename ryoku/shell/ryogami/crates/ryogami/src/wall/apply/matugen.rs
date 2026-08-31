@@ -363,7 +363,7 @@ mod tests {
 
     #[tokio::test]
     async fn generate_matugen_config_skips_missing_template_files() {
-        let tmp = std::env::temp_dir().join(format!("skwd-test-matugen-{}", std::process::id()));
+        let tmp = std::env::temp_dir().join(format!("ryogami-test-matugen-{}", std::process::id()));
         let template_dir = tmp.join("templates");
         let cache_dir = tmp.join("cache");
         std::fs::create_dir_all(&template_dir).unwrap();
@@ -390,13 +390,13 @@ mod tests {
             },
             Integration {
                 name: Some("missing-absolute".into()),
-                template: Some("/var/empty/__skwd_missing__.conf".into()),
+                template: Some("/var/empty/__ryogami_missing__.conf".into()),
                 output: Some("also-never.conf".into()),
                 reload: None,
             },
             Integration {
                 name: Some("missing-tilde".into()),
-                template: Some("~/.config/__skwd_missing_tilde__.conf".into()),
+                template: Some("~/.config/__ryogami_missing_tilde__.conf".into()),
                 output: Some("tilde-never.conf".into()),
                 reload: None,
             },
@@ -412,17 +412,17 @@ mod tests {
         assert!(!content.contains("does-not-exist.conf"), "missing relative template path should not be emitted:\n{content}");
 
         assert!(!content.contains("[templates.missing-absolute]"), "missing-absolute should be skipped:\n{content}");
-        assert!(!content.contains("__skwd_missing__.conf"), "missing absolute template path should not be emitted:\n{content}");
+        assert!(!content.contains("__ryogami_missing__.conf"), "missing absolute template path should not be emitted:\n{content}");
 
         assert!(!content.contains("[templates.missing-tilde]"), "missing-tilde should be skipped:\n{content}");
-        assert!(!content.contains("__skwd_missing_tilde__.conf"), "missing tilde template path should not be emitted:\n{content}");
+        assert!(!content.contains("__ryogami_missing_tilde__.conf"), "missing tilde template path should not be emitted:\n{content}");
 
         std::fs::remove_dir_all(&tmp).ok();
     }
 
     #[tokio::test]
     async fn generate_matugen_config_emits_only_when_both_template_and_output_set() {
-        let tmp = std::env::temp_dir().join(format!("skwd-test-matugen-pair-{}", std::process::id()));
+        let tmp = std::env::temp_dir().join(format!("ryogami-test-matugen-pair-{}", std::process::id()));
         let template_dir = tmp.join("templates");
         let cache_dir = tmp.join("cache");
         std::fs::create_dir_all(&template_dir).unwrap();
@@ -521,7 +521,7 @@ mod tests {
 
     #[tokio::test]
     async fn generate_matugen_config_always_has_templates_table_for_matugen4() {
-        let tmp = std::env::temp_dir().join(format!("skwd-test-matugen-empty-{}", std::process::id()));
+        let tmp = std::env::temp_dir().join(format!("ryogami-test-matugen-empty-{}", std::process::id()));
         let cache_dir = tmp.join("cache");
         std::fs::create_dir_all(&cache_dir).unwrap();
 

@@ -468,7 +468,7 @@ async fn scan_we_videos(we_dir: &Path, files: &mut Vec<String>) {
 async fn broadcast_progress(tx: &broadcast::Sender<String>, state: &Arc<Mutex<ConvertState>>) {
     let s = state.lock().await;
     let _ = tx.send(make_event(
-        "skwd.wall.convert.progress",
+        "ryogami.wall.convert.progress",
         serde_json::json!({
             "running": s.running,
             "progress": s.progress,
@@ -483,7 +483,7 @@ async fn broadcast_progress(tx: &broadcast::Sender<String>, state: &Arc<Mutex<Co
 
 fn broadcast_finished(tx: &broadcast::Sender<String>, s: &ConvertState) {
     let _ = tx.send(make_event(
-        "skwd.wall.convert.finished",
+        "ryogami.wall.convert.finished",
         serde_json::json!({
             "converted": s.succeeded,
             "skipped": s.skipped,
@@ -543,8 +543,8 @@ mod tests {
         }
     }
 
-    // Contract: skwd-wall's VideoConvertService.qml reads these fields off the
-    // skwd.wall.convert.progress event (camelCase `currentFile`).
+    // Contract: ryogami's VideoConvertService.qml reads these fields off the
+    // ryogami.wall.convert.progress event (camelCase `currentFile`).
     #[tokio::test]
     async fn convert_progress_event_contract() {
         let (tx, mut rx) = broadcast::channel(8);
@@ -559,7 +559,7 @@ mod tests {
         }
         broadcast_progress(&tx, &state).await;
         let evt: serde_json::Value = serde_json::from_str(&rx.recv().await.unwrap()).unwrap();
-        assert_eq!(evt["event"], "skwd.wall.convert.progress");
+        assert_eq!(evt["event"], "ryogami.wall.convert.progress");
         let d = &evt["data"];
         assert_eq!(d["running"], true);
         assert_eq!(d["progress"], 1);

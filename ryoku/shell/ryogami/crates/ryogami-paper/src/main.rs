@@ -16,7 +16,7 @@ mod wayland;
 use fill_mode::FillMode;
 
 #[derive(Parser, Debug)]
-#[command(name = "skwd-paper")]
+#[command(name = "ryogami-paper")]
 #[command(about = "Memory-efficient wallpaper daemon (video & images)")]
 struct Cli {
     output: String,
@@ -62,9 +62,9 @@ fn main() -> Result<()> {
         .map(std::path::PathBuf::from)
         .or_else(|| std::env::var("HOME").ok().map(|h| std::path::PathBuf::from(h).join(".cache")))
         .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
-        .join("skwd");
+        .join("ryogami");
     let _ = std::fs::create_dir_all(&log_dir);
-    let file_appender = tracing_appender::rolling::never(&log_dir, "skwd.log");
+    let file_appender = tracing_appender::rolling::never(&log_dir, "ryogami.log");
     let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
     Box::leak(Box::new(file_guard));
 
@@ -83,10 +83,10 @@ fn main() -> Result<()> {
         file = %cli.file,
         output = %cli.output,
         mode,
-        "starting skwd-paper"
+        "starting ryogami-paper"
     );
 
-    if let Some(limit_mb) = std::env::var("SKWD_PAPER_RSS_LIMIT_MB")
+    if let Some(limit_mb) = std::env::var("RYOGAMI_PAPER_RSS_LIMIT_MB")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
     {

@@ -252,7 +252,7 @@ pub async fn on_wall_show(config: &Config) {
     if super::is_kde() {
         return;
     }
-    if config.paper.engine != config::PaperEngine::SkwdPaper {
+    if config.paper.engine != config::PaperEngine::RyogamiPaper {
         return;
     }
     let prev = match read_prev_transition_image(&config.cache_dir()).await {

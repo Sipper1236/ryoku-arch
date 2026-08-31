@@ -86,7 +86,7 @@ impl AudioPlayer {
         let path = file_path.to_string();
         let stop_th = stop_flag.clone();
         let thread = std::thread::Builder::new()
-            .name("skwd-audio".into())
+            .name("ryogami-audio".into())
             .spawn(move || {
                 if let Err(e) = decode_loop(&path, producer, stop_th) {
                     tracing::warn!("audio decode_loop exited: {e:?}");

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use ryogami_proto::{Request, Response};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
 use tokio::sync::{Mutex, RwLock, broadcast, mpsc};
@@ -44,12 +43,13 @@ pub async fn run() -> anyhow::Result<()> {
         info!("wallpapers module disabled by config; skipping wallpaper subsystems");
     }
 
+    let (wall_surface, topics) = WallSurface::new();
     let state = SharedState {
         config: Arc::new(RwLock::new(config.clone())),
         db: Arc::new(Mutex::new(db::open().expect("failed to open database"))),
         db_shared: Arc::new(Mutex::new(db::open().expect("failed to open shared db"))),
-        ui: Arc::new(Mutex::new(ManagedProcess::new("wall-ui", "SKWD_WALL_INSTALL", resolve_shell_qml()))),
-        host: Arc::new(Mutex::new(ManagedProcess::new("host", "SKWD_HOST_INSTALL", resolve_host_qml()))),
+        ui: Arc::new(Mutex::new(ManagedProcess::new("wall-ui", "RYOGAMI_WALL_INSTALL", resolve_shell_qml()))),
+        host: Arc::new(Mutex::new(ManagedProcess::new("host", "RYOGAMI_HOST_INSTALL", resolve_host_qml()))),
         current_wallpaper: Arc::new(Mutex::new(None)),
         cache_state: Arc::new(Mutex::new(CacheState::default())),
         optimize_state: Arc::new(Mutex::new(OptimizeState::default())),
@@ -57,7 +57,13 @@ pub async fn run() -> anyhow::Result<()> {
         suppress_set: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
         random_rotation: Arc::new(Mutex::new(None)),
         runner: Arc::new(crate::util::RealRunner),
+        topics,
+        wall_surface,
+        resource_tier: Arc::new(Mutex::new(ResourceTier::default())),
+        event_tx: event_tx.clone(),
     };
+    // Publish the empty snapshot so a subscriber before the first set sees a frame.
+    state.wall_surface.publish_current().await;
 
     {
         let extra_env = build_host_env(&config).await;
@@ -127,7 +133,7 @@ pub async fn run() -> anyhow::Result<()> {
                             || prev_niri.backdrop_theme != new_cfg.niri.backdrop_theme
                             || prev_niri.backdrop_dim != new_cfg.niri.backdrop_dim;
                         *state.config.write().await = new_cfg;
-                        let _ = broadcast_event(&tx, "skwd.wall.config_changed", serde_json::json!({}));
+                        let _ = broadcast_event(&tx, "ryogami.wall.config_changed", serde_json::json!({}));
 
                         let wallpapers_on = state.config.read().await.features.wallpapers;
                         if wallpapers_on && prev_engine != new_engine {
@@ -171,14 +177,10 @@ pub async fn run() -> anyhow::Result<()> {
 
     loop {
         let (stream, _addr) = listener.accept().await?;
-        info!("client connected");
-        let event_tx = event_tx.clone();
-        let event_rx = event_tx.subscribe();
         let state = state.clone();
-
         tokio::spawn(async move {
-            if let Err(e) = handle_client(stream, event_tx, event_rx, state).await {
-                debug!("client disconnected: {e}");
+            if let Err(e) = handle_client(stream, state).await {
+                debug!("client error: {e}");
             }
         });
     }
@@ -338,7 +340,7 @@ async fn run_watcher_loop(
                         let _ = std::fs::remove_file(cache_dir.join("thumbs-sm").join(format!("vid-{thumb_name}")));
                     }
                 }
-                let _ = broadcast_event(&tx, "skwd.wall.file_removed", file_removed_payload(name, file_type));
+                let _ = broadcast_event(&tx, "ryogami.wall.file_removed", file_removed_payload(name, file_type));
             }
             watcher::FsEvent::FolderRemoved { prefix } => {
                 let db = state.db_shared.clone();
@@ -354,7 +356,7 @@ async fn run_watcher_loop(
                         let _ = std::fs::remove_file(cache_dir.join("thumbs-sm").join(&thumb_name));
                         let _ = std::fs::remove_file(cache_dir.join("thumbs-sm").join(format!("vid-{thumb_name}")));
                     }
-                    let _ = broadcast_event(&tx, "skwd.wall.folder_removed", folder_removed_payload(prefix, &deleted));
+                    let _ = broadcast_event(&tx, "ryogami.wall.folder_removed", folder_removed_payload(prefix, &deleted));
                 }
             }
             watcher::FsEvent::WeAdded { we_id, we_dir } => {
@@ -362,17 +364,17 @@ async fn run_watcher_loop(
                     continue;
                 }
                 info!("[server] watcher WeAdded we_id={we_id} dir={}", we_dir.display());
-                let _ = broadcast_event(&tx, "skwd.wall.we_added", we_added_payload(we_id, we_dir));
+                let _ = broadcast_event(&tx, "ryogami.wall.we_added", we_added_payload(we_id, we_dir));
                 let config = state.config.read().await.clone();
                 let db = state.db_shared.clone();
                 cache::process_we_single(&config, db, &tx, we_id, we_dir).await;
             }
             watcher::FsEvent::WeRemoved { we_id } => {
-                let _ = broadcast_event(&tx, "skwd.wall.we_removed", we_removed_payload(we_id));
+                let _ = broadcast_event(&tx, "ryogami.wall.we_removed", we_removed_payload(we_id));
             }
             watcher::FsEvent::ScanDone => {
                 phase = WatcherPhase::Ready;
-                let _ = broadcast_event(&tx, "skwd.wall.scan_done", serde_json::json!({}));
+                let _ = broadcast_event(&tx, "ryogami.wall.scan_done", serde_json::json!({}));
                 info!("initial directory scan complete, starting cache rebuild");
 
                 let config = state.config.read().await.clone();
@@ -393,116 +395,66 @@ async fn run_watcher_loop(
     }
 }
 
-async fn handle_client(
-    stream: tokio::net::UnixStream,
-    event_tx: broadcast::Sender<String>,
-    mut event_rx: broadcast::Receiver<String>,
-    state: SharedState,
+async fn handle_client(stream: tokio::net::UnixStream, state: SharedState) -> anyhow::Result<()> {
+    let (reader, mut writer) = stream.into_split();
+    let mut reader = BufReader::new(reader);
+
+    let mut first = String::new();
+    if reader.read_line(&mut first).await? == 0 {
+        return Ok(());
+    }
+    let cmd = first.trim();
+    if cmd.is_empty() {
+        return Ok(());
+    }
+
+    // A long-lived subscription streams one topic; anything else is a one-shot
+    // command line (dispatch, reply, close) -- mirrors ryoku's Go handle().
+    if let Some(name) = cmd.strip_prefix("subscribe ") {
+        return serve_subscription(reader, writer, &state, name.trim()).await;
+    }
+
+    let reply = dispatch_command(cmd, &state).await;
+    writer.write_all(reply.as_bytes()).await?;
+    writer.write_all(b"\n").await?;
+    Ok(())
+}
+
+/// Stream one topic to a subscriber until it disconnects or half-closes. The
+/// retained frame is sent first, then a fresh frame on every change; further
+/// client input (or EOF) ends the stream (mirrors ryoku's serveSubscription).
+async fn serve_subscription(
+    mut reader: BufReader<tokio::net::unix::OwnedReadHalf>,
+    mut writer: tokio::net::unix::OwnedWriteHalf,
+    state: &SharedState,
+    name: &str,
 ) -> anyhow::Result<()> {
-    let (reader, writer) = stream.into_split();
-    let reader = BufReader::new(reader);
-    let writer = Arc::new(Mutex::new(writer));
-    let mut lines = reader.lines();
-
-    let subscriptions: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
-    let wall_was_shown = std::sync::atomic::AtomicBool::new(false);
-
-    let writer_clone = writer.clone();
-    let subs_clone = subscriptions.clone();
-    let event_forwarder = tokio::spawn(async move {
-        let mut write_errors = 0u32;
-        loop {
-            match event_rx.recv().await {
-                Ok(line) => {
-                    let subs = subs_clone.lock().await;
-                    let dominated = subs.is_empty() || subs.iter().any(|prefix| line.contains(prefix));
-                    drop(subs);
-
-                    if dominated {
-                        info!(
-                            "[server] forwarding event to client: {}",
-                            &line[..line.floor_char_boundary(120)]
-                        );
-                        let mut w = writer_clone.lock().await;
-                        let ok = w.write_all(line.as_bytes()).await.is_ok() && w.write_all(b"\n").await.is_ok();
-                        if ok {
-                            write_errors = 0;
-                        } else {
-                            write_errors += 1;
-                            warn!("[server] event write failed ({write_errors} consecutive)");
-                            if write_errors >= 3 {
-                                warn!("[server] too many write failures, dropping event forwarder");
-                                break;
-                            }
-                        }
-                    } else {
-                        info!(
-                            "[server] event filtered out (no matching sub): {}",
-                            &line[..line.floor_char_boundary(80)]
-                        );
-                    }
-                }
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    warn!("client lagged, dropped {n} events");
-                }
-                Err(_) => break,
-            }
-        }
-    });
-
-    while let Some(line) = lines.next_line().await? {
-        let line = line.trim().to_string();
-        if line.is_empty() {
-            continue;
-        }
-
-        let req: Request = match serde_json::from_str(&line) {
-            Ok(r) => r,
-            Err(e) => {
-                let err_resp = Response::err(0, -1, format!("parse error: {e}"));
-                let mut w = writer.lock().await;
-                let _ = w
-                    .write_all(format!("{}\n", serde_json::to_string(&err_resp)?).as_bytes())
-                    .await;
-                continue;
-            }
-        };
-
-        debug!(method = %req.method, id = req.id, "<- request");
-        match req.method.as_str() {
-            "wall.show" => {
-                wall_was_shown.store(true, std::sync::atomic::Ordering::Release);
-            }
-            "wall.hide" => {
-                wall_was_shown.store(false, std::sync::atomic::Ordering::Release);
-            }
-            "wall.toggle" => {
-                let cur = wall_was_shown.load(std::sync::atomic::Ordering::Acquire);
-                wall_was_shown.store(!cur, std::sync::atomic::Ordering::Release);
-            }
-            _ => {}
-        }
-        let event_tx = event_tx.clone();
-        let subscriptions = subscriptions.clone();
-        let state = state.clone();
-        let writer = writer.clone();
-        tokio::spawn(async move {
-            let response = dispatch_request(&req, &event_tx, &subscriptions, &state).await;
-            let mut w = writer.lock().await;
-            let _ = w.write_all(format!("{}\n", serde_json::to_string(&response).unwrap()).as_bytes()).await;
-        });
+    let Some(topic) = state.topics.get(name) else {
+        writer.write_all(format!("err unknown topic: {name}\n").as_bytes()).await?;
+        return Ok(());
+    };
+    let (last, mut rx) = topic.subscribe().await;
+    if let Some(frame) = last {
+        writer.write_all(frame.as_bytes()).await?;
+        writer.write_all(b"\n").await?;
     }
-
-    event_forwarder.abort();
-    if wall_was_shown.load(std::sync::atomic::Ordering::Acquire) {
-        let was_long_lived = !subscriptions.lock().await.is_empty();
-        if was_long_lived {
-            info!("client disconnected with wall picker open; cleaning up");
-            crate::wall::apply::on_wall_hide().await;
-            state.ui.lock().await.kill();
+    let mut scratch = Vec::new();
+    loop {
+        tokio::select! {
+            recv = rx.recv() => match recv {
+                Ok(frame) => {
+                    writer.write_all(frame.as_bytes()).await?;
+                    writer.write_all(b"\n").await?;
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => break,
+            },
+            read = reader.read_until(b'\n', &mut scratch) => match read {
+                Ok(0) | Err(_) => break,
+                Ok(_) => scratch.clear(),
+            },
         }
     }
-    info!("client disconnected");
     Ok(())
 }
 

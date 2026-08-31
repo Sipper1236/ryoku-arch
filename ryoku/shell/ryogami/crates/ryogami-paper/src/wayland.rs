@@ -254,7 +254,7 @@ impl App {
             &surface,
             Some(&output),
             Layer::Background,
-            "skwd-paper".to_string(),
+            "ryogami-paper".to_string(),
             &self.qh,
             (),
         );
@@ -393,7 +393,7 @@ impl App {
             return;
         };
         let new_frame = renderer.render_mpv_to_fbo();
-        if std::env::var("SKWD_PAPER_TRACE").is_ok() {
+        if std::env::var("RYOGAMI_PAPER_TRACE").is_ok() {
             tracing::info!(new_frame, force_blit, surfaces = self.surfaces.len(), "render_all tick");
         }
         if !new_frame && !force_blit {
@@ -443,7 +443,7 @@ impl CompositorHandler for App {
             None => return,
         };
         self.surfaces[idx].frame_pending = false;
-        if std::env::var("SKWD_PAPER_NO_RENDER").is_err() {
+        if std::env::var("RYOGAMI_PAPER_NO_RENDER").is_err() {
             self.render_all(false);
         }
         // Reschedule frames for every output

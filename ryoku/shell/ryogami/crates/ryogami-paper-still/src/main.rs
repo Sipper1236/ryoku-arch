@@ -9,7 +9,7 @@ mod watchdog;
 use fill_mode::FillMode;
 
 #[derive(Parser, Debug)]
-#[command(name = "skwd-paper-still")]
+#[command(name = "ryogami-paper-still")]
 #[command(about = "Lightweight wallpaper renderer for static images (wl_shm only, no GPU)")]
 struct Cli {
     output: String,
@@ -18,7 +18,7 @@ struct Cli {
     persist: bool,
     #[arg(long = "fill-mode", value_enum, default_value_t = FillMode::default())]
     fill_mode: FillMode,
-    #[arg(long = "namespace", default_value = "skwd-paper")]
+    #[arg(long = "namespace", default_value = "ryogami-paper")]
     namespace: String,
 }
 
@@ -33,9 +33,9 @@ fn main() -> Result<()> {
         .map(std::path::PathBuf::from)
         .or_else(|| std::env::var("HOME").ok().map(|h| std::path::PathBuf::from(h).join(".cache")))
         .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
-        .join("skwd");
+        .join("ryogami");
     let _ = std::fs::create_dir_all(&log_dir);
-    let file_appender = tracing_appender::rolling::never(&log_dir, "skwd.log");
+    let file_appender = tracing_appender::rolling::never(&log_dir, "ryogami.log");
     let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
     Box::leak(Box::new(file_guard));
 
@@ -53,9 +53,9 @@ fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
-    tracing::info!(file = %cli.file, output = %cli.output, "starting skwd-paper-still");
+    tracing::info!(file = %cli.file, output = %cli.output, "starting ryogami-paper-still");
 
-    if let Some(limit_mb) = std::env::var("SKWD_PAPER_RSS_LIMIT_MB")
+    if let Some(limit_mb) = std::env::var("RYOGAMI_PAPER_RSS_LIMIT_MB")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
     {
