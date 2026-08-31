@@ -169,6 +169,20 @@ pub async fn dispatch(req: &Request, event_tx: &broadcast::Sender<String>, state
                     };
                     *state.current_wallpaper.lock().await = Some(name.clone());
 
+                    // Ryoku renders from the wallpaper topic (the in-shell
+                    // surface), not external paper processes, so a picker apply
+                    // must publish the frame exactly like `wallpaper set` does.
+                    if wp_type == "static" {
+                        let fit = crate::config::content_fit();
+                        if outputs.is_empty() {
+                            state.wall_surface.show(path, &fit, None).await;
+                        } else {
+                            for out in &outputs {
+                                state.wall_surface.show_output(out, path, &fit, None).await;
+                            }
+                        }
+                    }
+
                     
                     let key: String = if !we_id.is_empty() {
                         we_id.to_string()

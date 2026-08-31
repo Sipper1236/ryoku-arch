@@ -402,7 +402,20 @@ async fn run_watcher_loop(
 
                 if config.restore_on_startup {
                     match apply::restore(&config).await {
-                        Ok(name) => info!("auto-restored wallpaper: {name}"),
+                        Ok(name) => {
+                            info!("auto-restored wallpaper: {name}");
+                            // Ryoku renders from the wallpaper topic; without
+                            // this publish a daemon restart leaves the in-shell
+                            // surface on the empty retained frame (mirrors the
+                            // `wallpaper restore` verb).
+                            let p = config.wallpaper_dir().join(&name);
+                            if p.is_file() {
+                                state
+                                    .wall_surface
+                                    .show(&p.display().to_string(), &crate::config::content_fit(), None)
+                                    .await;
+                            }
+                        }
                         Err(e) => info!("no wallpaper to restore: {e}"),
                     }
                 } else {

@@ -296,3 +296,31 @@ fn json_requests_and_events_share_one_connection() {
     assert_eq!(ev["event"].as_str(), Some("ryogami.wall.toggle"), "pushed event");
     assert!(ev["data"].get("visible").is_some(), "toggle event carries visible");
 }
+
+#[test]
+fn wall_apply_publishes_the_topic_frame() {
+    // The picker applies through `wall.apply`; on Ryoku the in-shell surface
+    // renders the wallpaper topic, so the apply must publish the frame exactly
+    // like `wallpaper set` does.
+    let d = start_daemon();
+    let walls = d.root.join("Pictures").join("Wallpapers");
+    std::fs::create_dir_all(&walls).unwrap();
+    let img = walls.join("a.png");
+    std::fs::write(&img, b"a").unwrap();
+    let img_str = img.display().to_string();
+
+    let sub = connect(&d.sock);
+    sub.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let mut sub_w = sub.try_clone().unwrap();
+    let mut sub_r = BufReader::new(sub);
+    sub_w.write_all(b"subscribe wallpaper\n").unwrap();
+    sub_w.flush().unwrap();
+    read_frame(&mut sub_r); // retained (empty) frame
+
+    let req = format!("{{\"method\":\"wall.apply\",\"params\":{{\"path\":\"{img_str}\",\"type\":\"static\"}},\"id\":11}}");
+    let reply = send_command(&d.sock, &req);
+    assert!(reply.contains("\"applied\""), "apply replied: {reply}");
+
+    let frame = read_frame(&mut sub_r);
+    assert_eq!(frame["default"]["path"].as_str().unwrap(), img_str, "apply published the frame");
+}
