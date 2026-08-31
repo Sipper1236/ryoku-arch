@@ -28,7 +28,9 @@ var ryokuDropIn = regexp.MustCompile(`^[0-9]+-ryoku-[^/]*\.conf$`)
 // (keyboard.lua; hypr/user.lua, seeded with a header so a hand-edit sticks;
 // fastfetch/config.jsonc, which has no include mechanism, so direct edits
 // are the only way to customize the readout).
-// Slash-separated paths, relative to the config base.
+// Slash-separated paths, relative to the config base. Every entry here is also
+// in sys.LiveOwnedConfig: a seed is edited in place, so the user_edits overlay
+// must never re-lay a frozen copy over it.
 var generatedSeed = map[string]bool{
 	"hypr/monitors.lua":        true,
 	"hypr/gpu.lua":             true,

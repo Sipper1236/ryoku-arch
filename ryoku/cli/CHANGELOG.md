@@ -15,6 +15,18 @@
   (`internal/doctor/reconcile_gpu_pin.go`, `reconcile_ppd_amdgpu.go`).
 
 ### Fixed
+- **Updates, rollbacks and resets no longer reset the fastfetch readout (or
+  any live-edited seed).** The Hub's Fastfetch editor and the store's readout
+  styles edit `fastfetch/config.jsonc` in place, but a frozen copy captured by
+  the retired adopt step sat in the user_edits overlay and was re-laid on
+  every materialize, reverting the readout each time (users noticed at the
+  next shell greeting: reloads, logouts, reboots). Every generated seed
+  (fastfetch, monitors.lua, gpu.lua, keyboard.lua, kitty/current-theme.conf)
+  now joins user.lua in the never-overlaid set, and doctor migrates any stale
+  overlay copy out with a `.overlay.bak` beside the live file, so affected
+  machines self-heal on their next update. A stale gpu.lua overlay copy could
+  even resurrect a cleared GPU render pin; that door is closed too
+  (`internal/sys/useredits.go`, `internal/updater/materialize.go`).
 - **The spicetify remedy names the right fix for a flatpak Spotify.** A root-owned
   system flatpak (`/var/lib/flatpak`) cannot be patched without root; the Canvas
   and Marketplace doctor warnings now say to reinstall it per-user

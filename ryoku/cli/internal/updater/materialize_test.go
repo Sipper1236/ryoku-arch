@@ -205,12 +205,17 @@ func TestMaterializeUserEditsOverlay(t *testing.T) {
 
 	writeFile(t, filepath.Join(base, "hypr/modules/binds.lua"), "-- base binds v1\n")
 	writeFile(t, filepath.Join(base, "hypr/modules/window_rules.lua"), "-- base rules\n")
-	writeFile(t, filepath.Join(base, "hypr/user.lua"), "-- seed header\n") // live-owned seed
+	writeFile(t, filepath.Join(base, "hypr/user.lua"), "-- seed header\n")                    // live-owned seed
+	writeFile(t, filepath.Join(base, "fastfetch/config.jsonc"), "\"source\": \"ryoku\"\n")    // hub-edited seed
+	writeFile(t, filepath.Join(dest, "fastfetch/config.jsonc"), "\"source\": \"my-remix\"\n") // the hub edited it in place
 
 	edits := sys.UserEditsDir()
 	writeFile(t, filepath.Join(edits, "hypr/modules/binds.lua"), "-- my binds\n") // fork
 	writeFile(t, filepath.Join(edits, "hypr/settings.lua"), "-- my settings\n")   // addition (a Hub file)
 	writeFile(t, filepath.Join(edits, "hypr/user.lua"), "-- overlay junk\n")      // live-owned: must be ignored
+	// the retired adopt step froze a fastfetch snapshot into the overlay; laying
+	// it back was "updates keep resetting my fastfetch".
+	writeFile(t, filepath.Join(edits, "fastfetch/config.jsonc"), "\"source\": \"frozen-2025\"\n")
 
 	if err := Materialize(); err != nil {
 		t.Fatalf("materialize: %v", err)
@@ -222,6 +227,9 @@ func TestMaterializeUserEditsOverlay(t *testing.T) {
 	// stale overlay copy cannot wipe the user's in-place edits (if it had clobbered,
 	// the file would read "overlay junk", which does not contain "seed header").
 	wantFile(t, filepath.Join(dest, "hypr/user.lua"), "seed header")
+	// the hub's in-place readout edit survives: the frozen overlay snapshot is
+	// never laid over a live-edited seed.
+	wantFile(t, filepath.Join(dest, "fastfetch/config.jsonc"), "my-remix")
 
 	// a later base changes the forked file: the fork still wins (the user owns it).
 	writeFile(t, filepath.Join(base, "hypr/modules/binds.lua"), "-- base binds v2 (a fix)\n")
