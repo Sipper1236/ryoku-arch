@@ -443,10 +443,10 @@ func ensureVideoPreview(it scanned) string {
 			"-vf", "fps=24,scale_vaapi=w=640:h=-2:format=nv12",
 			"-c:v", "h264_vaapi", "-qp", "27", "-bf", "0", "-an", tmp)
 	} else {
-		cmd = exec.CommandContext(ctx, "ffmpeg", "-y", "-v", "error", "-i", it.src,
+		cmd = exec.CommandContext(ctx, "nice", "-n", "19", "ffmpeg", "-y", "-v", "error", "-i", it.src,
 			"-vf", "scale=640:-2", "-r", "24",
 			"-c:v", "libx264", "-preset", "veryfast", "-crf", "27", "-bf", "0",
-			"-pix_fmt", "yuv420p", "-an", tmp)
+			"-threads", "4", "-pix_fmt", "yuv420p", "-an", tmp)
 	}
 	if out, err := cmd.CombinedOutput(); err != nil {
 		os.Remove(tmp)

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -31,6 +32,10 @@ type daemon struct {
 	random    *randomRotation
 	video     *videoPlayer
 	optimizer *Optimizer
+
+	// paintSeq orders frame publishes: the video player's delayed yield and
+	// death fallback drop their repaint when a newer apply has since painted.
+	paintSeq atomic.Int64
 
 	// previous transition preset index (-1 = none); guards the no-repeat pick.
 	lastTransition int

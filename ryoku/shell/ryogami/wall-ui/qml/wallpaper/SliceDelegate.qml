@@ -112,6 +112,7 @@ Item {
     property bool hasVideo: videoPath.length > 0 && Config.videoPreviewEnabled
     property bool _previewArmed: false
     readonly property bool videoActive: _previewArmed && isCurrent && hasVideo && !(_listView && _listView.contentMoving)
+        && (Window.window ? Window.window.visible : false)
 
     width: isCurrent ? expandedWidth : sliceWidth
     height: _listView ? _listView.height : 0

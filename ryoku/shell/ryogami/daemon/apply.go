@@ -32,22 +32,46 @@ func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mut
 		if still := liveStill(path); still != "" {
 			paint = still
 		}
-		// The player's READY/exit handshake swaps the painter between the
-		// clip's still and yielding to the video surface below it.
-		repaint := func(l bool) { d.repaintOutputs(outputs, paint, fit, l) }
-		d.video.Play(outputs, path, liveFit(fit), d.config().ResourceTier, repaint)
 	} else if d.video.Playing() {
 		d.video.Stop()
 	}
 	// A reveal transition is an image operation: the clip's still gets one
-	// too; only a video without a still falls back to a bare cut, with the
-	// live flag telling the painter to yield immediately.
+	// too, so a switch onto or off a video animates like any other. Only a
+	// video without a still falls back to a bare cut, with the live flag
+	// telling the painter to yield immediately.
 	frameLive := live && paint == path
 	var tr interface{}
 	if !frameLive {
 		if picked := d.transitionFor(mode); picked != nil {
 			tr = picked
 		}
+	}
+	seq := d.paintSeq.Add(1)
+	if live {
+		// The player's READY/exit handshake swaps the painter between the
+		// clip's still and yielding to the video surface below it. The yield
+		// waits out the reveal so the transition is never cut short, and the
+		// sequence guard drops a flip the user has already switched past.
+		revealUntil := time.Now()
+		if p, okT := tr.(*pickedTransition); okT {
+			dur := p.DurationMs
+			if dur <= 0 {
+				dur = transitionDurationMs
+			}
+			revealUntil = revealUntil.Add(time.Duration(dur+150) * time.Millisecond)
+		}
+		repaint := func(l bool) {
+			if l {
+				if wait := time.Until(revealUntil); wait > 0 {
+					time.Sleep(wait)
+				}
+			}
+			if d.paintSeq.Load() != seq {
+				return
+			}
+			d.repaintOutputs(outputs, paint, fit, l)
+		}
+		d.video.Play(outputs, path, liveFit(fit), d.config().ResourceTier, repaint)
 	}
 	if len(outputs) == 0 || contains(outputs, "*") {
 		d.surface.show(paint, fit, tr, frameLive)
@@ -137,7 +161,13 @@ func (d *daemon) restoreOutputs() {
 			if still := liveStill(p); still != "" {
 				paint = still
 			}
-			repaint := func(l bool) { d.repaintOutputs(outs, paint, fit, l) }
+			seq := d.paintSeq.Add(1)
+			repaint := func(l bool) {
+				if d.paintSeq.Load() != seq {
+					return
+				}
+				d.repaintOutputs(outs, paint, fit, l)
+			}
 			d.video.Play(outs, p, liveFit(fit), d.config().ResourceTier, repaint)
 		}
 		frameLive := live && paint == p

@@ -29,6 +29,7 @@ Item {
     property bool hasVideo: videoPath.length > 0 && Config.videoPreviewEnabled
     property bool _previewArmed: false
     readonly property bool videoActive: _previewArmed && isSelected && hasVideo && !viewMoving
+        && (Window.window ? Window.window.visible : false)
 
     onIsSelectedChanged: {
         if (isSelected && hasVideo) {

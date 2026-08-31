@@ -182,7 +182,10 @@ Scope {
             anchors.fill: parent
             readonly property real screenDpr: (root.screen && root.screen.devicePixelRatio) ? root.screen.devicePixelRatio : 1
             dpr: screenDpr
-            url: root.wallpaperLive ? "" : root.wallpaperUrl
+            // Keep the still decoded while a video plays: the frame path is
+            // always a paintable still now, and holding it means the reveal
+            // off a video has its old texture instead of a black cut.
+            url: root.wallpaperUrl
             fit: root.wallpaperFit
             transition: root.wallpaperTransition
             visible: !root.wallpaperLive

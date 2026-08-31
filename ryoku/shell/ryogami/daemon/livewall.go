@@ -202,10 +202,12 @@ func runTranscode(pic, tmp string, src liveShape, capW int, fps string) bool {
 		}
 		_ = os.Remove(tmp)
 	}
-	err := exec.Command("ffmpeg", "-y", "-v", "error", "-i", pic,
+	// The CPU fallback runs niced with bounded threads: a background encode
+	// must never contend with the desktop.
+	err := exec.Command("nice", "-n", "19", "ffmpeg", "-y", "-v", "error", "-i", pic,
 		"-vf", "scale='min("+strconv.Itoa(capW)+",iw)':-2:flags=bicubic", "-r", fps,
 		"-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-bf", "0",
-		"-pix_fmt", "yuv420p", "-an", tmp).Run()
+		"-threads", "4", "-pix_fmt", "yuv420p", "-an", tmp).Run()
 	return err == nil && fileExists(tmp)
 }
 

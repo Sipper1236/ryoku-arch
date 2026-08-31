@@ -1247,7 +1247,7 @@ Scope {
         property string videoPath: model.videoPrev || model.videoFile || ""
         property bool hasVideo: videoPath.length > 0 && Config.videoPreviewEnabled
         property bool _previewArmed: false
-        readonly property bool videoActive: _previewArmed && hasVideo && thumbGridView.hoveredIdx === index && !thumbGridView.contentMoving
+        readonly property bool videoActive: _previewArmed && hasVideo && thumbGridView.hoveredIdx === index && !thumbGridView.contentMoving && wallpaperSelector.showing
 
         onVisibleChanged: {
             if (!visible) { _gridVideoDelay.stop(); _previewArmed = false }
