@@ -16,18 +16,19 @@ Item {
     readonly property bool videoMode: !!Wallhaven.selected && Wallhaven.selectedVideo
 
     readonly property var looks: [
-        { label: "Original",  brightness: 0,  contrast: 0,   saturation: 0,    warmth: 0,   vignette: false },
-        { label: "Vivid",     brightness: 4,  contrast: 14,  saturation: 34,   warmth: 6,   vignette: false },
-        { label: "Faded",     brightness: 8,  contrast: -22, saturation: -20,  warmth: 4,   vignette: false },
-        { label: "Cinematic", brightness: -4, contrast: 18,  saturation: -8,   warmth: 12,  vignette: true },
-        { label: "Noir",      brightness: 0,  contrast: 22,  saturation: -100, warmth: 0,   vignette: true },
-        { label: "Warm",      brightness: 3,  contrast: 6,   saturation: 10,   warmth: 46,  vignette: false },
-        { label: "Cool",      brightness: 2,  contrast: 8,   saturation: 8,    warmth: -44, vignette: false }
+        { label: "Original",  brightness: 0,  contrast: 0,   saturation: 0,    warmth: 0,   vignette: false, negate: false },
+        { label: "Vivid",     brightness: 4,  contrast: 14,  saturation: 34,   warmth: 6,   vignette: false, negate: false },
+        { label: "Faded",     brightness: 8,  contrast: -22, saturation: -20,  warmth: 4,   vignette: false, negate: false },
+        { label: "Cinematic", brightness: -4, contrast: 18,  saturation: -8,   warmth: 12,  vignette: true,  negate: false },
+        { label: "Noir",      brightness: 0,  contrast: 22,  saturation: -100, warmth: 0,   vignette: true,  negate: false },
+        { label: "Warm",      brightness: 3,  contrast: 6,   saturation: 10,   warmth: 46,  vignette: false, negate: false },
+        { label: "Cool",      brightness: 2,  contrast: 8,   saturation: 8,    warmth: -44, vignette: false, negate: false }
     ]
     function lookActive(l) {
         var a = Wallhaven.adjust;
         return a.brightness === l.brightness && a.contrast === l.contrast
-            && a.saturation === l.saturation && a.warmth === l.warmth && a.vignette === l.vignette;
+            && a.saturation === l.saturation && a.warmth === l.warmth && a.vignette === l.vignette
+            && a.negate === l.negate;
     }
     function currentLook() {
         for (var i = 0; i < looks.length; i++)
@@ -164,8 +165,22 @@ Item {
                     Sw {
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.right: parent.right
-                        on: Wallhaven.adjust.vignette
+                        on: !!Wallhaven.adjust.vignette
                         onToggled: (v) => Wallhaven.setAdjust("vignette", v)
+                    }
+                }
+                Cell {
+                    width: gradeSec.span(4)
+                    label: I18n.tr("Negate")
+                    value: Wallhaven.adjust.negate ? "ON" : "OFF"
+                    def: "OFF"
+                    desc: I18n.tr("Invert the colours. Baked in on Set.")
+                    controlWidth: Spans.inlineWidth("sw", 0, width)
+                    Sw {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.right: parent.right
+                        on: !!Wallhaven.adjust.negate
+                        onToggled: (v) => Wallhaven.setAdjust("negate", v)
                     }
                 }
             }

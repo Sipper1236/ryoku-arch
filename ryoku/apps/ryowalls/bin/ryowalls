@@ -2,7 +2,7 @@
 # Engine for ryowalls: search and download wallpapers (wallhaven + curated /
 # scraped live sources), a palette verb that prints an image's matugen palette for
 # the honest live preview, an adjust verb that grades an image (brightness /
-# contrast / saturation / warmth / vignette) for the editor, and an enhance verb
+# contrast / saturation / warmth / vignette / negate) for the editor, and an enhance verb
 # that AI-upscales an image or video on the GPU with progress. WALLHAVEN_API_KEY
 # raises limits; the palette verb mirrors the daemon's matugen engine so the live preview matches what Set writes.
 set -euo pipefail
@@ -285,7 +285,7 @@ enhance_video() {
 # edge for a fast preview render. src may be a local path or an http(s) url.
 adjust_image() {
 	local src="$1" out="$2"; shift 2
-	local br=0 ct=0 sat=0 warm=0 vig=0 size=0 rmul bmul
+	local br=0 ct=0 sat=0 warm=0 vig=0 neg=0 size=0 rmul bmul
 	while [ $# -gt 0 ]; do
 		case "$1" in
 		--brightness) br="$2"; shift 2 ;;
@@ -293,6 +293,7 @@ adjust_image() {
 		--saturation) sat="$2"; shift 2 ;;
 		--warmth) warm="$2"; shift 2 ;;
 		--vignette) vig=1; shift ;;
+		--negate) neg=1; shift ;;
 		--size) size="$2"; shift 2 ;;
 		*) shift ;;
 		esac
@@ -312,6 +313,7 @@ adjust_image() {
 	args+=(-modulate "$((100 + br)),$((100 + sat)),100")
 	[ "$ct" -ne 0 ] && args+=(-brightness-contrast "0x${ct}")
 	[ "$vig" = 1 ] && args+=(-background black -vignette 0x18)
+	[ "$neg" = 1 ] && args+=(-negate)
 	mkdir -p "$(dirname "$out")" 2>/dev/null || true
 	magick "$in" "${args[@]}" "$out"
 	local rc=$?
@@ -754,7 +756,7 @@ caps)
 	jq -cn --argjson vk "$vk" --argjson up "$up" '{vulkan:$vk,upscaler:$up}'
 	;;
 *)
-	echo "usage: ryowalls search --query <q> --page <n> [--top-range <r>] [--ratios <r>] --json | download <id> <url> | palette <url> | adjust <src> <out> [--brightness N] [--contrast N] [--saturation N] [--warmth N] [--vignette] [--size W] | enhance <path> | moewalls-search [--query <q>] [--page <n>] --json | moewalls-download <id> <url> | extras-search [--query <q>] --json | extras-download <id> <url> | live-list | live-import <src> | local-list [--type <t>] [--query <q>] | local-remove <path>..." >&2
+	echo "usage: ryowalls search --query <q> --page <n> [--top-range <r>] [--ratios <r>] --json | download <id> <url> | palette <url> | adjust <src> <out> [--brightness N] [--contrast N] [--saturation N] [--warmth N] [--vignette] [--negate] [--size W] | enhance <path> | moewalls-search [--query <q>] [--page <n>] --json | moewalls-download <id> <url> | extras-search [--query <q>] --json | extras-download <id> <url> | live-list | live-import <src> | local-list [--type <t>] [--query <q>] | local-remove <path>..." >&2
 	exit 2
 	;;
 esac

@@ -206,14 +206,14 @@ Singleton {
     }
 
     // ---- adjust: grade the picked image (brightness/contrast/saturation/warmth,
-    // vignette) live, then bake it on Set. Session-only, reset when the pick
+    // vignette, negate) live, then bake it on Set. Session-only, reset when the pick
     // changes. The graded preview drives both the rice mock and its palette, so
     // what you see is what Set writes. Videos can't be graded (canAdjust=false).
-    property var adjust: ({ brightness: 0, contrast: 0, saturation: 0, warmth: 0, vignette: false })
+    property var adjust: ({ brightness: 0, contrast: 0, saturation: 0, warmth: 0, vignette: false, negate: false })
     property string adjustPreview: ""     // graded temp image url for the live preview
     property int adjustRev: 0
     readonly property bool adjustActive: adjust.brightness !== 0 || adjust.contrast !== 0
-        || adjust.saturation !== 0 || adjust.warmth !== 0 || adjust.vignette
+        || adjust.saturation !== 0 || adjust.warmth !== 0 || adjust.vignette || adjust.negate
     readonly property bool canAdjust: !!selected && !selectedVideo
 
     readonly property string _adjDir: (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache")) + "/ryoku"
@@ -222,22 +222,23 @@ Singleton {
         var f = ["--brightness", "" + adjust.brightness, "--contrast", "" + adjust.contrast,
                  "--saturation", "" + adjust.saturation, "--warmth", "" + adjust.warmth];
         if (adjust.vignette) f.push("--vignette");
+        if (adjust.negate) f.push("--negate");
         return f;
     }
     function setAdjust(key, val) {
         var a = { brightness: adjust.brightness, contrast: adjust.contrast,
-                  saturation: adjust.saturation, warmth: adjust.warmth, vignette: adjust.vignette };
+                  saturation: adjust.saturation, warmth: adjust.warmth, vignette: adjust.vignette, negate: adjust.negate };
         a[key] = val;
         adjust = a;
         _adjDebounce.restart();
     }
     function applyLook(look) {
         adjust = { brightness: look.brightness || 0, contrast: look.contrast || 0,
-                   saturation: look.saturation || 0, warmth: look.warmth || 0, vignette: !!look.vignette };
+                   saturation: look.saturation || 0, warmth: look.warmth || 0, vignette: !!look.vignette, negate: !!look.negate };
         _adjDebounce.restart();
     }
     function resetAdjust() {
-        adjust = { brightness: 0, contrast: 0, saturation: 0, warmth: 0, vignette: false };
+        adjust = { brightness: 0, contrast: 0, saturation: 0, warmth: 0, vignette: false, negate: false };
         adjustPreview = "";
         _preview();
     }
@@ -450,7 +451,7 @@ Singleton {
         // a lingering enhance verdict belongs to the previous pick; a run still in
         // flight keeps its status so its finish is never silent.
         if (!enhancing) _enhReset();
-        adjust = { brightness: 0, contrast: 0, saturation: 0, warmth: 0, vignette: false };
+        adjust = { brightness: 0, contrast: 0, saturation: 0, warmth: 0, vignette: false, negate: false };
         adjustPreview = "";
         _preview();
     }
