@@ -89,7 +89,8 @@ restart_shell() {
   # kill the video player too: a running livewall satisfies init's liveAlive
   # early return, so a freshly built binary would never take effect until the
   # next live switch. the restarted daemon relaunches it from state.
-  pkill -x ryoku-livewall >/dev/null 2>&1 || true
+  pkill -x ryogami-live >/dev/null 2>&1 || true
+  pkill -x ryoku-livewall >/dev/null 2>&1 || true  # pre-rename orphans
   sleep 0.2
 
   mkdir -p "$(dirname -- "$log")"
@@ -157,16 +158,16 @@ done
   install -m755 "$here/../apps/ryowalls/bin/ryoku-summon" "$bindir/ryoku-summon"
 say "installed the hyprland leaf scripts to $bindir"
 
-# Build ryoku-livewall, the software-decode video-wallpaper daemon the shell drives
+# Build ryogami-live, the software-decode video-wallpaper daemon the shell drives
 # for live wallpapers. Needs wayland-scanner + a C toolchain + ffmpeg/wayland dev
 # libs (build-time only); skip cleanly when absent so a plain config deploy still
 # works (it ships prebuilt on installs, and a missing daemon just leaves the clip's
 # still frame as the wallpaper).
 if command -v wayland-scanner >/dev/null 2>&1 && command -v cc >/dev/null 2>&1 &&
-   "$here/livewall/build.sh" "$bindir/ryoku-livewall"; then
-  say "installed $bindir/ryoku-livewall"
+   "$here/livewall/build.sh" "$bindir/ryogami-live"; then
+  say "installed $bindir/ryogami-live"
 else
-  say "skipped ryoku-livewall (toolchain or ffmpeg/wayland dev libs absent; live falls back to the still)"
+  say "skipped ryogami-live (toolchain or ffmpeg/wayland dev libs absent; live falls back to the still)"
 fi
 
 # Build ryogami, the Go wallpaper daemon (catalog, thumbs, applies, depth

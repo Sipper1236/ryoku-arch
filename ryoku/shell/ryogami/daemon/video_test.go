@@ -2,87 +2,98 @@ package main
 
 import (
 	"bufio"
-	"io"
 	"os"
 	"path/filepath"
-	"reflect"
-	"sort"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 )
 
-func TestVideoMpvpaperArgs(t *testing.T) {
+func TestLiveFps(t *testing.T) {
 	cases := []struct {
-		name   string
-		output string
-		path   string
-		muted  bool
-		volume int
-		want   []string
+		name string
+		tier string
+		src  liveShape
+		want string
 	}{
-		{
-			name:   "muted per-output",
-			output: "DP-1",
-			path:   "/w/clip.mp4",
-			muted:  true,
-			volume: 100,
-			want:   []string{"-o", "loop hwdec=auto panscan=1.0 no-audio", "DP-1", "/w/clip.mp4"},
-		},
-		{
-			name:   "volume per-output",
-			output: "HDMI-A-1",
-			path:   "/w/clip.mp4",
-			muted:  false,
-			volume: 45,
-			want:   []string{"-o", "loop hwdec=auto panscan=1.0 volume=45", "HDMI-A-1", "/w/clip.mp4"},
-		},
-		{
-			name:   "all outputs volume",
-			output: "*",
-			path:   "/w/clip.mp4",
-			muted:  false,
-			volume: 100,
-			want:   []string{"-o", "loop hwdec=auto panscan=1.0 volume=100", "*", "/w/clip.mp4"},
-		},
-		{
-			name:   "all outputs muted",
-			output: "*",
-			path:   "/w/clip.mp4",
-			muted:  true,
-			volume: 0,
-			want:   []string{"-o", "loop hwdec=auto panscan=1.0 no-audio", "*", "/w/clip.mp4"},
-		},
+		{"low is capped", "low", liveShape{fps: 60}, "24"},
+		{"medium caps 60 to 30", "medium", liveShape{fps: 60}, "30"},
+		{"24fps is never padded", "medium", liveShape{fps: 24}, "24"},
+		{"high keeps 60", "high", liveShape{fps: 60}, "60"},
+		{"high keeps a 30fps source at 30", "high", liveShape{fps: 30}, "30"},
+		{"ntsc rates round up", "high", liveShape{fps: 59.94}, "60"},
+		{"unreadable rate falls back to 30", "high", liveShape{}, "30"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := mpvpaperArgs(tc.output, tc.path, tc.muted, tc.volume)
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("argv = %q, want %q", got, tc.want)
+			if got := liveFps(tc.tier, tc.src); got != tc.want {
+				t.Fatalf("liveFps(%q, %+v) = %q, want %q", tc.tier, tc.src, got, tc.want)
 			}
-			t.Logf("mpvpaper argv: mpvpaper %s", strings.Join(got, " "))
 		})
 	}
 }
 
-// fakeMpvpaper installs a mpvpaper shell script on PATH that records its argv to
-// a marker file, then either exits immediately (crash) or sleeps (steady play).
-func fakeMpvpaper(t *testing.T, marker string, exitFast bool) {
+func TestLiveDirect(t *testing.T) {
+	fits := liveShape{codec: "h264", pixFmt: "yuv420p", width: 1920, fps: 30}
+	if !liveDirect(fits, 2048, "30") {
+		t.Fatal("a fitting h264 clip must play directly")
+	}
+	hevc := fits
+	hevc.codec = "hevc"
+	if liveDirect(hevc, 2048, "30") {
+		t.Fatal("hevc must transcode")
+	}
+	tenBit := fits
+	tenBit.pixFmt = "yuv420p10le"
+	if liveDirect(tenBit, 2048, "30") {
+		t.Fatal("10-bit must transcode")
+	}
+	wide := fits
+	wide.width = 3840
+	if liveDirect(wide, 2048, "30") {
+		t.Fatal("a 4K clip must downscale")
+	}
+	fast := fits
+	fast.fps = 60
+	if liveDirect(fast, 2048, "30") {
+		t.Fatal("a 60fps clip must transcode to a 30fps budget")
+	}
+}
+
+func TestLiveFit(t *testing.T) {
+	if got := liveFit("Contain"); got != "fit" {
+		t.Fatalf("Contain = %q, want fit", got)
+	}
+	for _, cf := range []string{"Cover", "Fill", "ScaleDown", ""} {
+		if got := liveFit(cf); got != "fill" {
+			t.Fatalf("liveFit(%q) = %q, want fill", cf, got)
+		}
+	}
+}
+
+// fakeLiveTools installs stub ryogami-live / ffprobe / hyprctl binaries on
+// PATH. The player records its argv to marker; ffprobe reports a small direct-
+// playable h264 clip so Play never transcodes; hyprctl reports two monitors.
+func fakeLiveTools(t *testing.T, marker string, exitFast bool) {
 	t.Helper()
 	dir := t.TempDir()
-	body := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + marker + "\n"
+	player := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + marker + "\n"
 	if exitFast {
-		body += "exit 0\n"
+		player += "exit 0\n"
 	} else {
-		body += "sleep 30\n"
+		player += "sleep 30\n"
 	}
-	script := filepath.Join(dir, "mpvpaper")
-	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
-		t.Fatal(err)
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
-	old := os.Getenv("PATH")
-	t.Setenv("PATH", dir+":"+old)
+	write("ryogami-live", player)
+	write("ffprobe", "#!/bin/sh\nprintf 'codec_name=h264\\npix_fmt=yuv420p\\nwidth=1280\\nr_frame_rate=30/1\\n'\n")
+	write("hyprctl", `#!/bin/sh
+printf '[{"name":"DP-1","width":2560,"scale":1.25},{"name":"DP-2","width":1920,"scale":1.0}]\n'
+`)
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 }
 
@@ -114,114 +125,155 @@ func waitFor(t *testing.T, cond func() bool) bool {
 	return cond()
 }
 
-func TestVideoPlayStopLifecycle(t *testing.T) {
-	marker := filepath.Join(t.TempDir(), "spawned")
-	fakeMpvpaper(t, marker, false)
+func clip(t *testing.T) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "clip.mp4")
+	if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
 
+func TestVideoPlayExplicitOutputs(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "argv")
+	fakeLiveTools(t, marker, false)
 	p := newVideoPlayer()
-	mute := map[string]bool{"DP-1": true}
-	volume := map[string]int{"DP-2": 60}
-	p.Play([]string{"DP-1", "DP-2"}, "/w/clip.mp4", mute, volume)
+	defer p.Stop()
+	c := clip(t)
 
+	p.Play([]string{"DP-1", "DP-2"}, c, "fill", "medium", nil)
+	if !waitFor(t, func() bool { return len(readMarker(t, marker)) == 2 }) {
+		t.Fatalf("players did not spawn: %q", readMarker(t, marker))
+	}
+	got := readMarker(t, marker)
+	// A 1280-wide direct-playable clip: no transcode, source path verbatim,
+	// medium cap resolved from the fake monitors' physical width (2560; the
+	// compositor upscales to physical pixels, so scale never divides it).
+	want := []string{c + " 2560 fill DP-1", c + " 2560 fill DP-2"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("spawn argv[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
 	if !p.Playing() {
-		t.Fatal("Playing() = false after Play")
+		t.Fatal("Playing() = false with live players")
 	}
 	path, outs := p.Current()
-	if path != "/w/clip.mp4" || !reflect.DeepEqual(outs, []string{"DP-1", "DP-2"}) {
+	if path != c || len(outs) != 2 {
 		t.Fatalf("Current() = %q %q", path, outs)
-	}
-
-	if !waitFor(t, func() bool { return len(readMarker(t, marker)) == 2 }) {
-		t.Fatalf("expected 2 spawns, got %q", readMarker(t, marker))
-	}
-	// The two processes run concurrently and append in a racy order, so compare
-	// as an unordered set; spawn order itself is fixed by the loop in Play.
-	lines := readMarker(t, marker)
-	want := []string{
-		"-o loop hwdec=auto panscan=1.0 no-audio DP-1 /w/clip.mp4",
-		"-o loop hwdec=auto panscan=1.0 volume=60 DP-2 /w/clip.mp4",
-	}
-	sort.Strings(lines)
-	sort.Strings(want)
-	if !reflect.DeepEqual(lines, want) {
-		t.Fatalf("spawn argv = %q, want %q", lines, want)
-	}
-	for _, l := range lines {
-		t.Logf("spawned: mpvpaper %s", l)
-	}
-
-	// Snapshot the process-group leader pids so we can prove Stop reaped them.
-	p.mu.Lock()
-	var pids []int
-	for _, c := range p.procs {
-		pids = append(pids, c.Process.Pid)
-	}
-	p.mu.Unlock()
-
-	p.Stop()
-	if p.Playing() {
-		t.Fatal("Playing() = true after Stop")
-	}
-	if path, outs := p.Current(); path != "" || outs != nil {
-		t.Fatalf("Current() after Stop = %q %q", path, outs)
-	}
-	for _, pid := range pids {
-		gone := waitFor(t, func() bool { return syscall.Kill(pid, 0) == syscall.ESRCH })
-		if !gone {
-			t.Fatalf("pid %d still alive after Stop", pid)
-		}
 	}
 }
 
-func TestVideoPlayAllOutputs(t *testing.T) {
-	marker := filepath.Join(t.TempDir(), "spawned")
-	fakeMpvpaper(t, marker, false)
-
+func TestVideoPlayBroadcastSpansMonitors(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "argv")
+	fakeLiveTools(t, marker, false)
 	p := newVideoPlayer()
 	defer p.Stop()
-	p.Play(nil, "/w/clip.mp4", nil, nil)
+	c := clip(t)
 
-	if !waitFor(t, func() bool { return len(readMarker(t, marker)) == 1 }) {
-		t.Fatalf("expected 1 spawn for all-outputs, got %q", readMarker(t, marker))
+	p.Play(nil, c, "fit", "medium", nil)
+	if !waitFor(t, func() bool { return len(readMarker(t, marker)) == 2 }) {
+		t.Fatalf("broadcast did not span both monitors: %q", readMarker(t, marker))
 	}
-	lines := readMarker(t, marker)
-	want := "-o loop hwdec=auto panscan=1.0 volume=100 * /w/clip.mp4"
-	if lines[0] != want {
-		t.Fatalf("spawn argv = %q, want %q", lines[0], want)
+	got := readMarker(t, marker)
+	want := []string{c + " 2560 fit DP-1", c + " 2560 fit DP-2"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("spawn argv[%d] = %q, want %q", i, got[i], want[i])
+		}
 	}
-	t.Logf("spawned: mpvpaper %s", lines[0])
-
-	if _, outs := p.Current(); !reflect.DeepEqual(outs, []string{"*"}) {
+	_, outs := p.Current()
+	if len(outs) != 1 || outs[0] != "*" {
 		t.Fatalf("Current outputs = %q, want [*]", outs)
 	}
 }
 
-func TestVideoCrashResilience(t *testing.T) {
-	marker := filepath.Join(t.TempDir(), "spawned")
-	fakeMpvpaper(t, marker, true) // exits immediately
+func TestVideoStopEndsPlayback(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "argv")
+	fakeLiveTools(t, marker, false)
+	p := newVideoPlayer()
+	c := clip(t)
 
-	// Capture stderr to confirm the unexpected-exit log fires without a restart.
-	oldErr := os.Stderr
-	r, w, err := os.Pipe()
-	if err != nil {
+	p.Play([]string{"DP-1"}, c, "fill", "medium", nil)
+	if !waitFor(t, func() bool { return p.Playing() }) {
+		t.Fatal("player never spawned")
+	}
+	p.Stop()
+	if !waitFor(t, func() bool { return !p.Playing() }) {
+		t.Fatal("Stop left players tracked")
+	}
+	if path, outs := p.Current(); path != "" || len(outs) != 0 {
+		t.Fatalf("Current after Stop = %q %q", path, outs)
+	}
+}
+
+func TestVideoStopCancelsInFlightLaunch(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "argv")
+	fakeLiveTools(t, marker, false)
+	dir := t.TempDir()
+	// A stalling ffprobe holds Play inside the async prepare stage.
+	if err := os.WriteFile(filepath.Join(dir, "ffprobe"),
+		[]byte("#!/bin/sh\nsleep 0.4\nprintf 'codec_name=h264\\npix_fmt=yuv420p\\nwidth=1280\\nr_frame_rate=30/1\\n'\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	os.Stderr = w
-	defer func() { os.Stderr = oldErr }()
-
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
 	p := newVideoPlayer()
 	defer p.Stop()
-	p.Play([]string{"DP-1"}, "/w/clip.mp4", nil, nil)
+	c := clip(t)
 
-	// The fast-exiting fake makes the player fall idle with no auto-restart.
-	if !waitFor(t, func() bool { return !p.Playing() }) {
-		t.Fatal("Playing() stayed true after crash")
+	p.Play([]string{"DP-1"}, c, "fill", "medium", nil)
+	p.Stop() // switch away before the probe lands
+	time.Sleep(700 * time.Millisecond)
+	if lines := readMarker(t, marker); len(lines) != 0 {
+		t.Fatalf("stale generation spawned a player: %q", lines)
 	}
+}
 
-	_ = w.Close()
-	os.Stderr = oldErr
-	out, _ := io.ReadAll(r)
-	if !strings.Contains(string(out), "exited unexpectedly") {
-		t.Fatalf("stderr missing crash log, got %q", string(out))
+func TestVideoCrashIsUntracked(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "argv")
+	fakeLiveTools(t, marker, true) // player exits immediately
+	p := newVideoPlayer()
+	defer p.Stop()
+	c := clip(t)
+
+	p.Play([]string{"DP-1"}, c, "fill", "medium", nil)
+	if !waitFor(t, func() bool { return len(readMarker(t, marker)) == 1 }) {
+		t.Fatal("player never spawned")
+	}
+	if !waitFor(t, func() bool { return !p.Playing() }) {
+		t.Fatal("crashed player still tracked")
+	}
+}
+
+func TestVideoReadyHandshake(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "argv")
+	fakeLiveTools(t, marker, false)
+	dir := t.TempDir()
+	// A player that paints (READY), lives briefly, then dies.
+	body := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + marker + "\necho READY\nsleep 0.3\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, "ryogami-live"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	p := newVideoPlayer()
+	defer p.Stop()
+
+	flips := make(chan bool, 4)
+	p.Play([]string{"DP-1"}, clip(t), "fill", "medium", func(l bool) { flips <- l })
+	select {
+	case l := <-flips:
+		if !l {
+			t.Fatal("first flip = false, want true on READY")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("READY never yielded the painter")
+	}
+	select {
+	case l := <-flips:
+		if l {
+			t.Fatal("second flip = true, want false when the player dies")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("player death never brought the still back")
 	}
 }

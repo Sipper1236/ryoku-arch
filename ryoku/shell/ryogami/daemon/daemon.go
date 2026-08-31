@@ -95,7 +95,7 @@ func runDaemon() error {
 		}
 	})
 
-	// mpvpaper children must not outlive the daemon, and a previous daemon's
+	// livewall children must not outlive the daemon, and a previous daemon's
 	// orphans must not play under a fresh restore.
 	d.video.Stop()
 	go func() {

@@ -36,6 +36,25 @@
   them on every drag (`modules/wallpaper/skwd/`, `ryogami/daemon/`,
   `ipc/ryogami.go`, `ipc/theming.go`, `wall-ui/`).
 
+- **Video wallpapers play through ryogami-live (the restored in-repo C player,
+  renamed from ryoku-livewall), not mpvpaper.** The software-decode daemon
+  (`livewall/livewall.c`) paints wl_shm frames on its own background surface:
+  ~85 MB RSS and a quarter core, where mpvpaper's GL pipeline held ~1 GB,
+  pinned the CPU on hybrid GPU machines and flickered the screen. Definition
+  is fixed at the root: clips are transcoded once to the widest monitor's
+  PHYSICAL pixel width (the old logical-width cache came out soft on any
+  fractional-scale panel: 1920 @ 1.25 encoded at 1536 and stretched back up),
+  bounded by resource tier (low 1920, medium 2560, high 3840), on the AMD
+  video engine when present (~2 s for a 4K clip, libx264 crf 18 bicubic
+  otherwise). The source frame rate is kept and only capped by tier (24/30/60):
+  a 24fps clip is never padded to 30, which duplicated frames into judder. An
+  already-fitting H.264 clip plays untouched. The shell paints the clip's own
+  still under the player and yields only on the player's READY handshake, so
+  the reveal, the depth cutout and the palette work from a real frame, the
+  screen never blanks through the first transcode, and the still returns the
+  instant every player dies (`livewall/`, `ryogami/daemon/video.go`,
+  `ryogami/daemon/livewall.go`, `release/packages/ryogami/PKGBUILD`).
+
 - **The full skwd wallpaper stack now runs in the Go daemon: transitions,
   effects, pipelines, and a video engine.** Every static switch reveals through
   the 22-preset shader engine, rendered in-shell by the restored reveal

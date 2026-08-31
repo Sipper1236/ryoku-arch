@@ -17,10 +17,12 @@ pkgdesc="Ryogami: the Ryoku wallpaper daemon (catalog, thumbnails, applies, dept
 arch=('x86_64')
 url="https://ryoku.dev"
 license=('MIT')
-# runtime tools the daemon shells out to: imagemagick + ffmpeg (thumbnails and
-# colour extraction), matugen (palette on apply), quickshell (the wall-ui).
-depends=('imagemagick' 'ffmpeg' 'mpvpaper' 'quickshell')
-makedepends=('go')
+# runtime tools the daemon shells out to: imagemagick + ffmpeg (thumbnails,
+# colour extraction, the livewall transcode), matugen (palette on apply),
+# quickshell (the wall-ui). Video wallpapers play through the bundled
+# ryogami-live, built here from ryoku/shell/livewall.
+depends=('imagemagick' 'ffmpeg' 'quickshell')
+makedepends=('go' 'wayland' 'wayland-protocols')
 source=()
 
 _repo="$startdir/../../.."
@@ -28,10 +30,12 @@ _repo="$startdir/../../.."
 build() {
   cd "$_repo/ryoku/shell/ryogami/daemon"
   go build -o "$srcdir/ryogami" .
+  "$_repo/ryoku/shell/livewall/build.sh" "$srcdir/ryogami-live"
 }
 
 package() {
   install -Dm755 "$srcdir/ryogami" "$pkgdir/usr/bin/ryogami"
+  install -Dm755 "$srcdir/ryogami-live" "$pkgdir/usr/bin/ryogami-live"
   # user unit: systemd finds it under /usr/lib/systemd/user without materialize,
   # exactly where ExecStart already points (/usr/bin/ryogami).
   install -Dm644 "$_repo/ryoku/shell/systemd/user/ryogami.service" \

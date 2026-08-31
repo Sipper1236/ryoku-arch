@@ -56,7 +56,7 @@ Column {
     SettingsCard {
         colors: root.colors
         title: "Engine"
-        subtitle: "Pixels are painted by the built-in path: the shell renders stills with reveal transitions, mpvpaper plays video and live items."
+        subtitle: "Pixels are painted by the built-in path: the shell renders stills with reveal transitions, ryogami-live plays video and live items."
 
         SettingsRow {
             colors: root.colors

@@ -14,9 +14,10 @@ import (
 // matugen palette, and broadcast the applied event the picker listens for.
 
 // applyWallpaper handles static and video applies. Stills render on the
-// in-shell surface (with a reveal transition); videos play through mpvpaper on
-// the background layer, and the frame's live flag makes the shell painter
-// yield to it.
+// in-shell surface (with a reveal transition); a video plays through
+// ryoku-livewall on its own background surface while the shell paints the
+// clip's still underneath, so the reveal, the depth cutout and the palette all
+// work from a real frame and the screen never goes black if the player dies.
 func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mute map[string]bool, volume map[string]int) error {
 	if path == "" {
 		return fmt.Errorf("missing 'path' parameter")
@@ -26,23 +27,33 @@ func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mut
 	}
 	fit := contentFit()
 	live := wpType == "video"
-	// A reveal transition is an image operation; a video's frame swap is a cut.
+	paint := path
+	if live {
+		if still := liveStill(path); still != "" {
+			paint = still
+		}
+		// The player's READY/exit handshake swaps the painter between the
+		// clip's still and yielding to the video surface below it.
+		repaint := func(l bool) { d.repaintOutputs(outputs, paint, fit, l) }
+		d.video.Play(outputs, path, liveFit(fit), d.config().ResourceTier, repaint)
+	} else if d.video.Playing() {
+		d.video.Stop()
+	}
+	// A reveal transition is an image operation: the clip's still gets one
+	// too; only a video without a still falls back to a bare cut, with the
+	// live flag telling the painter to yield immediately.
+	frameLive := live && paint == path
 	var tr interface{}
-	if !live {
+	if !frameLive {
 		if picked := d.transitionFor(mode); picked != nil {
 			tr = picked
 		}
 	}
-	if live {
-		d.video.Play(outputs, path, mute, volume)
-	} else if d.video.Playing() {
-		d.video.Stop()
-	}
 	if len(outputs) == 0 || contains(outputs, "*") {
-		d.surface.show(path, fit, tr, live)
+		d.surface.show(paint, fit, tr, frameLive)
 	} else {
 		for _, out := range outputs {
-			d.surface.showOutput(out, path, fit, tr, live)
+			d.surface.showOutput(out, paint, fit, tr, frameLive)
 		}
 	}
 	name := filepath.Base(path)
@@ -117,18 +128,23 @@ func (d *daemon) restoreOutputs() {
 			return
 		}
 		live := e["type"] == "video"
+		paint := p
 		if live {
-			mute := map[string]bool{out: e["mute"] == true}
 			var outs []string
 			if out != "*" {
 				outs = []string{out}
 			}
-			d.video.Play(outs, p, mute, nil)
+			if still := liveStill(p); still != "" {
+				paint = still
+			}
+			repaint := func(l bool) { d.repaintOutputs(outs, paint, fit, l) }
+			d.video.Play(outs, p, liveFit(fit), d.config().ResourceTier, repaint)
 		}
+		frameLive := live && paint == p
 		if out == "*" {
-			d.surface.show(p, fit, nil, live)
+			d.surface.show(paint, fit, nil, frameLive)
 		} else {
-			d.surface.showOutput(out, p, fit, nil, live)
+			d.surface.showOutput(out, paint, fit, nil, frameLive)
 		}
 		restored = filepath.Base(p)
 	}
@@ -228,3 +244,16 @@ func (d *daemon) importWallpaper(src string) error {
 
 // marshalable sanity check for events carrying Entry values.
 var _ = json.Marshal
+
+// repaintOutputs republishes paint on the apply's output set with the given
+// live flag and no transition: the READY/exit handshake's frame swaps are
+// cuts, never reveals.
+func (d *daemon) repaintOutputs(outputs []string, paint, fit string, live bool) {
+	if len(outputs) == 0 || contains(outputs, "*") {
+		d.surface.show(paint, fit, nil, live)
+		return
+	}
+	for _, out := range outputs {
+		d.surface.showOutput(out, paint, fit, nil, live)
+	}
+}
