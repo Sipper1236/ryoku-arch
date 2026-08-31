@@ -356,6 +356,61 @@ pub async fn restore(config: &Config) -> anyhow::Result<String> {
     }
 }
 
+/// Restart the live (video) wallpaper(s) with fresh settings, mirroring ryoku's
+/// Go `live-reload` (stopLive + showSavedLive): a theme / motion-opts change wants
+/// the players relaunched, but a still current is left untouched. Re-applies every
+/// saved output whose type is video (apply_video kills the old player and spawns a
+/// fresh one); a static, WE, or empty current is a no-op. `Ok(true)` when a live
+/// wallpaper was (re)started.
+pub async fn live_reload(config: &Config) -> anyhow::Result<bool> {
+    let outputs_state = read_outputs_state(&config.cache_dir()).await;
+    let map = outputs_state.as_object().cloned().unwrap_or_default();
+    if !map.is_empty() {
+        let mut groups: HashMap<String, Vec<String>> = HashMap::new();
+        let mut audio_by_output: HashMap<String, bool> = HashMap::new();
+        let mut volume_by_output: HashMap<String, u32> = HashMap::new();
+        for (output, entry) in &map {
+            let wp_type = entry.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            let path = entry.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if let Some(m) = entry.get("mute").and_then(serde_json::Value::as_bool) {
+                audio_by_output.insert(output.clone(), m);
+            }
+            if let Some(v) = entry.get("volume").and_then(serde_json::Value::as_u64) {
+                volume_by_output.insert(output.clone(), v.min(100) as u32);
+            }
+            if wp_type == "video" && !path.is_empty() {
+                groups.entry(path).or_default().push(output.clone());
+            }
+        }
+        let mut reloaded = false;
+        for (path, outs) in groups {
+            let outputs_arg: Vec<String> = if outs.iter().any(|o| o == "*") { Vec::new() } else { outs.clone() };
+            let audio_arg: HashMap<String, bool> =
+                outs.iter().filter_map(|o| audio_by_output.get(o).map(|&v| (o.clone(), v))).collect();
+            let volume_arg: HashMap<String, u32> =
+                outs.iter().filter_map(|o| volume_by_output.get(o).map(|&v| (o.clone(), v))).collect();
+            apply_video_inner(&path, &outputs_arg, &[], &audio_arg, &volume_arg, config, true).await?;
+            reloaded = true;
+        }
+        return Ok(reloaded);
+    }
+
+    let state_path = config.cache_dir().join("last-wallpaper.json");
+    if !state_path.exists() {
+        return Ok(false);
+    }
+    let text = tokio::fs::read_to_string(&state_path).await?;
+    let state: serde_json::Value = serde_json::from_str(&text)?;
+    if state.get("type").and_then(|v| v.as_str()) == Some("video") {
+        let path = state.get("path").and_then(|v| v.as_str()).unwrap_or("");
+        if !path.is_empty() {
+            apply_video_inner(path, &[], &[], &HashMap::new(), &HashMap::new(), config, true).await?;
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 pub async fn reapply_statics_for_engine_change(config: &Config) -> anyhow::Result<()> {
     let outputs_state = read_outputs_state(&config.cache_dir()).await;
     let map = outputs_state.as_object().cloned().unwrap_or_default();
@@ -1285,5 +1340,22 @@ mod tests {
         assert_eq!(state2["DP-2"]["type"], "we");
         assert_eq!(state2["DP-2"]["we_id"], "12345");
         assert_eq!(state2["DP-2"]["mute"], true);
+    }
+
+    // A still (or absent) current must never restart a live player: `wallpaper
+    // live-reload` is a no-op unless a video is the saved wallpaper.
+    #[tokio::test]
+    async fn live_reload_noops_on_static_current() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut cfg = Config::default();
+        cfg.paths.cache = Some(dir.path().to_string_lossy().to_string());
+
+        assert!(!live_reload(&cfg).await.unwrap(), "no saved state -> no-op");
+
+        std::fs::write(dir.path().join("last-wallpaper.json"), r#"{"type":"static","path":"/w/x.png"}"#).unwrap();
+        assert!(!live_reload(&cfg).await.unwrap(), "static last-wallpaper -> no-op");
+
+        std::fs::write(dir.path().join("outputs.json"), r#"{"DP-1":{"type":"static","path":"/w/x.png"}}"#).unwrap();
+        assert!(!live_reload(&cfg).await.unwrap(), "static per-output state -> no-op");
     }
 }

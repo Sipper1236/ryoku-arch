@@ -72,6 +72,21 @@ fn read_frame(reader: &mut BufReader<UnixStream>) -> serde_json::Value {
     serde_json::from_str(line.trim()).expect("frame is not JSON")
 }
 
+// One command per connection: the daemon dispatches a line, replies, and closes
+// (mirrors ryoku's Go handle()). Each command therefore needs a fresh socket.
+fn send_command(sock: &Path, line: &str) -> String {
+    let cmd = connect(sock);
+    cmd.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let mut w = cmd.try_clone().unwrap();
+    let mut r = BufReader::new(cmd);
+    w.write_all(line.as_bytes()).unwrap();
+    w.write_all(b"\n").unwrap();
+    w.flush().unwrap();
+    let mut reply = String::new();
+    r.read_line(&mut reply).unwrap();
+    reply.trim().to_string()
+}
+
 #[test]
 fn wallpaper_topic_publishes_frame_on_set() {
     let d = start_daemon();
@@ -166,4 +181,66 @@ fn cli_wallpaper_set_publishes_frame() {
     let frame = read_frame(&mut sub_r);
     assert_eq!(frame["default"]["path"].as_str().unwrap(), img_str, "frame carries the CLI's path");
     assert!(frame["default"]["revision"].as_i64().unwrap() > init_rev, "revision bumped");
+}
+
+#[test]
+fn wallpaper_repaint_reemits_a_frame() {
+    // repaint re-derives theme/borders and re-fits in place after a filter change:
+    // the subscriber must see a fresh frame (same path, bumped revision) so the
+    // re-rendered image is reloaded — a byte-identical frame would be suppressed.
+    let d = start_daemon();
+    let sub = connect(&d.sock);
+    sub.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let mut sub_w = sub.try_clone().unwrap();
+    let mut sub_r = BufReader::new(sub);
+    sub_w.write_all(b"subscribe wallpaper\n").unwrap();
+    sub_w.flush().unwrap();
+    read_frame(&mut sub_r); // retained (empty) frame
+
+    let img = d.root.join("wall.png");
+    std::fs::write(&img, b"placeholder").unwrap();
+    let img_str = img.display().to_string();
+
+    assert_eq!(send_command(&d.sock, &format!("wallpaper set {img_str}")), "ok", "set reply");
+    let set_rev = read_frame(&mut sub_r)["default"]["revision"].as_i64().unwrap();
+
+    assert_eq!(send_command(&d.sock, "wallpaper repaint"), "ok", "repaint reply");
+
+    let frame = read_frame(&mut sub_r);
+    assert_eq!(frame["default"]["path"].as_str().unwrap(), img_str, "repaint keeps the same path");
+    assert!(frame["default"]["revision"].as_i64().unwrap() > set_rev, "repaint re-emits with a bumped revision");
+}
+
+#[test]
+fn wallpaper_next_advances_to_a_different_wallpaper() {
+    // `next` advances to the following file in the wallpaper dir: the published
+    // frame must carry a different path than the current one.
+    let d = start_daemon();
+    let walls = d.root.join("Pictures").join("Wallpapers");
+    std::fs::create_dir_all(&walls).unwrap();
+    let a = walls.join("a.png");
+    let b = walls.join("b.png");
+    std::fs::write(&a, b"a").unwrap();
+    std::fs::write(&b, b"b").unwrap();
+    let a_str = a.display().to_string();
+    let b_str = b.display().to_string();
+
+    let sub = connect(&d.sock);
+    sub.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let mut sub_w = sub.try_clone().unwrap();
+    let mut sub_r = BufReader::new(sub);
+    sub_w.write_all(b"subscribe wallpaper\n").unwrap();
+    sub_w.flush().unwrap();
+    read_frame(&mut sub_r); // retained (empty) frame
+
+    assert_eq!(send_command(&d.sock, &format!("wallpaper set {a_str}")), "ok", "set reply");
+    let set_frame = read_frame(&mut sub_r);
+    assert_eq!(set_frame["default"]["path"].as_str().unwrap(), a_str, "current is a.png");
+
+    assert_eq!(send_command(&d.sock, "wallpaper next"), "ok", "next reply");
+
+    let next_frame = read_frame(&mut sub_r);
+    let picked = next_frame["default"]["path"].as_str().unwrap();
+    assert_eq!(picked, b_str, "next advanced to the following wallpaper");
+    assert_ne!(picked, a_str, "next picked a different wallpaper than current");
 }

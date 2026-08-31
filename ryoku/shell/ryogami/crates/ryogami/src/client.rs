@@ -73,6 +73,19 @@ mod tests {
     }
 
     #[test]
+    fn maps_new_wallpaper_modes_to_line_commands() {
+        // The three modes added for the ryogami cutover forward verbatim, incl. the
+        // hyphen in `live-reload` and an optional per-output `--screen`.
+        assert_eq!(command_line(&argv(&["wallpaper", "next"])).as_deref(), Some("wallpaper next"));
+        assert_eq!(command_line(&argv(&["wallpaper", "repaint"])).as_deref(), Some("wallpaper repaint"));
+        assert_eq!(command_line(&argv(&["wallpaper", "live-reload"])).as_deref(), Some("wallpaper live-reload"));
+        assert_eq!(
+            command_line(&argv(&["wallpaper", "next", "--screen", "DP-1"])).as_deref(),
+            Some("wallpaper next --screen DP-1"),
+        );
+    }
+
+    #[test]
     fn no_verb_or_daemon_runs_the_daemon() {
         assert_eq!(command_line(&[]), None, "no args -> daemon");
         assert_eq!(command_line(&argv(&["daemon"])), None, "explicit daemon");

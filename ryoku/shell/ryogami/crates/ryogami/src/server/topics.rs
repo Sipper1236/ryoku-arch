@@ -159,6 +159,22 @@ impl WallSurface {
         self.publish_locked(&st).await;
     }
 
+    /// Re-emit the current frame with a fresh revision on every entry, busting the
+    /// downstream image cache so a re-rendered source (theme / filter change) is
+    /// reloaded in place, no reveal. Mirrors ryoku's Go `wall.republish`, driven by
+    /// `wallpaper repaint`. A revision bump is required: a byte-identical frame is
+    /// suppressed by the topic, so the same path alone would never wake a binding.
+    pub async fn republish(&self) {
+        let mut st = self.state.lock().await;
+        st.seq += 1;
+        let rev = st.seq;
+        st.def.revision = rev;
+        for e in st.outputs.values_mut() {
+            e.revision = rev;
+        }
+        self.publish_locked(&st).await;
+    }
+
     /// A snapshot of the current frame, for status queries.
     pub async fn snapshot(&self) -> WallFrame {
         let st = self.state.lock().await;
