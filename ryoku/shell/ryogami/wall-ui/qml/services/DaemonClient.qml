@@ -210,18 +210,6 @@ QtObject {
     function setFavourite(key, favourite, callback) {
         call("wall.set_favourite", {key: key, favourite: favourite}, callback)
     }
-    function updateAnalysis(key, tags, colors, analyzedBy, hue, sat, callback) {
-        var params = {key: key}
-        if (tags !== undefined && tags !== null) params.tags = JSON.stringify(tags)
-        if (colors !== undefined && colors !== null) params.colors = JSON.stringify(colors)
-        if (analyzedBy) params.analyzed_by = analyzedBy
-        if (hue !== undefined && hue !== null) params.hue = hue
-        if (sat !== undefined && sat !== null) params.sat = sat
-        call("wall.update_analysis", params, callback)
-    }
-    function retagOne(key, callback) {
-        call("analysis.retag_one", {key: key}, callback)
-    }
     function recomputeColors(callback) {
         call("wall.recompute_colors", {}, callback)
     }
@@ -234,10 +222,6 @@ QtObject {
 
     function updateMetadata(key, filesize, width, height) {
         call("wall.update_metadata", {key: key, filesize: filesize, width: width, height: height})
-    }
-
-    function fetchWeather(callback) {
-        call("wall.weather", {}, callback)
     }
 
     function randomStart(intervalSecs, options, callback) {

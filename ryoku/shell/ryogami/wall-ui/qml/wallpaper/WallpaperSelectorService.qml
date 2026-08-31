@@ -31,17 +31,6 @@ QtObject {
   property string selectedFolder: ""
   property var availableFolders: []
   property string sortMode: "color"
-  property var selectedTags: []
-  property int selectedTagIndex: -1
-  property var popularTags: []
-  property bool tagsMatchAny: false
-  property bool weatherFilterActive: false
-  property var currentWeather: []
-  property string weatherLocale: ""
-
-  property var tagsDb: ({})
-  property var colorsDb: ({})
-  property var weatherDb: ({})
   property var favouritesDb: ({})
   property bool favouriteFilterActive: false
   property bool _favouritesLoaded: false
@@ -56,7 +45,7 @@ QtObject {
       var walls = result.wallpapers || []
       console.log("[WSS] listWallpapers returned " + walls.length + " items")
       var items = []
-      var newTags = {}, newColors = {}, newFavs = {}, newWeather = {}
+      var newFavs = {}
 
       for (var i = 0; i < walls.length; i++) {
         var r = walls[i]
@@ -79,9 +68,6 @@ QtObject {
           placeholder: false
         })
 
-        if (r.tags) try { newTags[key] = JSON.parse(r.tags) } catch(e) {}
-        if (r.colors) try { newColors[key] = JSON.parse(r.colors) } catch(e) {}
-        if (r.weather) try { newWeather[key] = JSON.parse(r.weather) } catch(e) {}
         if (r.favourite === 1) newFavs[key] = true
       }
 
@@ -93,9 +79,6 @@ QtObject {
         keys[lookupKey] = true
       }
       _wallpaperDataKeys = keys
-      tagsDb = newTags
-      colorsDb = newColors
-      weatherDb = newWeather
       if (!_favouritesLoaded) {
         favouritesDb = newFavs
         _favouritesLoaded = true
@@ -105,7 +88,6 @@ QtObject {
       cacheResult = "cached"
 
       FileMetadataService.loadFromDaemonData(walls)
-      _rebuildPopularTags()
       updateFilteredModel()
     })
   }
@@ -116,10 +98,6 @@ QtObject {
 
   function startCacheCheck() {
     console.log("[WSS] startCacheCheck called, DaemonClient.ready=" + DaemonClient.ready)
-    ollamaTaggingActive = false
-    ollamaColorsActive = false
-    ollamaEta = ""
-    ollamaLogLine = ""
     cacheResult = ""
 
     if (DaemonClient.ready) {
@@ -322,102 +300,12 @@ QtObject {
     if (favouriteFilterActive) updateFilteredModel()
   }
 
-  
-  function getWallpaperTags(name, weId, thumb) {
-    if (weId) return tagsDb[weId] || []
-    if (thumb) {
-      var tk = ImageService.thumbKey(thumb, name)
-      if (tk && tagsDb[tk]) return tagsDb[tk]
-    }
-    var byName = tagsDb[name]
-    if (byName) return byName
-    var stem = name.replace(/\.[^.]+$/, "")
-    return tagsDb[stem] || []
-  }
-
-  function setWallpaperTags(name, weId, tags, thumb) {
-    var key = weId ? weId : (thumb ? ImageService.thumbKey(thumb, name) : name.replace(/\.[^.]+$/, ""))
-    if (!key) return
-    var db = JSON.parse(JSON.stringify(tagsDb))
-    db[key] = tags
-    tagsDb = db
-    _rebuildPopularTags()
-    DaemonClient.updateAnalysis(key, tags, null, null, null, null)
-    
-    
-    if (selectedTags.length > 0 && _tagsEditingCount === 0) _debouncedUpdate.restart()
-    else if (_tagsEditingCount > 0) _filterPendingAfterEdit = true
-  }
-
-  
-  property int _tagsEditingCount: 0
-  property bool _filterPendingAfterEdit: false
-
-  function beginTagsEdit() {
-    _tagsEditingCount += 1
-  }
-  function endTagsEdit() {
-    if (_tagsEditingCount > 0) _tagsEditingCount -= 1
-    if (_tagsEditingCount === 0 && _filterPendingAfterEdit) {
-      _filterPendingAfterEdit = false
-      if (selectedTags.length > 0) _debouncedUpdate.restart()
-    }
-  }
-
-  function _rebuildPopularTags() {
-    var tagCounts = {}
-    var dbSize = 0
-    for (var name in tagsDb) {
-      dbSize++
-      var tags = tagsDb[name]
-      for (var i = 0; i < tags.length; i++) {
-        tagCounts[tags[i]] = (tagCounts[tags[i]] || 0) + 1
-      }
-    }
-    var tagArray = []
-    for (var t in tagCounts) tagArray.push({tag: t, count: tagCounts[t]})
-    tagArray.sort(function(a, b) { return b.count - a.count })
-    console.log("[WSS] _rebuildPopularTags: tagsDb has " + dbSize + " entries, built " + tagArray.length + " popular tags")
-    popularTags = tagArray
-  }
-
   property var _debouncedUpdate: Timer {
     interval: 0
     onTriggered: service.updateFilteredModel()
   }
 
   onFavouriteFilterActiveChanged: _debouncedUpdate.restart()
-
-  onWeatherFilterActiveChanged: {
-    if (weatherFilterActive && currentWeather.length === 0) {
-      _fetchWeather()
-    } else {
-      _debouncedUpdate.restart()
-    }
-  }
-
-  function _fetchWeather() {
-    DaemonClient.fetchWeather(function(result, error) {
-      if (error) {
-        console.warn("[WSS] weather fetch error:", error.message)
-        weatherFilterActive = false
-        return
-      }
-      currentWeather = result.conditions || []
-      weatherLocale = result.locale || ""
-      console.log("[WSS] weather conditions:", JSON.stringify(currentWeather), "for", weatherLocale)
-      updateFilteredModel()
-    })
-  }
-
-  property bool ollamaTaggingActive: false
-  property bool ollamaColorsActive: false
-  property bool ollamaActive: ollamaTaggingActive || ollamaColorsActive
-  property int ollamaTotalThumbs: 0
-  property int ollamaTaggedCount: 0
-  property int ollamaColoredCount: 0
-  property string ollamaEta: ""
-  property string ollamaLogLine: ""
 
   property var _wallpaperData: []
   property var _wallpaperDataKeys: ({})
@@ -466,57 +354,13 @@ QtObject {
     var items = []
     for (var i = 0; i < _wallpaperData.length; i++) {
       var item = _wallpaperData[i]
-      var lookupKey = item.weId ? item.weId : ImageService.thumbKey(item.thumb)
-      var ollamaColor = colorsDb[lookupKey]
-      var useOllama = Config.colorSource === "ollama" && ollamaColor
-      var hue = useOllama ? ollamaColor.hue : item.hue
-      var saturation = useOllama ? (ollamaColor.saturation || 0) : (item.saturation || 0)
+      var hue = item.hue
+      var saturation = item.saturation || 0
       var effectiveType = (item.type === "we" && item.videoFile) ? "video" : item.type
       if (selectedFolder !== "*" && _folderOf(item) !== selectedFolder) continue
       if (selectedTypeFilter !== "" && effectiveType !== selectedTypeFilter) continue
       if (selectedColorFilter !== -1 && hue !== selectedColorFilter) continue
       if (favouriteFilterActive && !isFavourite(item.name, item.weId)) continue
-
-      if (selectedTags.length > 0) {
-        var wallpaperTags = tagsDb[lookupKey] || []
-        var hasPositive = false
-        var anyPositiveMatched = false
-        var allPositiveMatched = true
-        var anyNegativeHit = false
-        for (var t = 0; t < selectedTags.length; t++) {
-          var raw = selectedTags[t]
-          if (raw && raw.charAt(0) === "-") {
-            var excluded = raw.substring(1)
-            if (excluded && wallpaperTags.indexOf(excluded) !== -1) { anyNegativeHit = true; break }
-          } else {
-            hasPositive = true
-            if (wallpaperTags.indexOf(raw) !== -1) {
-              anyPositiveMatched = true
-            } else {
-              allPositiveMatched = false
-            }
-          }
-        }
-        if (anyNegativeHit) continue
-        if (hasPositive) {
-          if (wallpaperTags.length === 0) continue
-          if (tagsMatchAny) {
-            if (!anyPositiveMatched) continue
-          } else {
-            if (!allPositiveMatched) continue
-          }
-        }
-      }
-
-      if (weatherFilterActive && currentWeather.length > 0) {
-        var wpWeather = weatherDb[lookupKey]
-        if (!wpWeather || wpWeather.length === 0) continue
-        var weatherMatch = false
-        for (var w = 0; w < currentWeather.length; w++) {
-          if (wpWeather.indexOf(currentWeather[w]) !== -1) { weatherMatch = true; break }
-        }
-        if (!weatherMatch) continue
-      }
 
       items.push({
         name: item.name, type: item.type, thumb: item.thumb, path: item.path,
@@ -579,7 +423,6 @@ QtObject {
   onSelectedColorFilterChanged: updateFilteredModel()
   onSelectedTypeFilterChanged: updateFilteredModel()
   onSelectedFolderChanged: updateFilteredModel()
-  onTagsMatchAnyChanged: { if (selectedTags.length > 0) _debouncedUpdate.restart() }
 
   function _collectNeighbors(path) {
     var n = filteredModel.count
@@ -685,57 +528,6 @@ QtObject {
 
   property var _unsubscribeWE: Process { command: ["bash", "-c", "true"] }
 
-  property var _analysisConn: Connections {
-    target: WallpaperAnalysisService
-    function onProgressUpdated() {
-      service.ollamaTaggingActive = WallpaperAnalysisService.running
-      service.ollamaColorsActive = WallpaperAnalysisService.running
-      service.ollamaTotalThumbs = WallpaperAnalysisService.totalThumbs
-      service.ollamaTaggedCount = WallpaperAnalysisService.taggedCount
-      service.ollamaColoredCount = WallpaperAnalysisService.coloredCount
-      service.ollamaLogLine = WallpaperAnalysisService.lastLog
-      service.ollamaEta = WallpaperAnalysisService.eta
-      if (!WallpaperAnalysisService.running && WallpaperAnalysisService.lastLog)
-        _ollamaErrorClearTimer.restart()
-    }
-    function onItemAnalyzed(key, tags, colors, weather) {
-      service.tagsDb[key] = tags
-      service.colorsDb[key] = colors
-      if (weather && weather.length > 0) service.weatherDb[key] = weather
-      service._analysisItemsDirty = true
-      if (!WallpaperAnalysisService.running) {
-        service._analysisItemsDirty = false
-        var tcopy = {}
-        for (var tk in service.tagsDb) tcopy[tk] = service.tagsDb[tk]
-        service.tagsDb = tcopy
-        var ccopy = {}
-        for (var ck in service.colorsDb) ccopy[ck] = service.colorsDb[ck]
-        service.colorsDb = ccopy
-        service._rebuildPopularTags()
-      }
-    }
-    function onAnalysisComplete() {
-      service.ollamaTaggingActive = false
-      service.ollamaColorsActive = false
-      service.ollamaEta = ""
-      service.ollamaLogLine = ""
-      if (service._analysisItemsDirty) {
-        service._analysisItemsDirty = false
-        service.tagsDb = service.tagsDb
-        service.colorsDb = service.colorsDb
-        service._rebuildPopularTags()
-        service.updateFilteredModel()
-      }
-    }
-  }
-
-  property bool _analysisItemsDirty: false
-
-  property var _ollamaErrorClearTimer: Timer {
-    interval: 5000
-    onTriggered: service.ollamaLogLine = ""
-  }
-
   property var _optimizeConn: Connections {
     target: ImageOptimizeService
     function onFinished(optimized, skipped, failed) {
@@ -746,20 +538,5 @@ QtObject {
 
   property var _videoConvertConn: Connections {
     target: VideoConvertService
-  }
-
-  property var _liveReloadTimer: Timer {
-    interval: 30000
-    running: service.showing && service.ollamaActive
-    repeat: true
-    onTriggered: {
-      if (service._analysisItemsDirty) {
-        service._analysisItemsDirty = false
-        service.tagsDb = service.tagsDb
-        service.colorsDb = service.colorsDb
-        service._rebuildPopularTags()
-        service.updateFilteredModel()
-      }
-    }
   }
 }

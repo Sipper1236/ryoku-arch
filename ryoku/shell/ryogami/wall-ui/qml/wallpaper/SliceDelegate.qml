@@ -43,20 +43,6 @@ Item {
             if (!_backMeta)
                 FileMetadataService.probeIfNeeded(key, delegateItem.model.path, delegateItem.model.type === "video" ? "video" : "image")
         }
-        if (!flipped) {
-            addTagField._syncing = true; addTagField.text = ""; addTagField._sessionTags = []; addTagField._syncing = false
-        }
-        
-        
-        if (delegateItem.service) {
-            if (flipped) delegateItem.service.beginTagsEdit()
-            else delegateItem.service.endTagsEdit()
-        }
-    }
-    Component.onDestruction: {
-        
-        
-        if (flipped && delegateItem.service) delegateItem.service.endTagsEdit()
     }
     Connections {
         target: FileMetadataService
@@ -614,114 +600,8 @@ Item {
                 Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
 
                 Item {
-                    id: backAddTagRow
-                    width: parent.width; height: 22
-
-                    Rectangle {
-                        anchors.fill: parent
-                        color: addTagField.activeFocus
-                            ? (delegateItem.colors ? Qt.rgba(delegateItem.colors.surface.r, delegateItem.colors.surface.g, delegateItem.colors.surface.b, 0.5) : Qt.rgba(0, 0, 0, 0.3))
-                            : "transparent"
-                        border.width: 1
-                        border.color: addTagField.activeFocus
-                            ? (delegateItem.colors ? Qt.rgba(delegateItem.colors.primary.r, delegateItem.colors.primary.g, delegateItem.colors.primary.b, 0.5) : Qt.rgba(1, 1, 1, 0.3))
-                            : "transparent"
-                    }
-
-                    TextInput {
-                        id: addTagField
-                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
-                        verticalAlignment: TextInput.AlignVCenter
-                        font.family: Style.fontFamily; font.pixelSize: 10; font.letterSpacing: 0.3
-                        color: delegateItem.colors ? delegateItem.colors.surfaceText : "#fff"
-                        clip: true
-                        property var _sessionTags: []
-                        property bool _syncing: false
-                        onTextChanged: {
-                            if (_syncing) return
-                            var raw = text.toLowerCase()
-                            var words = raw.split(/\s+/).filter(function(w) { return w.length > 0 })
-                            var wpTags = delegateItem.service.getWallpaperTags(backTagsSection.wpName, backTagsSection.wpWeId, backTagsSection.wpThumb).slice()
-                            var changed = false
-                            for (var i = 0; i < words.length; i++) {
-                                if (_sessionTags.indexOf(words[i]) === -1) _sessionTags.push(words[i])
-                                if (wpTags.indexOf(words[i]) === -1) { wpTags.push(words[i]); changed = true }
-                            }
-                            var toRemove = []
-                            for (var k = 0; k < _sessionTags.length; k++) {
-                                if (words.indexOf(_sessionTags[k]) === -1) toRemove.push(_sessionTags[k])
-                            }
-                            for (var r = 0; r < toRemove.length; r++) {
-                                var si = _sessionTags.indexOf(toRemove[r])
-                                if (si !== -1) _sessionTags.splice(si, 1)
-                                var wi = wpTags.indexOf(toRemove[r])
-                                if (wi !== -1) { wpTags.splice(wi, 1); changed = true }
-                            }
-                            if (changed) delegateItem.service.setWallpaperTags(backTagsSection.wpName, backTagsSection.wpWeId, wpTags, backTagsSection.wpThumb)
-                        }
-                        Keys.onReturnPressed: function(event) { event.accepted = true }
-                        Keys.onEscapePressed: {
-                            _syncing = true; text = ""; _sessionTags = []; _syncing = false
-                            if (delegateItem._listView) delegateItem._listView.forceActiveFocus()
-                        }
-
-                        Text {
-                            anchors.fill: parent; verticalAlignment: Text.AlignVCenter
-                            text: "+ ADD TAG"
-                            font.family: Style.fontFamily; font.pixelSize: 10; font.letterSpacing: 1
-                            color: delegateItem.colors ? Qt.rgba(delegateItem.colors.surfaceText.r, delegateItem.colors.surfaceText.g, delegateItem.colors.surfaceText.b, 0.25) : Qt.rgba(1, 1, 1, 0.2)
-                            visible: !parent.text && !parent.activeFocus
-                        }
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent; cursorShape: Qt.IBeamCursor; z: -1
-                        onClicked: addTagField.forceActiveFocus()
-                    }
-                }
-
-                Item {
-                    id: backTagsSection
                     width: parent.width
                     height: parent.height - y - backActionRow.height - parent.spacing
-                    clip: true
-
-                    property string wpName: delegateItem.model.name
-                    property string wpWeId: delegateItem.model.weId || ""
-                    property string wpThumb: delegateItem.model.thumb || ""
-                    property bool _retagging: false
-                    property var currentTags: {
-                        if (!delegateItem.flipped) return []
-                        var db = delegateItem.service ? delegateItem.service.tagsDb : null
-                        if (!db) return []
-                        var key = backTagsSection.wpWeId
-                            ? backTagsSection.wpWeId
-                            : ImageService.thumbKey(backTagsSection.wpThumb, backTagsSection.wpName)
-                        return db[key] || []
-                    }
-
-                    TagPillFlow {
-                        anchors.fill: parent
-                        colors: delegateItem.colors
-                        tags: backTagsSection.currentTags
-                        retagging: backTagsSection._retagging
-                        pillHeight: 26; pillFontSize: 11; pillSpacing: 6; pillPadding: 28
-                        onTransitionDone: backTagsSection._retagging = false
-                        onRemoveRequested: function(tag) {
-                            var tags = delegateItem.service.getWallpaperTags(backTagsSection.wpName, backTagsSection.wpWeId, backTagsSection.wpThumb).slice()
-                            var idx = tags.indexOf(tag)
-                            if (idx !== -1) tags.splice(idx, 1)
-                            delegateItem.service.setWallpaperTags(backTagsSection.wpName, backTagsSection.wpWeId, tags, backTagsSection.wpThumb)
-                        }
-                    }
-
-                    Text {
-                        anchors.centerIn: parent
-                        visible: backTagsSection.currentTags.length === 0
-                        text: "NO TAGS"
-                        color: Qt.rgba(1, 1, 1, 0.15)
-                        font.family: Style.fontFamily; font.pixelSize: 11; font.letterSpacing: 2
-                    }
                 }
 
                 Row {
@@ -730,7 +610,7 @@ Item {
                     spacing: 6
 
                     
-                    property int _slotCount: delegateItem.model.type === "we" ? 4 : 3
+                    property int _slotCount: delegateItem.model.type === "we" ? 3 : 2
                     property real _slotWidth: (width - spacing * (_slotCount - 1)) / _slotCount
 
                     ActionButton {
@@ -743,17 +623,6 @@ Item {
                             Qt.openUrlExternally(ImageService.fileUrl(dir))
                             delegateItem.flipped = false
                         }
-                    }
-
-                    RetagButton {
-                        width: backActionRow._slotWidth
-                        colors: delegateItem.colors
-                        skew: Math.abs(delegateItem.skewOffset) * 0.4
-                        wpKey: backTagsSection.wpWeId
-                            ? backTagsSection.wpWeId
-                            : ImageService.thumbKey(backTagsSection.wpThumb, backTagsSection.wpName)
-                        hasTags: backTagsSection.currentTags.length > 0
-                        onRetagStarted: backTagsSection._retagging = true
                     }
 
                     ActionButton {

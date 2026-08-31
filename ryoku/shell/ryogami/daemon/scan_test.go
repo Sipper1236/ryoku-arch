@@ -37,8 +37,6 @@ func haveMagick() bool {
 	return err == nil
 }
 
-func strp(s string) *string { return &s }
-
 // TestScanNaming pins the key/name/'--' conventions and subdir handling. Thumb
 // generation is irrelevant here (it may fail without magick); only the derived
 // identity fields are asserted.
@@ -98,7 +96,7 @@ func TestScanNaming(t *testing.T) {
 }
 
 // TestScanMergeFavouriteSurvives: an unchanged mtime returns the prior row
-// verbatim, so user state (favourite, tags) persists and no work is done.
+// verbatim, so user state (favourite) persists and no work is done.
 func TestScanMergeFavouriteSurvives(t *testing.T) {
 	root := t.TempDir()
 	wall := filepath.Join(root, "wall")
@@ -113,7 +111,7 @@ func TestScanMergeFavouriteSurvives(t *testing.T) {
 	mt := fi.ModTime().Unix()
 
 	prior := map[string]Entry{
-		"a.png": {Key: "a.png", Name: "a.png", Type: "static", Favourite: 1, Tags: strp("warm"), ApplyCount: 7, Mtime: mt},
+		"a.png": {Key: "a.png", Name: "a.png", Type: "static", Favourite: 1, ApplyCount: 7, Mtime: mt},
 	}
 
 	calls := 0
@@ -125,7 +123,7 @@ func TestScanMergeFavouriteSurvives(t *testing.T) {
 		t.Fatalf("onItem must not fire for unchanged entry, fired %d", calls)
 	}
 	e := got["a.png"]
-	if e.Favourite != 1 || e.ApplyCount != 7 || e.Tags == nil || *e.Tags != "warm" {
+	if e.Favourite != 1 || e.ApplyCount != 7 {
 		t.Fatalf("prior state not preserved: %+v", e)
 	}
 }
@@ -150,7 +148,7 @@ func TestScanMergeVanishedDropped(t *testing.T) {
 	}
 }
 
-// TestScanMergeMtimeChangeReprocesses: a changed mtime keeps favourites/tags/
+// TestScanMergeMtimeChangeReprocesses: a changed mtime keeps favourites and
 // counts but discards derived analysis fields (Width/Height) so they are rebuilt.
 func TestScanMergeMtimeChangeReprocesses(t *testing.T) {
 	root := t.TempDir()
@@ -168,7 +166,7 @@ func TestScanMergeMtimeChangeReprocesses(t *testing.T) {
 	prior := map[string]Entry{
 		"a.png": {
 			Key: "a.png", Name: "a.png", Type: "static",
-			Favourite: 1, Tags: strp("warm"), ApplyCount: 3,
+			Favourite: 1, ApplyCount: 3,
 			Width: 1920, Height: 1080, Mtime: newMt - 500,
 		},
 	}
@@ -177,8 +175,8 @@ func TestScanMergeMtimeChangeReprocesses(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := got["a.png"]
-	if e.Favourite != 1 || e.ApplyCount != 3 || e.Tags == nil || *e.Tags != "warm" {
-		t.Fatalf("favourite/tags/count must survive mtime change: %+v", e)
+	if e.Favourite != 1 || e.ApplyCount != 3 {
+		t.Fatalf("favourite/count must survive mtime change: %+v", e)
 	}
 	if e.Width != 0 || e.Height != 0 {
 		t.Fatalf("analysis dims must reset on mtime change: %+v", e)

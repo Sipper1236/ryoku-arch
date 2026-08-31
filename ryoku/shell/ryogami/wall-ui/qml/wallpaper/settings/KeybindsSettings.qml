@@ -33,17 +33,14 @@ Flow {
 
     SettingsCard {
         colors: root.colors
-        title: "Filters & tags"
+        title: "Filters"
         width: (parent.width - parent.spacing) / 2
 
         Repeater {
             model: [
                 { key: "Shift + ← / →", action: "Cycle colour filters" },
                 { key: "Shift + ↑",     action: "Toggle filter bar" },
-                { key: "Shift + ↓",     action: "Toggle tag cloud" },
-                { key: "Tab",           action: "Auto-complete tag" },
-                { key: "Enter",         action: "Add tag (in tag input)" },
-                { key: "Escape",        action: "Clear search / close" }
+                { key: "Escape",        action: "Close" }
             ]
             delegate: SettingsRow {
                 colors: root.colors

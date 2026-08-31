@@ -11,16 +11,11 @@ Item {
     property var service
     property bool settingsOpen: false
     property bool effectsOpen: false
-    property bool ollamaActive: false
     property bool wallhavenBrowserOpen: false
     property bool steamWorkshopBrowserOpen: false
     property bool cacheLoading: false
     property int cacheProgress: 0
     property int cacheTotal: 0
-    property int ollamaProgress: 0
-    property int ollamaTotal: 0
-    property string ollamaEta: ""
-    property string ollamaLogLine: ""
     property bool videoConvertRunning: false
     property int videoConvertProgress: 0
     property int videoConvertTotal: 0
@@ -30,14 +25,10 @@ Item {
     property int imageOptimizeTotal: 0
     property string imageOptimizeFile: ""
 
-    property bool tagCloudOpen: false
-    property bool weatherFilterActive: false
-
     signal settingsToggled()
     signal effectsToggled()
     signal wallhavenToggled()
     signal steamWorkshopToggled()
-    signal tagCloudToggled()
     signal modeToggled(string mode)
 
     readonly property int _skew: 10 * Config.uiScale
@@ -131,21 +122,6 @@ Item {
             tooltip: "Favourites"
             isActive: filterBar.service ? filterBar.service.favouriteFilterActive : false
             onClicked: filterBar.service.favouriteFilterActive = !filterBar.service.favouriteFilterActive
-        }
-
-        FilterButton {
-            visible: Config.locale !== ""
-            colors: filterBar.colors
-            icon: "\u{f0590}"
-            tooltip: filterBar.weatherFilterActive
-                ? ("Weather filter ON" + (filterBar.service ? " (" + filterBar.service.currentWeather.join(", ") + ")" : ""))
-                : "Filter by local weather"
-            isActive: filterBar.weatherFilterActive
-            onClicked: {
-                filterBar.weatherFilterActive = !filterBar.weatherFilterActive
-                if (filterBar.service)
-                    filterBar.service.weatherFilterActive = filterBar.weatherFilterActive
-            }
         }
 
         FilterButton {
@@ -670,7 +646,7 @@ Item {
         }
 
         Item {
-            visible: filterBar.cacheLoading || filterBar.ollamaActive || filterBar.ollamaLogLine !== "" || filterBar.videoConvertRunning || filterBar.imageOptimizeRunning
+            visible: filterBar.cacheLoading || filterBar.videoConvertRunning || filterBar.imageOptimizeRunning
             width: visible ? (_statusRow.width + 24 + filterBar._skew) : 0
             height: 24 * Config.uiScale
 
@@ -714,7 +690,7 @@ Item {
                     RotationAnimation on rotation {
                         from: 0; to: 360; duration: 1200
                         loops: Animation.Infinite
-                        running: filterBar.cacheLoading || filterBar.ollamaActive || filterBar.videoConvertRunning || filterBar.imageOptimizeRunning || filterBar.ollamaLogLine !== ""
+                        running: filterBar.cacheLoading || filterBar.videoConvertRunning || filterBar.imageOptimizeRunning
                     }
                 }
 
@@ -726,16 +702,6 @@ Item {
                                 parts.push("CACHE " + filterBar.cacheProgress + "/" + filterBar.cacheTotal)
                             else
                                 parts.push("PROCESSING")
-                        }
-                        if (filterBar.ollamaActive) {
-                            if (filterBar.ollamaTotal > 0) {
-                                var ollamaText = "OLLAMA " + filterBar.ollamaProgress + "/" + filterBar.ollamaTotal
-                                if (filterBar.ollamaEta) ollamaText += " (" + filterBar.ollamaEta + ")"
-                                parts.push(ollamaText)
-                            } else
-                                parts.push("OLLAMA")
-                        } else if (filterBar.ollamaLogLine !== "") {
-                            parts.push("OLLAMA")
                         }
                         if (filterBar.videoConvertRunning) {
                             if (filterBar.videoConvertTotal > 0)
@@ -804,64 +770,6 @@ Item {
                 elide: Text.ElideMiddle
                 maximumLineCount: 1
                 color: filterBar.colors ? Qt.rgba(filterBar.colors.surfaceText.r, filterBar.colors.surfaceText.g, filterBar.colors.surfaceText.b, 0.5) : Qt.rgba(1, 1, 1, 0.4)
-            }
-        }
-
-        Item {
-            visible: filterBar.ollamaLogLine !== ""
-            width: visible ? (Math.min(_ollamaLogText.implicitWidth, 220) + 24 + filterBar._skew) : 0
-            height: 24 * Config.uiScale
-            Behavior on width { NumberAnimation { duration: Style.animFast } }
-
-            Canvas {
-                anchors.fill: parent
-                visible: parent.visible
-                property color fillColor: filterBar.colors ? Qt.rgba(filterBar.colors.surfaceContainer.r, filterBar.colors.surfaceContainer.g, filterBar.colors.surfaceContainer.b, 0.85) : Qt.rgba(0.1, 0.12, 0.18, 0.85)
-                property color strokeColor: filterBar.colors ? Qt.rgba(filterBar.colors.primary.r, filterBar.colors.primary.g, filterBar.colors.primary.b, 0.15) : Qt.rgba(1, 1, 1, 0.08)
-                onFillColorChanged: requestPaint()
-                onStrokeColorChanged: requestPaint()
-                onWidthChanged: requestPaint()
-                onPaint: {
-                    var ctx = getContext("2d")
-                    ctx.clearRect(0, 0, width, height)
-                    var sk = filterBar._skew
-                    ctx.fillStyle = fillColor
-                    ctx.strokeStyle = strokeColor
-                    ctx.lineWidth = 1
-                    ctx.beginPath()
-                    ctx.moveTo(sk, 0)
-                    ctx.lineTo(width, 0)
-                    ctx.lineTo(width - sk, height)
-                    ctx.lineTo(0, height)
-                    ctx.closePath()
-                    ctx.fill()
-                    ctx.stroke()
-                }
-            }
-
-            Text {
-                id: _ollamaLogText
-                anchors.centerIn: parent
-                width: Math.min(implicitWidth, 220)
-                text: filterBar.ollamaLogLine
-                font.family: Style.fontFamilyCode
-                font.pixelSize: 8 * Config.uiScale
-                font.letterSpacing: 0.3
-                elide: Text.ElideMiddle
-                maximumLineCount: 1
-                color: filterBar.colors ? Qt.rgba(filterBar.colors.surfaceText.r, filterBar.colors.surfaceText.g, filterBar.colors.surfaceText.b, 0.5) : Qt.rgba(1, 1, 1, 0.4)
-            }
-        }
-
-        FilterButton {
-            visible: Config.ollamaEnabled
-            colors: filterBar.colors
-            label: "O"
-            tooltip: filterBar.ollamaActive ? "Stop Ollama scan" : "Start Ollama scan"
-            isActive: filterBar.ollamaActive
-            onClicked: {
-                if (filterBar.ollamaActive) WallpaperAnalysisService.stop()
-                else WallpaperAnalysisService.start()
             }
         }
     }

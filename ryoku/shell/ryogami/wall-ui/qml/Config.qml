@@ -78,16 +78,9 @@ QtObject {
     readonly property string steamDir: _resolve(_data.paths?.steam)
 
     readonly property string mainMonitor: _data.monitor ?? ""
-    readonly property string ollamaUrl: Quickshell.env("RYOGAMI_OLLAMA_URL") || (_data.ollama?.url ?? "")
-    readonly property string ollamaModel: _data.ollama?.model ?? ""
-    readonly property string ollamaPrompt: _data.ollama?.prompt ?? ""
-    readonly property string ollamaConsolidationModel: _data.ollama?.consolidationModel ?? ""
-    readonly property bool ollamaConsolidateEnabled: _data.ollama?.consolidateEnabled !== false
 
-    readonly property string locale: _data.general?.locale ?? ""
     readonly property bool closeOnSelection: _data.general?.closeOnSelection === true
     readonly property bool filterBarAlwaysVisible: _data.general?.filterBarAlwaysVisible !== false
-    readonly property bool searchBarAlwaysVisible: _data.general?.searchBarAlwaysVisible === true
     readonly property int randomInterval: _data.general?.randomInterval ?? 300
     readonly property bool randomIncludeStatic: _data.general?.randomIncludeStatic !== false
     readonly property bool randomIncludeVideo: _data.general?.randomIncludeVideo !== false
@@ -100,7 +93,6 @@ QtObject {
     readonly property real uiScale: Math.max(0.5, Math.min(2.0, _data.general?.uiScale ?? 1.0))
 
     readonly property bool matugenEnabled: _data.features?.matugen !== false
-    readonly property bool ollamaEnabled: _data.features?.ollama !== false
     readonly property bool steamEnabled: _data.features?.steam !== false
     readonly property bool wallhavenEnabled: _data.features?.wallhaven !== false
     readonly property bool videoPreviewEnabled: _data.features?.videoPreview !== false
@@ -179,7 +171,7 @@ QtObject {
 
     readonly property int maxThumbJobs: _data.performance?.maxThumbJobs ?? 16
 
-    readonly property string colorSource: _data.colorSource ?? "ollama"
+    readonly property string colorSource: _data.colorSource ?? "magick"
 
     readonly property string matugenConfig: cacheDir + "/matugen-config.toml"
     readonly property string defaultMatugenConfig: _resolve(_data.defaultMatugenConfig ?? "~/.config/matugen/config.toml")

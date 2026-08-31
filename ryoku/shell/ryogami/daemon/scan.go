@@ -144,7 +144,7 @@ func collectMedia(root, thumbDir, thumbSmDir, wpType string, exts map[string]boo
 
 // processItem resolves one scanned file against prior state: an unchanged mtime
 // returns the prior entry untouched; otherwise thumbs and colors are (re)built
-// while favourites, tags, and apply counts carry over.
+// while favourites and apply counts carry over.
 func processItem(it scanned, prior map[string]Entry, onItem func(Entry)) Entry {
 	if p, ok := prior[it.key]; ok && p.Mtime == it.mtime {
 		// A warm entry may predate preview clips: backfill without a rescan.
@@ -164,7 +164,6 @@ func processItem(it scanned, prior map[string]Entry, onItem func(Entry)) Entry {
 	}
 	if p, ok := prior[it.key]; ok {
 		e.Favourite = p.Favourite
-		e.Tags = p.Tags
 		e.ApplyCount = p.ApplyCount
 	}
 

@@ -2,7 +2,6 @@
     "compositor": "niri",
     "monitor": "",
     "general": {
-        "locale": "",
         "closeOnSelection": false,
         "reopenAtLastSelection": false
     },
@@ -18,16 +17,10 @@
     },
     "features": {
         "matugen": true,
-        "ollama": false,
         "steam": false,
         "wallhaven": true
     },
     "colorSource": "magick",
-    "ollama": {
-        "url": "http://localhost:11434",
-        "model": "gemma3:4b",
-        "consolidateEnabled": true
-    },
     "steam": {
         "apiKey": "",
         "username": ""

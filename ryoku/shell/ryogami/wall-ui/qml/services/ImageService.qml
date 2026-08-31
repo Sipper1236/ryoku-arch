@@ -8,12 +8,9 @@ QtObject {
     readonly property int thumbHeight: 360
     readonly property int smallThumbWidth: 240
     readonly property int smallThumbHeight: 135
-    readonly property int ollamaWidth: 320
-    readonly property int ollamaHeight: 180
 
     readonly property int thumbQuality: 2
     readonly property int smallThumbQuality: 3
-    readonly property int ollamaJpegQuality: 75
 
     readonly property int monochromeThreshold: 10
 
@@ -50,11 +47,6 @@ QtObject {
         return "timeout --kill-after=5 15 magick " + srcFrame0 +
             " -resize " + w + "x" + h + "^ -gravity center -extent " + w + "x" + h +
             " -quality 85 " + dest + " 2>/dev/null"
-    }
-
-    function encodeBase64Cmd(imagePath) {
-        return "magick " + imagePath + " -resize " + ollamaWidth + "x" + ollamaHeight +
-            " -quality " + ollamaJpegQuality + " jpeg:- 2>/dev/null | base64 -w0"
     }
 
     function hueBucket(hue, sat) {

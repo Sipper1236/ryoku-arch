@@ -136,24 +136,6 @@ func (d *daemon) dispatchRequest(req *request) response {
 		})
 		return ok(req.ID, map[string]interface{}{"ok": true})
 
-	case "wall.update_analysis":
-		key := strParam(p, "key", "")
-		found := d.store.mutate(key, func(e *Entry) {
-			e.Tags = optStr(p, "tags")
-			e.Colors = optStr(p, "colors")
-			e.AnalyzedBy = optStr(p, "analyzed_by")
-			if v, has := p["hue"].(float64); has {
-				e.Hue = int(v)
-			}
-			if v, has := p["sat"].(float64); has {
-				e.Sat = int(v)
-			}
-		})
-		if !found {
-			return errResp(req.ID, 2, fmt.Sprintf("unknown wallpaper: %s", key))
-		}
-		return ok(req.ID, map[string]interface{}{"ok": true})
-
 	case "wall.delete":
 		if err := d.deleteWallpaper(strParam(p, "key", "")); err != nil {
 			return errResp(req.ID, 2, err.Error())
@@ -225,13 +207,6 @@ func (d *daemon) dispatchRequest(req *request) response {
 	default:
 		return errResp(req.ID, -32601, fmt.Sprintf("unknown method: %s", req.Method))
 	}
-}
-
-func optStr(p map[string]interface{}, key string) *string {
-	if v, has := p[key].(string); has {
-		return &v
-	}
-	return nil
 }
 
 func nullable(s string) interface{} {

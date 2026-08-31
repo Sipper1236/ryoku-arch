@@ -21,17 +21,9 @@ Scope {
   signal wallpaperChanged()
   signal uiReady()
 
-  function _setSelectedTags(tags) {
-    var hadTags = service.selectedTags.length > 0
-    service.selectedTags = tags
-    if (hadTags || tags.length > 0)
-      service.updateFilteredModel()
-  }
-
   function _resetFilters() {
     service.selectedColorFilter = -1
     service.selectedTypeFilter = ""
-    _setSelectedTags([])
   }
 
   function _applyItem(item, forcePicker) {
@@ -108,7 +100,6 @@ Scope {
   onShowingChanged: {
     if (showing) {
       _filterBarManuallyShown = Config.filterBarAlwaysVisible
-      tagCloudVisible = Config.searchBarAlwaysVisible
       _restorePending = true
       _bindActiveViewModel()
       service.startCacheCheck()
@@ -205,7 +196,6 @@ Scope {
   }
 
   function _focusActiveList() {
-    if (wallpaperSelector.tagCloudVisible) return
     if (isHexMode) hexListView.forceActiveFocus()
     else if (isGridMode) thumbGridView.forceActiveFocus()
     else sliceListView.forceActiveFocus()
@@ -228,7 +218,6 @@ Scope {
   Behavior on sliceSpacing { NumberAnimation { duration: Style.animExpand; easing.type: Easing.OutCubic } }
   property bool suppressWidthAnim: false
   property int topBarHeight: 50 * Config.uiScale
-  property bool tagCloudVisible: false
   property bool _filterBarManuallyShown: Config.filterBarAlwaysVisible
   property bool _filterBarHoverRevealed: false
   readonly property bool _filterBarShown: _filterBarManuallyShown || _filterBarHoverRevealed
@@ -426,14 +415,9 @@ Scope {
       service: service
       settingsOpen: wallpaperSelector.settingsOpen
       effectsOpen: wallpaperSelector.effectsOpen
-      ollamaActive: service.ollamaActive
       cacheLoading: service.cacheLoading
       cacheProgress: service.cacheProgress
       cacheTotal: service.cacheTotal
-      ollamaProgress: service.ollamaTaggedCount
-      ollamaTotal: service.ollamaTotalThumbs
-      ollamaEta: service.ollamaEta
-      ollamaLogLine: service.ollamaLogLine
       videoConvertRunning: VideoConvertService.running
       videoConvertProgress: VideoConvertService.progress
       videoConvertTotal: VideoConvertService.total
@@ -444,17 +428,10 @@ Scope {
       imageOptimizeFile: ImageOptimizeService.currentFile
       wallhavenBrowserOpen: wallpaperSelector.wallhavenBrowserOpen
       steamWorkshopBrowserOpen: wallpaperSelector.steamWorkshopBrowserOpen
-      tagCloudOpen: wallpaperSelector.tagCloudVisible
-      weatherFilterActive: service.weatherFilterActive
       onSettingsToggled: { wallpaperSelector.effectsOpen = false; wallpaperSelector.settingsOpen = !wallpaperSelector.settingsOpen; if (!wallpaperSelector.settingsOpen) wallpaperSelector._focusActiveList() }
       onEffectsToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = !wallpaperSelector.effectsOpen; if (!wallpaperSelector.effectsOpen) wallpaperSelector._focusActiveList() }
       onWallhavenToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.steamWorkshopBrowserOpen = false; wallpaperSelector.wallhavenBrowserOpen = !wallpaperSelector.wallhavenBrowserOpen }
       onSteamWorkshopToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.wallhavenBrowserOpen = false; wallpaperSelector.steamWorkshopBrowserOpen = !wallpaperSelector.steamWorkshopBrowserOpen }
-      onTagCloudToggled: {
-        wallpaperSelector.tagCloudVisible = !wallpaperSelector.tagCloudVisible
-        if (!wallpaperSelector.tagCloudVisible)
-          wallpaperSelector._setSelectedTags([])
-      }
       onModeToggled: function(mode) {
         Config.saveKey("matugen.mode", mode)
         DaemonClient.retheme(Config.matugenScheme, mode, Config.matugenColorIndex)
@@ -565,27 +542,6 @@ Scope {
         }
       }
     }
-    Loader {
-      id: tagCloudLoader
-      active: wallpaperSelector.tagCloudVisible
-      anchors.top: cardContainer.bottom
-      anchors.horizontalCenter: cardContainer.horizontalCenter
-      z: 5
-      sourceComponent: Component {
-        TagCloud {
-          parentWidth: cardContainer.width
-          colors: wallpaperSelector.colors
-          service: wallpaperSelector.selectorService
-          tagCloudVisible: true
-          onEscapePressed: wallpaperSelector._focusActiveList()
-          onCloseRequested: {
-            wallpaperSelector.tagCloudVisible = false
-            wallpaperSelector._setSelectedTags([])
-            wallpaperSelector._focusActiveList()
-          }
-        }
-      }
-    }
 
     Loader {
       id: whBrowserLoader
@@ -682,16 +638,16 @@ Scope {
       header: Item { width: (sliceListView.width - wallpaperSelector.expandedWidth) / 2; height: 1 }
       footer: Item { width: (sliceListView.width - wallpaperSelector.expandedWidth) / 2; height: 1 }
 
-      focus: wallpaperSelector.showing && !wallpaperSelector.tagCloudVisible
+      focus: wallpaperSelector.showing
       onVisibleChanged: {
         console.log("[SLICE] onVisibleChanged visible=", visible, "count=", count, "model=", (model ? "set" : "null"), "contentX=", contentX, "width=", width, "height=", height, "contentWidth=", contentWidth)
-        if (visible && !wallpaperSelector.tagCloudVisible && !wallpaperSelector.isHexMode) forceActiveFocus()
+        if (visible && !wallpaperSelector.isHexMode) forceActiveFocus()
       }
 
       Connections {
         target: wallpaperSelector
         function onShowingChanged() {
-          if (wallpaperSelector.showing && !wallpaperSelector.tagCloudVisible)
+          if (wallpaperSelector.showing)
             wallpaperSelector._focusActiveList()
         }
       }
@@ -741,12 +697,6 @@ Scope {
         if (event.modifiers & Qt.ShiftModifier) {
           if (event.key === Qt.Key_Up) {
             wallpaperSelector._filterBarManuallyShown = !wallpaperSelector._filterBarManuallyShown
-            event.accepted = true
-            return
-          } else if (event.key === Qt.Key_Down) {
-            wallpaperSelector.tagCloudVisible = !wallpaperSelector.tagCloudVisible
-            if (!wallpaperSelector.tagCloudVisible)
-              wallpaperSelector._setSelectedTags([])
             event.accepted = true
             return
           } else if (event.key === Qt.Key_Left) {
@@ -847,10 +797,10 @@ Scope {
       maximumFlickVelocity: 3000
       cacheBuffer: _stepX * 2
 
-      focus: wallpaperSelector.showing && wallpaperSelector.isHexMode && !wallpaperSelector.tagCloudVisible
+      focus: wallpaperSelector.showing && wallpaperSelector.isHexMode
       property bool _initialSnap: true
       onVisibleChanged: {
-        if (visible && !wallpaperSelector.tagCloudVisible) forceActiveFocus()
+        if (visible) forceActiveFocus()
         if (visible) {
           _initialSnap = true
           _restored = false
@@ -877,7 +827,7 @@ Scope {
 
       property bool _restored: false
       onCountChanged: {
-        if (count > 0 && visible && !wallpaperSelector.tagCloudVisible && !_restored) {
+        if (count > 0 && visible && !_restored) {
           var startCol = Math.min(Math.floor(wallpaperSelector.hexCols / 2), count - 1)
           if (startCol >= 0) { currentIndex = startCol; _selectedCol = startCol; _selectedRow = 0 }
         }
@@ -940,12 +890,6 @@ Scope {
         if (event.modifiers & Qt.ShiftModifier) {
           if (event.key === Qt.Key_Up) {
             wallpaperSelector._filterBarManuallyShown = !wallpaperSelector._filterBarManuallyShown
-            event.accepted = true
-            return
-          } else if (event.key === Qt.Key_Down) {
-            wallpaperSelector.tagCloudVisible = !wallpaperSelector.tagCloudVisible
-            if (!wallpaperSelector.tagCloudVisible)
-              wallpaperSelector._setSelectedTags([])
             event.accepted = true
             return
           } else if (event.key === Qt.Key_Left) {
@@ -1107,7 +1051,7 @@ Scope {
         propagateComposedEvents: true
         onWheel: function(wheel) {
           thumbGridView._snapScroll(wheel.angleDelta.y)
-          if (!wallpaperSelector.tagCloudVisible) thumbGridView.forceActiveFocus()
+          thumbGridView.forceActiveFocus()
         }
         onPressed: function(mouse) { mouse.accepted = false }
         onReleased: function(mouse) { mouse.accepted = false }
@@ -1116,9 +1060,9 @@ Scope {
 
       visible: wallpaperSelector.cardVisible && !wallpaperSelector.anyBrowserOpen && wallpaperSelector.isGridMode
 
-      focus: wallpaperSelector.showing && wallpaperSelector.isGridMode && !wallpaperSelector.tagCloudVisible
+      focus: wallpaperSelector.showing && wallpaperSelector.isGridMode
       onVisibleChanged: {
-        if (visible && !wallpaperSelector.tagCloudVisible) forceActiveFocus()
+        if (visible) forceActiveFocus()
       }
 
       Keys.onEscapePressed: {
@@ -1167,13 +1111,6 @@ Scope {
         }
       }
       Keys.onDownPressed: function(event) {
-        if (event.modifiers & Qt.ShiftModifier) {
-          wallpaperSelector.tagCloudVisible = !wallpaperSelector.tagCloudVisible
-          if (!wallpaperSelector.tagCloudVisible)
-            wallpaperSelector._setSelectedTags([])
-          event.accepted = true
-          return
-        }
         var newIdx = currentIndex + Config.gridColumns
         if (newIdx < count) {
           currentIndex = newIdx
@@ -1390,11 +1327,11 @@ Scope {
             onContainsMouseChanged: {
               if (containsMouse) {
                 thumbGridView.hoveredIdx = gridThumbDelegate.index
-                if (!wallpaperSelector.tagCloudVisible) thumbGridView.forceActiveFocus()
+                thumbGridView.forceActiveFocus()
               }
             }
             onClicked: function(mouse) {
-              if (!wallpaperSelector.tagCloudVisible) thumbGridView.forceActiveFocus()
+              thumbGridView.forceActiveFocus()
               if (mouse.button === Qt.RightButton) {
                 var gpos = gridThumbDelegate.mapToItem(null, gridThumbDelegate.width / 2, gridThumbDelegate.height / 2)
                 var d = gridThumbDelegate.model
@@ -1504,10 +1441,6 @@ Scope {
           if (!_gridMeta)
             FileMetadataService.probeIfNeeded(key, overlayData.path, overlayData.type === "video" ? "video" : "image")
         }
-        if (wallpaperSelector.selectorService) {
-          if (overlayOpen) wallpaperSelector.selectorService.beginTagsEdit()
-          else wallpaperSelector.selectorService.endTagsEdit()
-        }
       }
       Connections {
         target: FileMetadataService
@@ -1521,7 +1454,6 @@ Scope {
       }
 
       function show(data, gx, gy, sourceItem) {
-        gridTagField._syncing = true; gridTagField.text = ""; gridTagField._sessionTags = []; gridTagField._syncing = false
         overlayData = data
         overlayItemKey = (data.weId || "") !== "" ? data.weId : data.name
         _sourceItem = sourceItem || null
@@ -1829,107 +1761,11 @@ Scope {
 
               Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
 
-              Item {
-                width: parent.width; height: 24
-                Rectangle {
-                  anchors.fill: parent
-                  color: gridTagField.activeFocus
-                    ? (wallpaperSelector.colors ? Qt.rgba(wallpaperSelector.colors.surface.r, wallpaperSelector.colors.surface.g, wallpaperSelector.colors.surface.b, 0.5) : Qt.rgba(0, 0, 0, 0.3))
-                    : "transparent"
-                  border.width: 1
-                  border.color: gridTagField.activeFocus
-                    ? (wallpaperSelector.colors ? Qt.rgba(wallpaperSelector.colors.primary.r, wallpaperSelector.colors.primary.g, wallpaperSelector.colors.primary.b, 0.5) : Qt.rgba(1, 1, 1, 0.3))
-                    : (wallpaperSelector.colors ? Qt.rgba(wallpaperSelector.colors.outline.r, wallpaperSelector.colors.outline.g, wallpaperSelector.colors.outline.b, 0.2) : Qt.rgba(1, 1, 1, 0.1))
-                  Behavior on color { ColorAnimation { duration: Style.animVeryFast } }
-                  Behavior on border.color { ColorAnimation { duration: Style.animVeryFast } }
-                }
-                TextInput {
-                  id: gridTagField
-                  anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10
-                  verticalAlignment: TextInput.AlignVCenter
-                  font.family: Style.fontFamily; font.pixelSize: 11; font.letterSpacing: 0.3
-                  color: wallpaperSelector.colors ? wallpaperSelector.colors.surfaceText : "#fff"
-                  clip: true
-                  property var _sessionTags: []
-                  property bool _syncing: false
-                  onTextChanged: {
-                    if (_syncing) return
-                    if (!gridBackOverlay.overlayData) return
-                    var raw = text.toLowerCase()
-                    var words = raw.split(/\s+/).filter(function(w) { return w.length > 0 })
-                    var wpTags = wallpaperSelector.selectorService.getWallpaperTags(gridTagsSection.wpName, gridTagsSection.wpWeId, gridTagsSection.wpThumb).slice()
-                    var changed = false
-                    for (var i = 0; i < words.length; i++) {
-                      if (_sessionTags.indexOf(words[i]) === -1) _sessionTags.push(words[i])
-                      if (wpTags.indexOf(words[i]) === -1) { wpTags.push(words[i]); changed = true }
-                    }
-                    var toRemove = []
-                    for (var k = 0; k < _sessionTags.length; k++) {
-                      if (words.indexOf(_sessionTags[k]) === -1) toRemove.push(_sessionTags[k])
-                    }
-                    for (var r = 0; r < toRemove.length; r++) {
-                      var si = _sessionTags.indexOf(toRemove[r])
-                      if (si !== -1) _sessionTags.splice(si, 1)
-                      var wi = wpTags.indexOf(toRemove[r])
-                      if (wi !== -1) { wpTags.splice(wi, 1); changed = true }
-                    }
-                    if (changed) wallpaperSelector.selectorService.setWallpaperTags(gridTagsSection.wpName, gridTagsSection.wpWeId, wpTags, gridTagsSection.wpThumb)
-                  }
-                  Keys.onReturnPressed: function(event) { event.accepted = true }
-                  Keys.onEscapePressed: { _syncing = true; text = ""; _sessionTags = []; _syncing = false; gridBackOverlay.hide() }
-                  Text {
-                    anchors.fill: parent; verticalAlignment: Text.AlignVCenter
-                    text: "+ ADD TAG"; font.family: Style.fontFamily; font.pixelSize: 11; font.letterSpacing: 1
-                    color: wallpaperSelector.colors ? Qt.rgba(wallpaperSelector.colors.surfaceText.r, wallpaperSelector.colors.surfaceText.g, wallpaperSelector.colors.surfaceText.b, 0.25) : Qt.rgba(1, 1, 1, 0.2)
-                    visible: !parent.text && !parent.activeFocus
-                  }
-                }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.IBeamCursor; z: -1; onClicked: gridTagField.forceActiveFocus() }
-              }
-
-              Item {
-                id: gridTagsSection
-                width: parent.width
-                height: Math.min(Math.max(30, gridTagFlow.contentHeight + 10), gridBackOverlay.bigH * 0.3)
-                clip: true
-
-                property string wpName: gridBackOverlay.overlayData ? gridBackOverlay.overlayData.name : ""
-                property string wpWeId: gridBackOverlay.overlayData ? (gridBackOverlay.overlayData.weId || "") : ""
-                property string wpThumb: gridBackOverlay.overlayData ? (gridBackOverlay.overlayData.thumb || "") : ""
-                property bool _retagging: false
-                property var currentTags: {
-                  if (!gridBackOverlay.overlayOpen) return []
-                  var db = wallpaperSelector.selectorService ? wallpaperSelector.selectorService.tagsDb : null
-                  if (!db) return []
-                  var key = gridTagsSection.wpWeId ? gridTagsSection.wpWeId : ImageService.thumbKey(gridBackOverlay.overlayData ? gridBackOverlay.overlayData.thumb : "", gridTagsSection.wpName)
-                  return db[key] || []
-                }
-
-                TagPillFlow {
-                  id: gridTagFlow
-                  anchors.fill: parent
-                  colors: wallpaperSelector.colors
-                  tags: gridTagsSection.currentTags
-                  retagging: gridTagsSection._retagging
-                  pillHeight: 28; pillFontSize: 12; pillSpacing: 5; pillPadding: 30
-                  onTransitionDone: gridTagsSection._retagging = false
-                  onRemoveRequested: function(tag) {
-                    var tags = wallpaperSelector.selectorService.getWallpaperTags(gridTagsSection.wpName, gridTagsSection.wpWeId, gridTagsSection.wpThumb).slice()
-                    var idx = tags.indexOf(tag); if (idx !== -1) tags.splice(idx, 1)
-                    wallpaperSelector.selectorService.setWallpaperTags(gridTagsSection.wpName, gridTagsSection.wpWeId, tags, gridTagsSection.wpThumb)
-                  }
-                }
-                Text {
-                  anchors.centerIn: parent; visible: gridTagsSection.currentTags.length === 0
-                  text: "NO TAGS"; color: Qt.rgba(1,1,1,0.15); font.family: Style.fontFamily; font.pixelSize: 12; font.letterSpacing: 2
-                }
-              }
-
               Row {
                 id: gridActionRow
                 width: parent.width; height: 32; spacing: 8
 
-                property int _slotCount: gridBackOverlay.overlayData && gridBackOverlay.overlayData.type === "we" ? 4 : 3
+                property int _slotCount: gridBackOverlay.overlayData && gridBackOverlay.overlayData.type === "we" ? 3 : 2
                 property real _slotWidth: (width - spacing * (_slotCount - 1)) / _slotCount
 
                 ActionButton {
@@ -1937,16 +1773,6 @@ Scope {
                   colors: wallpaperSelector.colors
                   icon: "\u{f0208}"; label: "VIEW"
                   onClicked: { if (!gridBackOverlay.overlayData) return; var p = gridBackOverlay.overlayData.path; Qt.openUrlExternally(ImageService.fileUrl(p.substring(0, p.lastIndexOf("/")))); gridBackOverlay.hide() }
-                }
-
-                RetagButton {
-                  width: gridActionRow._slotWidth
-                  colors: wallpaperSelector.colors
-                  wpKey: !gridBackOverlay.overlayData ? "" : ((gridBackOverlay.overlayData.weId || "")
-                    ? gridBackOverlay.overlayData.weId
-                    : ImageService.thumbKey(gridBackOverlay.overlayData.thumb || "", gridBackOverlay.overlayData.name || ""))
-                  hasTags: gridTagsSection.currentTags.length > 0
-                  onRetagStarted: gridTagsSection._retagging = true
                 }
 
                 ActionButton {
@@ -2002,10 +1828,6 @@ Scope {
           if (!_hexMeta)
             FileMetadataService.probeIfNeeded(key, overlayData.path, overlayData.type === "video" ? "video" : "image")
         }
-        if (wallpaperSelector.selectorService) {
-          if (overlayOpen) wallpaperSelector.selectorService.beginTagsEdit()
-          else wallpaperSelector.selectorService.endTagsEdit()
-        }
       }
       Connections {
         target: FileMetadataService
@@ -2023,7 +1845,6 @@ Scope {
       readonly property real _sin30: 0.5
 
       function show(data, gx, gy, sourceItem) {
-        overlayTagField._syncing = true; overlayTagField.text = ""; overlayTagField._sessionTags = []; overlayTagField._syncing = false
         overlayData = data
         overlayItemKey = (data.weId || "") !== "" ? data.weId : data.name
         _sourceItem = sourceItem || null
@@ -2369,107 +2190,11 @@ Scope {
 
               Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
 
-              Item {
-                width: parent.width; height: 24
-                Rectangle {
-                  anchors.fill: parent
-                  color: overlayTagField.activeFocus
-                    ? (wallpaperSelector.colors ? Qt.rgba(wallpaperSelector.colors.surface.r, wallpaperSelector.colors.surface.g, wallpaperSelector.colors.surface.b, 0.5) : Qt.rgba(0, 0, 0, 0.3))
-                    : "transparent"
-                  border.width: 1
-                  border.color: overlayTagField.activeFocus
-                    ? (wallpaperSelector.colors ? Qt.rgba(wallpaperSelector.colors.primary.r, wallpaperSelector.colors.primary.g, wallpaperSelector.colors.primary.b, 0.5) : Qt.rgba(1, 1, 1, 0.3))
-                    : (wallpaperSelector.colors ? Qt.rgba(wallpaperSelector.colors.outline.r, wallpaperSelector.colors.outline.g, wallpaperSelector.colors.outline.b, 0.2) : Qt.rgba(1, 1, 1, 0.1))
-                  Behavior on color { ColorAnimation { duration: Style.animVeryFast } }
-                  Behavior on border.color { ColorAnimation { duration: Style.animVeryFast } }
-                }
-                TextInput {
-                  id: overlayTagField
-                  anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10
-                  verticalAlignment: TextInput.AlignVCenter
-                  font.family: Style.fontFamily; font.pixelSize: 11; font.letterSpacing: 0.3
-                  color: wallpaperSelector.colors ? wallpaperSelector.colors.surfaceText : "#fff"
-                  clip: true
-                  property var _sessionTags: []
-                  property bool _syncing: false
-                  onTextChanged: {
-                    if (_syncing) return
-                    if (!hexBackOverlay.overlayData) return
-                    var raw = text.toLowerCase()
-                    var words = raw.split(/\s+/).filter(function(w) { return w.length > 0 })
-                    var wpTags = wallpaperSelector.selectorService.getWallpaperTags(overlayTagsSection.wpName, overlayTagsSection.wpWeId, overlayTagsSection.wpThumb).slice()
-                    var changed = false
-                    for (var i = 0; i < words.length; i++) {
-                      if (_sessionTags.indexOf(words[i]) === -1) _sessionTags.push(words[i])
-                      if (wpTags.indexOf(words[i]) === -1) { wpTags.push(words[i]); changed = true }
-                    }
-                    var toRemove = []
-                    for (var k = 0; k < _sessionTags.length; k++) {
-                      if (words.indexOf(_sessionTags[k]) === -1) toRemove.push(_sessionTags[k])
-                    }
-                    for (var r = 0; r < toRemove.length; r++) {
-                      var si = _sessionTags.indexOf(toRemove[r])
-                      if (si !== -1) _sessionTags.splice(si, 1)
-                      var wi = wpTags.indexOf(toRemove[r])
-                      if (wi !== -1) { wpTags.splice(wi, 1); changed = true }
-                    }
-                    if (changed) wallpaperSelector.selectorService.setWallpaperTags(overlayTagsSection.wpName, overlayTagsSection.wpWeId, wpTags, overlayTagsSection.wpThumb)
-                  }
-                  Keys.onReturnPressed: function(event) { event.accepted = true }
-                  Keys.onEscapePressed: { _syncing = true; text = ""; _sessionTags = []; _syncing = false; hexBackOverlay.hide() }
-                  Text {
-                    anchors.fill: parent; verticalAlignment: Text.AlignVCenter
-                    text: "+ ADD TAG"; font.family: Style.fontFamily; font.pixelSize: 11; font.letterSpacing: 1
-                    color: wallpaperSelector.colors ? Qt.rgba(wallpaperSelector.colors.surfaceText.r, wallpaperSelector.colors.surfaceText.g, wallpaperSelector.colors.surfaceText.b, 0.25) : Qt.rgba(1, 1, 1, 0.2)
-                    visible: !parent.text && !parent.activeFocus
-                  }
-                }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.IBeamCursor; z: -1; onClicked: overlayTagField.forceActiveFocus() }
-              }
-
-              Item {
-                id: overlayTagsSection
-                width: parent.width
-                height: Math.min(Math.max(30, hexTagFlow.contentHeight + 10), hexBackOverlay.bigR * 0.5)
-                clip: true
-
-                property string wpName: hexBackOverlay.overlayData ? hexBackOverlay.overlayData.name : ""
-                property string wpWeId: hexBackOverlay.overlayData ? (hexBackOverlay.overlayData.weId || "") : ""
-                property string wpThumb: hexBackOverlay.overlayData ? (hexBackOverlay.overlayData.thumb || "") : ""
-                property bool _retagging: false
-                property var currentTags: {
-                  if (!hexBackOverlay.overlayOpen) return []
-                  var db = wallpaperSelector.selectorService ? wallpaperSelector.selectorService.tagsDb : null
-                  if (!db) return []
-                  var key = overlayTagsSection.wpWeId ? overlayTagsSection.wpWeId : ImageService.thumbKey(hexBackOverlay.overlayData ? hexBackOverlay.overlayData.thumb : "", overlayTagsSection.wpName)
-                  return db[key] || []
-                }
-
-                TagPillFlow {
-                  id: hexTagFlow
-                  anchors.fill: parent
-                  colors: wallpaperSelector.colors
-                  tags: overlayTagsSection.currentTags
-                  retagging: overlayTagsSection._retagging
-                  pillHeight: 28; pillFontSize: 12; pillSpacing: 5; pillPadding: 30
-                  onTransitionDone: overlayTagsSection._retagging = false
-                  onRemoveRequested: function(tag) {
-                    var tags = wallpaperSelector.selectorService.getWallpaperTags(overlayTagsSection.wpName, overlayTagsSection.wpWeId, overlayTagsSection.wpThumb).slice()
-                    var idx = tags.indexOf(tag); if (idx !== -1) tags.splice(idx, 1)
-                    wallpaperSelector.selectorService.setWallpaperTags(overlayTagsSection.wpName, overlayTagsSection.wpWeId, tags, overlayTagsSection.wpThumb)
-                  }
-                }
-                Text {
-                  anchors.centerIn: parent; visible: overlayTagsSection.currentTags.length === 0
-                  text: "NO TAGS"; color: Qt.rgba(1,1,1,0.15); font.family: Style.fontFamily; font.pixelSize: 12; font.letterSpacing: 2
-                }
-              }
-
               Row {
                 id: overlayActionRow
                 width: parent.width; height: 32; spacing: 8
 
-                property int _slotCount: hexBackOverlay.overlayData && hexBackOverlay.overlayData.type === "we" ? 4 : 3
+                property int _slotCount: hexBackOverlay.overlayData && hexBackOverlay.overlayData.type === "we" ? 3 : 2
                 property real _slotWidth: (width - spacing * (_slotCount - 1)) / _slotCount
 
                 ActionButton {
@@ -2477,16 +2202,6 @@ Scope {
                   colors: wallpaperSelector.colors
                   icon: "\u{f0208}"; label: "VIEW"
                   onClicked: { if (!hexBackOverlay.overlayData) return; var p = hexBackOverlay.overlayData.path; Qt.openUrlExternally(ImageService.fileUrl(p.substring(0, p.lastIndexOf("/")))); hexBackOverlay.hide() }
-                }
-
-                RetagButton {
-                  width: overlayActionRow._slotWidth
-                  colors: wallpaperSelector.colors
-                  wpKey: !hexBackOverlay.overlayData ? "" : ((hexBackOverlay.overlayData.weId || "")
-                    ? hexBackOverlay.overlayData.weId
-                    : ImageService.thumbKey(hexBackOverlay.overlayData.thumb || "", hexBackOverlay.overlayData.name || ""))
-                  hasTags: overlayTagsSection.currentTags.length > 0
-                  onRetagStarted: overlayTagsSection._retagging = true
                 }
 
                 ActionButton {

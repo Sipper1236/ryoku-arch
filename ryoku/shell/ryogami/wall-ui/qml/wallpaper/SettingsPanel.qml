@@ -15,9 +15,6 @@ Item {
   property string activeTab: "selector"
   property bool openDownward: false
 
-  property var _ollamaModels: []
-  property bool _ollamaModelsFetching: false
-  property string _ollamaFetchStdout: ""
   property string _lastConvertResult: ""
   property string _lastOptimizeResult: ""
 
@@ -25,37 +22,8 @@ Item {
 
   function _s(v) { return v * Config.uiScale }
 
-  property var _ollamaFetchProc: Process {
-    onExited: function(code) {
-      settingsPanel._ollamaModelsFetching = false
-      if (code === 0) {
-        try {
-          var resp = JSON.parse(settingsPanel._ollamaFetchStdout.trim())
-          var names = (resp.models || []).map(function(m) { return m.name })
-          names.sort()
-          settingsPanel._ollamaModels = names
-        } catch(e) { settingsPanel._ollamaModels = [] }
-      } else { settingsPanel._ollamaModels = [] }
-    }
-    stdout: SplitParser {
-      onRead: function(data) { settingsPanel._ollamaFetchStdout += data }
-    }
-  }
-
-  function _fetchOllamaModels() {
-    var url = Config.ollamaUrl || "http://localhost:11434"
-    _ollamaModelsFetching = true
-    _ollamaFetchStdout = ""
-    _ollamaFetchProc.command = ["sh", "-c", "curl -s --max-time 5 '" + url + "/api/tags'"]
-    _ollamaFetchProc.running = true
-  }
-
   Connections {
     target: Config
-    function onOllamaEnabledChanged() {
-      if (!Config.ollamaEnabled && settingsPanel.activeTab === "ollama")
-        settingsPanel.activeTab = "general"
-    }
     function onMatugenEnabledChanged() {
       if (!Config.matugenEnabled && settingsPanel.activeTab === "matugen")
         settingsPanel.activeTab = "general"
@@ -82,7 +50,7 @@ Item {
   }
 
   z: 102
-  width: (settingsPanel.activeTab === "performance" || settingsPanel.activeTab === "ollama" ? 920 : settingsPanel.activeTab === "general" ? 780 : 580) * Config.uiScale
+  width: (settingsPanel.activeTab === "performance" ? 920 : settingsPanel.activeTab === "general" ? 780 : 580) * Config.uiScale
   Behavior on width { NumberAnimation { duration: Style.animFast; easing.type: Easing.OutCubic } }
   height: tabRow.height + contentLoader.height + 36
 
@@ -221,7 +189,6 @@ Item {
         if (Config.wallhavenEnabled) tabs.push({ key: "wallhaven", label: "WALLHAVEN" })
         if (Config.steamEnabled) tabs.push({ key: "steam", label: "STEAM" })
         if (Config.steamEnabled) tabs.push({ key: "wallpaper-engine", label: "WALLPAPER ENGINE" })
-        if (Config.ollamaEnabled) tabs.push({ key: "ollama", label: "OLLAMA" })
         if (Config.matugenEnabled) tabs.push({ key: "matugen", label: "MATUGEN" })
         if (Config.isNiri) tabs.push({ key: "niri", label: "NIRI" })
         return tabs
@@ -249,7 +216,6 @@ Item {
       if (settingsPanel.activeTab === "selector") return selectorContent.implicitHeight
       if (settingsPanel.activeTab === "paper") return paperContent.implicitHeight
       if (settingsPanel.activeTab === "general") return generalContent.implicitHeight
-      if (settingsPanel.activeTab === "ollama") return ollamaContent.implicitHeight
       if (settingsPanel.activeTab === "paths") return pathsContent.implicitHeight
       if (settingsPanel.activeTab === "wallhaven") return wallhavenContent.implicitHeight
       if (settingsPanel.activeTab === "steam") return steamContent.implicitHeight
@@ -319,23 +285,6 @@ Item {
       onLoaded: {
         item.colors = Qt.binding(function() { return settingsPanel.colors })
         item.saveConfigKey = function(k, v) { settingsPanel._saveConfigKey(k, v) }
-      }
-    }
-
-    Loader {
-      id: ollamaContent
-      anchors.left: parent.left
-      anchors.right: parent.right
-      active: settingsPanel.activeTab === "ollama"
-      visible: active
-      source: "settings/OllamaSettings.qml"
-      onLoaded: {
-        item.colors = Qt.binding(function() { return settingsPanel.colors })
-        item.ollamaModels = Qt.binding(function() { return settingsPanel._ollamaModels })
-        item.ollamaModelsFetching = Qt.binding(function() { return settingsPanel._ollamaModelsFetching })
-        item.saveConfigKey = function(k, v) { settingsPanel._saveConfigKey(k, v) }
-        item.refreshModels = function() { settingsPanel._fetchOllamaModels() }
-        item.openDeleteConfirm = function() { _deleteConfirmPopup.open() }
       }
     }
 
@@ -471,115 +420,6 @@ Item {
       source: "settings/KeybindsSettings.qml"
       onLoaded: {
         item.colors = Qt.binding(function() { return settingsPanel.colors })
-      }
-    }
-  }
-
-  Rectangle {
-    id: _deleteConfirmPopup
-    visible: false
-    anchors.fill: parent
-    z: 200
-    color: settingsPanel.colors ? Qt.rgba(settingsPanel.colors.surface.r, settingsPanel.colors.surface.g, settingsPanel.colors.surface.b, 0.97) : Qt.rgba(0.08, 0.08, 0.12, 0.97)
-    radius: 8
-
-    function open() { _deleteConfirmInput.text = ""; visible = true; _deleteConfirmInput.forceActiveFocus() }
-    function close() { visible = false }
-
-    MouseArea { anchors.fill: parent; onClicked: function(mouse) { mouse.accepted = true } }
-
-    Column {
-      anchors.centerIn: parent
-      spacing: 12
-      width: parent.width * 0.7
-
-      Text {
-        anchors.horizontalCenter: parent.horizontalCenter
-        text: "\u{f0027}"
-        font.family: Style.fontFamilyNerdIcons; font.pixelSize: settingsPanel._s(28)
-        color: "#ef5350"
-      }
-
-      Text {
-        anchors.horizontalCenter: parent.horizontalCenter
-        text: "DELETE ALL TAGS?"
-        font.family: Style.fontFamily; font.pixelSize: settingsPanel._s(14); font.weight: Font.Bold; font.letterSpacing: 1.5
-        color: settingsPanel.colors ? settingsPanel.colors.surfaceText : "#fff"
-      }
-
-      Text {
-        width: parent.width
-        horizontalAlignment: Text.AlignHCenter
-        text: "This will erase every tag and re-analyse all wallpapers with the current model. This cannot be undone."
-        font.family: Style.fontFamily; font.pixelSize: settingsPanel._s(11); font.letterSpacing: 0.2
-        color: settingsPanel.colors ? Qt.rgba(settingsPanel.colors.surfaceText.r, settingsPanel.colors.surfaceText.g, settingsPanel.colors.surfaceText.b, 0.6) : Qt.rgba(1, 1, 1, 0.5)
-        wrapMode: Text.WordWrap
-        lineHeight: 1.3
-      }
-
-      Item { width: 1; height: 2 }
-
-      Text {
-        anchors.horizontalCenter: parent.horizontalCenter
-        text: 'Type "delete" to confirm'
-        font.family: Style.fontFamily; font.pixelSize: settingsPanel._s(11)
-        color: settingsPanel.colors ? Qt.rgba(settingsPanel.colors.surfaceText.r, settingsPanel.colors.surfaceText.g, settingsPanel.colors.surfaceText.b, 0.5) : Qt.rgba(1, 1, 1, 0.4)
-      }
-
-      Rectangle {
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: 180; height: 30; radius: 15
-        color: settingsPanel.colors ? Qt.rgba(settingsPanel.colors.surface.r, settingsPanel.colors.surface.g, settingsPanel.colors.surface.b, 0.5) : Qt.rgba(0, 0, 0, 0.3)
-        border.width: _deleteConfirmInput.activeFocus ? 1 : 0
-        border.color: "#ef5350"
-
-        TextInput {
-          id: _deleteConfirmInput
-          anchors.fill: parent
-          anchors.leftMargin: 14; anchors.rightMargin: 14
-          verticalAlignment: TextInput.AlignVCenter
-          horizontalAlignment: TextInput.AlignHCenter
-          font.family: Style.fontFamily; font.pixelSize: settingsPanel._s(12); font.letterSpacing: 0.5
-          color: settingsPanel.colors ? settingsPanel.colors.surfaceText : "#fff"
-          clip: true
-          Keys.onEscapePressed: _deleteConfirmPopup.close()
-          Keys.onReturnPressed: {
-            if (_deleteConfirmInput.text.toLowerCase().trim() === "delete") {
-              WallpaperAnalysisService.regenerate()
-              _deleteConfirmPopup.close()
-            }
-          }
-        }
-      }
-
-      Row {
-        anchors.horizontalCenter: parent.horizontalCenter
-        spacing: 8
-
-        FilterButton {
-          colors: settingsPanel.colors
-          label: "CANCEL"
-          skew: 8 * Config.uiScale; height: 26 * Config.uiScale
-          onClicked: _deleteConfirmPopup.close()
-        }
-
-        FilterButton {
-          id: _confirmDeleteBtn
-          property bool canConfirm: _deleteConfirmInput.text.toLowerCase().trim() === "delete"
-          colors: settingsPanel.colors
-          label: "CONFIRM"
-          skew: 8 * Config.uiScale; height: 26 * Config.uiScale
-          hasActiveColor: true
-          activeColor: canConfirm ? "#c62828" : Qt.rgba(0.5, 0.5, 0.5, 0.3)
-          isActive: canConfirm
-          activeOpacity: canConfirm ? 1.0 : 0.4
-          onClicked: {
-            if (canConfirm) {
-              WallpaperAnalysisService.regenerate()
-              _deleteConfirmPopup.close()
-            }
-          }
-        }
       }
     }
   }

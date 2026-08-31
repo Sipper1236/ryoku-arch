@@ -42,27 +42,6 @@ Flow {
             onCommit: function(v) { if (root.saveConfigKey) root.saveConfigKey("monitor", v) }
         }
 
-        RowDropdown {
-            colors: root.colors
-            title: "Colour source"
-            description: "Whether to use Ollama vision or ImageMagick for palette extraction."
-            value: Config.colorSource
-            model: [
-                { mode: "ollama", label: "Ollama" },
-                { mode: "magick", label: "ImageMagick" }
-            ]
-            onSelect: function(v) { if (root.saveConfigKey) root.saveConfigKey("colorSource", v) }
-        }
-
-        RowTextInput {
-            colors: root.colors
-            title: "Locale"
-            description: "City name for the weather filter."
-            value: Config.locale
-            placeholder: "e.g. London"
-            onCommit: function(v) { if (root.saveConfigKey) root.saveConfigKey("general.locale", v) }
-        }
-
         RowTextInput {
             colors: root.colors
             title: "UI scale"
@@ -89,14 +68,6 @@ Flow {
             description: "Generate Material 3 colour schemes from the active wallpaper."
             checked: Config.matugenEnabled
             onToggle: function(v) { if (root.saveConfigKey) root.saveConfigKey("features.matugen", v) }
-        }
-
-        RowToggle {
-            colors: root.colors
-            title: "Ollama"
-            description: "Automated tagging via local LLM."
-            checked: Config.ollamaEnabled
-            onToggle: function(v) { if (root.saveConfigKey) root.saveConfigKey("features.ollama", v) }
         }
 
         RowToggle {
@@ -197,14 +168,6 @@ Flow {
             description: "Keep the filter bar pinned visible instead of auto-hiding."
             checked: Config.filterBarAlwaysVisible
             onToggle: function(v) { if (root.saveConfigKey) root.saveConfigKey("general.filterBarAlwaysVisible", v) }
-        }
-
-        RowToggle {
-            colors: root.colors
-            title: "Always show search bar"
-            description: "Keep the search bar pinned visible."
-            checked: Config.searchBarAlwaysVisible
-            onToggle: function(v) { if (root.saveConfigKey) root.saveConfigKey("general.searchBarAlwaysVisible", v) }
         }
 
         RowToggle {
