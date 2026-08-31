@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
+	"io"
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -86,89 +90,133 @@ func TestDepthReusable(t *testing.T) {
 }
 
 // TestDepthTargets returns the still wallpapers on screen, default plus per-
-// output overrides, and skips videos.
+// output overrides, and skips videos and live-claimed slots.
 func TestDepthTargets(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-	if err := os.MkdirAll(stateDir(), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	img := filepath.Join(home, "a.png")
 	vid := filepath.Join(home, "b.mp4")
+	live := filepath.Join(home, "c.png")
 	writeFile(t, img, "img")
 	writeFile(t, vid, "vid")
-	writeWallState(wallStateFile{Default: img, Outputs: map[string]string{"DP-1": vid}})
+	writeFile(t, live, "live")
 
 	d := &daemon{}
+	d.ryoWall = ryogamiFrame{
+		Default: ryogamiFrameEntry{Path: img},
+		Outputs: map[string]ryogamiFrameEntry{
+			"DP-1": {Path: vid},
+			"DP-2": {Path: live, Live: true},
+		},
+	}
 	targets := d.depthTargets()
 	if len(targets) != 1 || targets[0].slot != "" || targets[0].source != img {
 		t.Fatalf("targets = %+v, want only the default still image", targets)
 	}
 }
 
-// TestEntryJSONCarriesDepth proves the cutout path and its revision reach the
-// published frame.
-func TestEntryJSONCarriesDepth(t *testing.T) {
-	e := wallEntry{path: "wp-1.png", revision: 1, fit: "Cover", depthPath: "/p/sunset-depth.png", depthRev: 42}
-	j := entryJSON(&e)
-	if j.Depth != "/p/sunset-depth.png" || j.DepthRev != 42 {
-		t.Fatalf("entryJSON = {%q,%d}, want the cutout path and rev", j.Depth, j.DepthRev)
+// TestDepthPublishWire pins the bridge contract with ryogami: a finished cutout
+// crosses the socket as `depth set` with a JSON body carrying the slot, source,
+// cutout path and its mtime revision, and clearing crosses as `depth clear`.
+// Staleness (a switch mid-generation) is ryogami's side of the contract: it
+// validates the source against the slot before folding the cutout in.
+func TestDepthPublishWire(t *testing.T) {
+	rt := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", rt)
+	ln, err := net.Listen("unix", filepath.Join(rt, "ryogami.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	lines := make(chan string, 2)
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				l, _ := bufio.NewReader(c).ReadString('\n')
+				lines <- strings.TrimSpace(l)
+				_, _ = io.WriteString(c, "ok\n")
+			}(conn)
+		}
+	}()
+	recv := func() string {
+		select {
+		case l := <-lines:
+			return l
+		case <-time.After(2 * time.Second):
+			t.Fatal("no command reached the fake ryogami")
+			return ""
+		}
+	}
+
+	out := filepath.Join(t.TempDir(), "wp-depth.png")
+	writeFile(t, out, "cutout")
+
+	d := &daemon{}
+	d.depthPublish("DP-1", "/walls/wp.png", out)
+	got := recv()
+	body, ok := strings.CutPrefix(got, "depth set ")
+	if !ok {
+		t.Fatalf("publish sent %q, want a `depth set` line", got)
+	}
+	var req struct {
+		Screen string `json:"screen"`
+		Source string `json:"source"`
+		Out    string `json:"out"`
+		Rev    int64  `json:"rev"`
+	}
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		t.Fatalf("publish body not JSON: %v", err)
+	}
+	if req.Screen != "DP-1" || req.Source != "/walls/wp.png" || req.Out != out {
+		t.Fatalf("publish body = %+v", req)
+	}
+	if req.Rev == 0 || req.Rev != fileModTime(out) {
+		t.Fatalf("rev = %d, want the cutout's mtime %d", req.Rev, fileModTime(out))
+	}
+
+	d.depthClear()
+	if got := recv(); got != "depth clear" {
+		t.Fatalf("clear sent %q", got)
 	}
 }
 
-// TestDepthSetClearAndStale drives the worker's surface API: a finished cutout
-// lands on the slot showing its source and republishes, a result for a
-// superseded wallpaper is dropped, and clearing removes the overlay.
-func TestDepthSetClearAndStale(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+// TestRyogamiFrameWake pins the bridge trigger: a frame showing a different
+// wallpaper, one that lost its cutout, or a live claim wakes the depth worker,
+// while the frame our own publish produces (same sources, depth set) stays
+// quiet, so the publish-subscribe loop settles.
+func TestRyogamiFrameWake(t *testing.T) {
+	d := &daemon{depthSig: make(chan struct{}, 1)}
+	woke := func() bool {
+		select {
+		case <-d.depthSig:
+			return true
+		default:
+			return false
+		}
+	}
+	feed := func(js string) { d.consumeRyogamiFrames(strings.NewReader(js + "\n")) }
 
-	src := filepath.Join(home, "wp.png")
-	writeFile(t, src, "fake-png")
-	if err := os.MkdirAll(stateDir(), 0o755); err != nil {
-		t.Fatal(err)
+	feed(`{"default":{"path":"/w/a.png"},"outputs":{}}`)
+	if !woke() {
+		t.Fatal("a new wallpaper did not wake the worker")
 	}
-	writeFile(t, wallState(), src+"\n") // the slot currently shows src
-
-	d := &daemon{lastTransition: -1}
-	d.startWallpaper()
-	if err := d.wall.show(src); err != nil {
-		t.Fatalf("show: %v", err)
+	feed(`{"default":{"path":"/w/a.png","depth":"/d/a-depth.png"},"outputs":{}}`)
+	if woke() {
+		t.Fatal("our own depth publish woke the worker again")
 	}
-
-	out := filepath.Join(home, "wp-depth.png")
-	writeFile(t, out, "cutout")
-	d.wall.setDepth("", src, out)
-	if d.wall.def.depthPath != out || d.wall.def.depthRev == 0 {
-		t.Fatalf("setDepth: {%q,%d}, want the cutout path and a nonzero rev", d.wall.def.depthPath, d.wall.def.depthRev)
+	feed(`{"default":{"path":"/w/a.png"},"outputs":{}}`)
+	if !woke() {
+		t.Fatal("a re-set that dropped the cutout did not wake the worker")
 	}
-
-	var f struct {
-		Default struct {
-			Depth    string `json:"depth"`
-			DepthRev int    `json:"depthRev"`
-		} `json:"default"`
-	}
-	sub := d.wall.topic.subscribe()
-	defer d.wall.topic.unsubscribe(sub)
-	if err := json.Unmarshal(<-sub.frames, &f); err != nil {
-		t.Fatalf("published frame not JSON: %v", err)
-	}
-	if f.Default.Depth != out || f.Default.DepthRev == 0 {
-		t.Fatalf("published depth = {%q,%d}, want the cutout and a rev", f.Default.Depth, f.Default.DepthRev)
-	}
-
-	d.wall.setDepth("", filepath.Join(home, "other.png"), filepath.Join(home, "other-depth.png"))
-	if d.wall.def.depthPath != out {
-		t.Fatalf("a cutout for a superseded wallpaper was applied: %q", d.wall.def.depthPath)
-	}
-
-	d.wall.clearDepth()
-	if d.wall.def.depthPath != "" || d.wall.def.depthRev != 0 {
-		t.Fatalf("clearDepth left {%q,%d}", d.wall.def.depthPath, d.wall.def.depthRev)
+	feed(`{"default":{"path":"/w/a.png","live":true},"outputs":{}}`)
+	if !woke() {
+		t.Fatal("a live claim did not wake the worker")
 	}
 }
 
@@ -183,7 +231,8 @@ func TestDepthPerWallRegistry(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".local", "state"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
-	t.Setenv("PATH", t.TempDir()) // no ryoku-depth: engine reads as absent
+	t.Setenv("PATH", t.TempDir())            // no ryoku-depth: engine reads as absent
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir()) // no ryogami: clears fail fast, harmlessly
 
 	wx := filepath.Join(home, "x.png")
 	wy := filepath.Join(home, "y.png")
@@ -194,14 +243,12 @@ func TestDepthPerWallRegistry(t *testing.T) {
 	}
 
 	show := func(d *daemon, pic string) {
-		writeWallState(wallStateFile{Default: pic})
-		if err := d.wall.show(pic); err != nil {
-			t.Fatalf("show: %v", err)
-		}
+		d.ryoWallMu.Lock()
+		d.ryoWall = ryogamiFrame{Default: ryogamiFrameEntry{Path: pic}}
+		d.ryoWallMu.Unlock()
 	}
 
-	d := &daemon{lastTransition: -1}
-	d.startWallpaper()
+	d := &daemon{}
 
 	// Untagged wallpaper: off, no generation, busy never set, and the overlay is
 	// cleared -- the switch never sticks on "Cutting out".
@@ -243,9 +290,10 @@ func TestDepthPerWallRegistry(t *testing.T) {
 		t.Fatal("returning to X did not restore depth")
 	}
 
-	// Persisted across a daemon restart: a fresh daemon reads the same registry.
-	d2 := &daemon{lastTransition: -1}
-	d2.startWallpaper()
+	// Persisted across a daemon restart: a fresh daemon reads the same registry
+	// once ryogami's retained frame reseeds its wallpaper mirror.
+	d2 := &daemon{}
+	show(d2, wx)
 	d2.reconcileDepth(false, false)
 	if !loadDepthWalls().Current {
 		t.Fatal("depth opt-in did not survive a daemon restart")

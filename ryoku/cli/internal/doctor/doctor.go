@@ -134,6 +134,7 @@ func reconcilers() []reconciler {
 		{"sumi bar simplification", reconcileSumiBar},
 		{"dock config store", reconcileDockStore},
 		{"retired shell menus", reconcileRetiredMenus},
+		{"retired wallpaper keys", reconcileRetiredWallpaperKeys},
 		{"quick-settings capture tab", reconcileCaptureModule},
 		{"quick-settings depth tab", reconcileDepthModule},
 		{"retired system sidebar", reconcileLegacySystemSidebar},

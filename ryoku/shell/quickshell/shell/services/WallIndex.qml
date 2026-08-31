@@ -109,7 +109,7 @@ Singleton {
             queuedApply = path;
             return;
         }
-        applyProc.command = ["ryoku-shell", "wallpaper", "set", path];
+        applyProc.command = ["ryogami", "wallpaper", "set", path];
         applyProc.running = true;
     }
     Process {
@@ -118,7 +118,7 @@ Singleton {
             if (root.queuedApply.length) {
                 var next = root.queuedApply;
                 root.queuedApply = "";
-                applyProc.command = ["ryoku-shell", "wallpaper", "set", next];
+                applyProc.command = ["ryogami", "wallpaper", "set", next];
                 applyProc.running = true;
             }
         }

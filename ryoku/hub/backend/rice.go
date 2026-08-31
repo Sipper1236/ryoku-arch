@@ -578,9 +578,9 @@ func restoreRice(slot string) error {
 		return fmt.Errorf("no backup to restore at %q", slot)
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, "wallpaper.path")); err == nil && isFile(strings.TrimSpace(string(b))) {
-		_ = riceRun("ryoku-shell", "wallpaper", "set", strings.TrimSpace(string(b)))
+		_ = riceRun("ryogami", "wallpaper", "set", strings.TrimSpace(string(b)))
 	} else {
-		_ = riceRun("ryoku-shell", "wallpaper", "repaint")
+		_ = riceRun("ryogami", "wallpaper", "repaint")
 	}
 	_ = writeGeneratedLua(loadOverrides())
 	riceReload()
@@ -675,7 +675,7 @@ func applyRice(slug string, layers []string) error {
 		_ = os.MkdirAll(destDir, 0o755)
 		dst := filepath.Join(destDir, r.Slug+filepath.Ext(r.Assets.Wallpaper))
 		if copyFile(filepath.Join(dir, r.Assets.Wallpaper), dst) == nil {
-			_ = riceRun("ryoku-shell", "wallpaper", "set", dst)
+			_ = riceRun("ryogami", "wallpaper", "set", dst)
 		}
 	}
 	// Colour mode is set AFTER the wallpaper: `wallpaper set` re-derives the
@@ -689,7 +689,7 @@ func applyRice(slug string, layers []string) error {
 		if pal := readPalette(filepath.Join(dir, r.Color.Palette)); pal != nil {
 			writePalette(pal)
 		}
-		_ = riceRun("ryoku-shell", "wallpaper", "repaint")
+		_ = riceRun("ryogami", "wallpaper", "repaint")
 	} else {
 		st.FollowWallpaper = true
 		saveThemeState(st)

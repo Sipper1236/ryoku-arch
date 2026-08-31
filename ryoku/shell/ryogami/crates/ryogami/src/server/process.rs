@@ -1,0 +1,390 @@
+use std::path::{Path, PathBuf};
+
+use tracing::{info, warn};
+
+use crate::config::Config;
+
+use super::*;
+
+/// When RYOGAMI_HEADLESS is set, the daemon serves its socket but spawns no UI/host
+/// processes. Used for end-to-end tests of the real binary.
+pub(super) fn is_headless() -> bool {
+    std::env::var_os("RYOGAMI_HEADLESS").is_some()
+}
+
+pub struct ManagedProcess {
+    child: Option<tokio::process::Child>,
+    shell_qml: PathBuf,
+    label: &'static str,
+    env_key: &'static str,
+    dry_run: bool,
+}
+
+impl ManagedProcess {
+    pub(super) fn new(label: &'static str, env_key: &'static str, shell_qml: PathBuf) -> Self {
+        Self {
+            child: None,
+            shell_qml,
+            label,
+            env_key,
+            dry_run: false,
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn new_dry(label: &'static str, env_key: &'static str, shell_qml: PathBuf) -> Self {
+        Self {
+            child: None,
+            shell_qml,
+            label,
+            env_key,
+            dry_run: true,
+        }
+    }
+
+    pub fn is_running(&mut self) -> bool {
+        if let Some(ref mut child) = self.child {
+            match child.try_wait() {
+                Ok(Some(_)) | Err(_) => {
+                    self.child = None;
+                    false
+                }
+                Ok(None) => true,
+            }
+        } else {
+            false
+        }
+    }
+
+    pub fn launch(&mut self) {
+        self.launch_with_env(&[]);
+    }
+
+    fn command_override(&self) -> Option<PathBuf> {
+        if self.label != "wall-ui" {
+            return None;
+        }
+        std::env::var_os("RYOGAMI_WALL_BIN").map(PathBuf::from)
+    }
+
+    pub fn launch_with_env(&mut self, extra_env: &[(&str, String)]) {
+        if self.dry_run || is_headless() {
+            return;
+        }
+        if self.is_running() {
+            return;
+        }
+        let mut cmd = if let Some(bin) = self.command_override() {
+            let _ = std::process::Command::new("pkill")
+                .arg("-f")
+                .arg(format!("^{}", bin.display()))
+                .status();
+            info!("launching {}: {}", self.label, bin.display());
+            tokio::process::Command::new(bin)
+        } else {
+            let _ = std::process::Command::new("pkill")
+                .arg("-f")
+                .arg(format!("quickshell .*{}", self.shell_qml.display()))
+                .status();
+            info!("launching {}: quickshell -p {}", self.label, self.shell_qml.display());
+            let install_dir = self.shell_qml.parent().unwrap_or_else(|| Path::new("/usr/share/ryogami"));
+            let mut c = tokio::process::Command::new("quickshell");
+            c.arg("-p").arg(&self.shell_qml).env(self.env_key, install_dir);
+            c
+        };
+        cmd.kill_on_drop(true);
+        for (k, v) in extra_env {
+            cmd.env(k, v);
+        }
+        cmd.stdin(std::process::Stdio::null());
+        match open_managed_log(self.label) {
+            Some(log_path) => match std::fs::OpenOptions::new().create(true).write(true).truncate(true).open(&log_path) {
+                Ok(stdout_file) => match stdout_file.try_clone() {
+                    Ok(stderr_file) => {
+                        info!("{}: spawn stdout/stderr -> {}", self.label, log_path.display());
+                        cmd.stdout(std::process::Stdio::from(stdout_file));
+                        cmd.stderr(std::process::Stdio::from(stderr_file));
+                    }
+                    Err(e) => {
+                        warn!("{}: failed to clone log fd ({e}); spawn output discarded", self.label);
+                        cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+                    }
+                },
+                Err(e) => {
+                    warn!("{}: failed to open {} ({e}); spawn output discarded", self.label, log_path.display());
+                    cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+                }
+            },
+            None => {
+                cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+            }
+        }
+        match cmd.spawn() {
+            Ok(child) => {
+                self.child = Some(child);
+            }
+            Err(e) => {
+                warn!("failed to launch {}: {e}", self.label);
+            }
+        }
+    }
+
+    pub fn kill(&mut self) {
+        if let Some(ref mut child) = self.child {
+            info!("killing {} process", self.label);
+            let _ = child.start_kill();
+            self.child = None;
+        }
+    }
+
+    pub fn toggle(&mut self) {
+        self.toggle_with_env(&[]);
+    }
+
+    pub fn toggle_with_env(&mut self, extra_env: &[(&str, String)]) {
+        if self.is_running() {
+            self.kill();
+        } else {
+            self.launch_with_env(extra_env);
+        }
+    }
+}
+
+pub(super) fn open_managed_log(label: &str) -> Option<PathBuf> {
+    let base = std::env::var("XDG_CACHE_HOME")
+        .ok()
+        .map(PathBuf::from)
+        .or_else(|| std::env::var("HOME").ok().map(|h| PathBuf::from(h).join(".cache")))?
+        .join("ryogami");
+    std::fs::create_dir_all(&base).ok()?;
+    Some(base.join(format!("{label}.log")))
+}
+
+pub(super) fn resolve_shell_qml() -> PathBuf {
+    if let Ok(p) = std::env::var("RYOGAMI_SHELL_QML") {
+        return PathBuf::from(p);
+    }
+    let local = PathBuf::from("shell.qml");
+    if local.exists() {
+        return std::fs::canonicalize(&local).unwrap_or(local);
+    }
+    let sibling = PathBuf::from("../ryogami/shell.qml");
+    if sibling.exists() {
+        return std::fs::canonicalize(&sibling).unwrap_or(sibling);
+    }
+    PathBuf::from("/usr/share/ryogami/shell.qml")
+}
+
+pub(super) fn resolve_bar_qml() -> PathBuf {
+    resolve_dev_or_system("ryogami-bar", "RYOGAMI_BAR_QML")
+}
+
+
+pub(super) fn resolve_dev_or_system(name: &str, env_var: &str) -> PathBuf {
+    if let Ok(p) = std::env::var(env_var) {
+        return PathBuf::from(p);
+    }
+    if let Ok(install) = std::env::var("RYOGAMI_INSTALL") {
+        let p = PathBuf::from(install).join(name).join("shell.qml");
+        if p.exists() {
+            return p;
+        }
+    }
+    let umbrella = PathBuf::from(format!("../ryogami-shell/{name}/shell.qml"));
+    if umbrella.exists() {
+        return std::fs::canonicalize(&umbrella).unwrap_or(umbrella);
+    }
+    let sibling = PathBuf::from(format!("../{name}/shell.qml"));
+    if sibling.exists() {
+        return std::fs::canonicalize(&sibling).unwrap_or(sibling);
+    }
+    let suite_path = PathBuf::from(format!("/usr/share/ryogami/{name}/shell.qml"));
+    if suite_path.exists() {
+        return suite_path;
+    }
+    PathBuf::from(format!("/usr/share/{name}/shell.qml"))
+}
+
+pub(super) fn resolve_launch_qml() -> PathBuf {
+    resolve_dev_or_system("ryogami-launch", "RYOGAMI_LAUNCH_QML")
+}
+
+pub(super) fn resolve_launch_shell_qml() -> PathBuf {
+    if let Ok(p) = std::env::var("RYOGAMI_LAUNCH_SHELL_QML") {
+        return PathBuf::from(p);
+    }
+    let launch_shell_qml = resolve_launch_qml();
+    let candidate = launch_shell_qml
+        .parent()
+        .map(|p| p.join("qml/launcher/LauncherShell.qml"));
+    if let Some(p) = candidate
+        && p.exists() {
+            return std::fs::canonicalize(&p).unwrap_or(p);
+        }
+    PathBuf::from("/usr/share/ryogami/ryogami-launch/qml/launcher/LauncherShell.qml")
+}
+
+pub(super) fn resolve_bar_shell_qml() -> PathBuf {
+    if let Ok(p) = std::env::var("RYOGAMI_BAR_SHELL_QML") {
+        return PathBuf::from(p);
+    }
+    let bar_qml = resolve_bar_qml();
+    let candidate = bar_qml.parent().map(|p| p.join("qml/bar/BarShell.qml"));
+    if let Some(p) = candidate
+        && p.exists() {
+            return std::fs::canonicalize(&p).unwrap_or(p);
+        }
+    PathBuf::from("/usr/share/ryogami/ryogami-bar/qml/bar/BarShell.qml")
+}
+
+pub(super) fn resolve_switch_shell_qml() -> PathBuf {
+    if let Ok(p) = std::env::var("RYOGAMI_SWITCH_SHELL_QML") {
+        return PathBuf::from(p);
+    }
+    let switch_qml = resolve_switch_qml();
+    let candidate = switch_qml
+        .parent()
+        .map(|p| p.join("qml/switcher/SwitchShell.qml"));
+    if let Some(p) = candidate
+        && p.exists() {
+            return std::fs::canonicalize(&p).unwrap_or(p);
+        }
+    PathBuf::from("/usr/share/ryogami/ryogami-switch/qml/switcher/SwitchShell.qml")
+}
+
+pub(super) fn install_dir_of(shell_qml: &Path) -> String {
+    shell_qml
+        .parent()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default()
+}
+
+pub(super) async fn build_host_env(config: &Config) -> Vec<(&'static str, String)> {
+    let launch_shell   = resolve_launch_shell_qml();
+    let bar_shell      = resolve_bar_shell_qml();
+    let switch_shell   = resolve_switch_shell_qml();
+    let settings_shell = resolve_settings_shell_qml();
+    let power_shell    = resolve_power_shell_qml();
+
+    let launch_install   = install_dir_of(&resolve_launch_qml());
+    let bar_install      = install_dir_of(&resolve_bar_qml());
+    let switch_install   = install_dir_of(&resolve_switch_qml());
+    let settings_install = install_dir_of(&resolve_settings_qml());
+    let power_install    = install_dir_of(&resolve_power_qml());
+
+    let mut env: Vec<(&'static str, String)> = vec![
+        ("RYOGAMI_LAUNCH_SHELL",     launch_shell.display().to_string()),
+        ("RYOGAMI_BAR_SHELL",        bar_shell.display().to_string()),
+        ("RYOGAMI_SWITCH_SHELL",     switch_shell.display().to_string()),
+        ("RYOGAMI_SETTINGS_SHELL",   settings_shell.display().to_string()),
+        ("RYOGAMI_POWER_SHELL",      power_shell.display().to_string()),
+        ("RYOGAMI_LAUNCH_INSTALL",   launch_install),
+        ("RYOGAMI_BAR_INSTALL",      bar_install),
+        ("RYOGAMI_SWITCH_INSTALL",   switch_install),
+        ("RYOGAMI_SETTINGS_INSTALL", settings_install),
+        ("RYOGAMI_POWER_INSTALL",    power_install),
+    ];
+    if should_launch_notification(config) {
+        let notification_shell = resolve_notification_shell_qml();
+        let notification_install = install_dir_of(&resolve_notification_qml());
+        env.push(("RYOGAMI_NOTIFICATION_SHELL", notification_shell.display().to_string()));
+        env.push(("RYOGAMI_NOTIFICATION_INSTALL", notification_install));
+    }
+    env
+}
+
+pub(super) fn resolve_notification_shell_qml() -> PathBuf {
+    if let Ok(p) = std::env::var("RYOGAMI_NOTIFICATION_SHELL_QML") {
+        return PathBuf::from(p);
+    }
+    let notification_qml = resolve_notification_qml();
+    let candidate = notification_qml
+        .parent()
+        .map(|p| p.join("qml/NotificationShell.qml"));
+    if let Some(p) = candidate
+        && p.exists() {
+            return std::fs::canonicalize(&p).unwrap_or(p);
+        }
+    PathBuf::from("/usr/share/ryogami/ryogami-notification/qml/NotificationShell.qml")
+}
+
+pub(super) fn resolve_power_shell_qml() -> PathBuf {
+    if let Ok(p) = std::env::var("RYOGAMI_POWER_SHELL_QML") {
+        return PathBuf::from(p);
+    }
+    let power_qml = resolve_power_qml();
+    let candidate = power_qml
+        .parent()
+        .map(|p| p.join("qml/power/PowerShell.qml"));
+    if let Some(p) = candidate
+        && p.exists() {
+            return std::fs::canonicalize(&p).unwrap_or(p);
+        }
+    PathBuf::from("/usr/share/ryogami/ryogami-power/qml/power/PowerShell.qml")
+}
+
+pub(super) fn resolve_settings_shell_qml() -> PathBuf {
+    if let Ok(p) = std::env::var("RYOGAMI_SETTINGS_SHELL_QML") {
+        return PathBuf::from(p);
+    }
+    let settings_qml = resolve_settings_qml();
+    let candidate = settings_qml
+        .parent()
+        .map(|p| p.join("qml/SettingsShell.qml"));
+    if let Some(p) = candidate
+        && p.exists() {
+            return std::fs::canonicalize(&p).unwrap_or(p);
+        }
+    PathBuf::from("/usr/share/ryogami/ryogami-settings/qml/SettingsShell.qml")
+}
+
+pub(super) fn resolve_host_qml() -> PathBuf {
+    if let Ok(p) = std::env::var("RYOGAMI_HOST_QML") {
+        return PathBuf::from(p);
+    }
+    let local = PathBuf::from("data/host/shell.qml");
+    if local.exists() {
+        return std::fs::canonicalize(&local).unwrap_or(local);
+    }
+    let sibling = PathBuf::from("../ryogami/data/host/shell.qml");
+    if sibling.exists() {
+        return std::fs::canonicalize(&sibling).unwrap_or(sibling);
+    }
+    if let Ok(install) = std::env::var("RYOGAMI_INSTALL") {
+        let p = PathBuf::from(install).join("ryogami/host/shell.qml");
+        if p.exists() {
+            return p;
+        }
+    }
+    PathBuf::from("/usr/share/ryogami/ryogami/host/shell.qml")
+}
+
+pub(super) fn resolve_switch_qml() -> PathBuf {
+    resolve_dev_or_system("ryogami-switch", "RYOGAMI_SWITCH_QML")
+}
+
+pub(super) fn resolve_notification_qml() -> PathBuf {
+    resolve_dev_or_system("ryogami-notification", "RYOGAMI_NOTIFICATION_QML")
+}
+
+
+
+pub(super) fn resolve_power_qml() -> PathBuf {
+    resolve_dev_or_system("ryogami-power", "RYOGAMI_POWER_QML")
+}
+
+pub(super) fn resolve_settings_qml() -> PathBuf {
+    resolve_dev_or_system("ryogami-settings", "RYOGAMI_SETTINGS_QML")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn install_dir_of_returns_parent_dir() {
+        assert_eq!(install_dir_of(Path::new("/a/b/shell.qml")), "/a/b");
+        assert_eq!(install_dir_of(Path::new("shell.qml")), "");
+        assert_eq!(install_dir_of(Path::new("/")), "");
+    }
+}

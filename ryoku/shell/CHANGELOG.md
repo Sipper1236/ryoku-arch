@@ -13,6 +13,14 @@
   (`modules/depth/`, `ipc/depth.go`, `scripts/ryoku-depth`,
   `controlcenter/routes/DesktopRoute.qml`, `docs/depth.md`).
 
+- **Depth generation stays in the shell daemon and now drives ryogami's
+  wallpaper frames.** With the wallpaper surface moved to ryogami, the Go depth
+  worker (per-wall registry, engine runs, `depth refresh|status|set-enabled|clear`)
+  mirrors ryogami's `wallpaper` topic to see what is on screen and hands finished
+  cutouts back over `depth set` / `depth clear` on ryogami.sock; ryogami folds
+  them into the published frame and drops a cutout whose wallpaper already left
+  the slot (`ipc/ryogami.go`, `ipc/depth.go`, `ryogami/src/server/routing.rs`).
+
 - **Hard reload accepts still, animated, and muted video media while retaining the bundled wordmark fallback and unchanged iris/readiness lifecycle.** Reload covers read the selected media descriptor from `brand.json`; a persisted custom-media On/Off gate releases all custom decoders when Off and restores the saved asset when On (`quickshell/reload-cover/`).
 
 - **The desktop visualizer can stack several looks, use exact gradients, and wrap

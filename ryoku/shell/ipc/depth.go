@@ -80,10 +80,9 @@ func saveDepthWalls(w depthWalls) {
 	}
 }
 
-// currentWall is the wallpaper the registry keys off: the default (broadcast)
-// wallpaper, the same path the shell watches in ryoku-wallpaper and the cutout is
-// named after.
-func currentWall() string { return readWallState().Default }
+// The wallpaper the registry keys off is the default (broadcast) wallpaper of
+// the frame ryogami last published, mirrored by watchRyogami; see currentWall
+// in ryogami.go. The cutout is named after that source path.
 
 // depthBin: on PATH once packaged, but a dev run must reach it under
 // RYOKU_SHELL_DIR where it is not.
@@ -111,13 +110,14 @@ func depthOut(source string) string {
 
 // depthStatusJSON reports generation state and the current default cutout to the
 // UI: busy drives the progress bar, path drives the preview thumbnail.
-func depthStatusJSON(busy bool) string {
+func (d *daemon) depthStatusJSON() string {
 	path := ""
-	if st := readWallState(); st.Default != "" && !isVideo(st.Default) {
-		if p := depthOut(st.Default); isFile(p) {
+	if wall := d.currentWall(); wall != "" && !isVideo(wall) {
+		if p := depthOut(wall); isFile(p) {
 			path = p
 		}
 	}
+	busy := d.depthBusy.Load()
 	b, _ := json.Marshal(struct {
 		Busy bool   `json:"busy"`
 		Path string `json:"path"`
@@ -175,9 +175,6 @@ func (d *daemon) scheduleDepth() {
 
 func (d *daemon) depthWorker() {
 	for range d.depthSig {
-		if d.wall == nil {
-			continue
-		}
 		d.reconcileDepth(d.depthForce.Swap(false), d.depthGen.Swap(false))
 	}
 }
@@ -188,7 +185,7 @@ func (d *daemon) depthWorker() {
 // generates nothing and never sets the busy flag, so a switch never sticks the
 // panel on "Cutting out".
 func (d *daemon) reconcileDepth(force, gen bool) {
-	wall := currentWall()
+	wall := d.currentWall()
 	reg := loadDepthWalls()
 	effective := wall != "" && !isVideo(wall) && reg.Walls[wall]
 	if reg.Current != effective || !isFile(depthWallsPath()) {
@@ -196,7 +193,7 @@ func (d *daemon) reconcileDepth(force, gen bool) {
 		saveDepthWalls(reg)
 	}
 	if !effective || !depthEngineAvailable() {
-		d.wall.clearDepth()
+		d.depthClear()
 		return
 	}
 	cfg := depthConfig()
@@ -224,12 +221,12 @@ func (d *daemon) reuseDepth(model string, matting bool) {
 	for _, t := range targets {
 		out := depthOut(t.source)
 		if depthReusable(idx, t.source, model, matting, out) {
-			d.wall.setDepth(t.slot, t.source, out)
+			d.depthPublish(t.slot, t.source, out)
 			any = true
 		}
 	}
 	if !any {
-		d.wall.clearDepth()
+		d.depthClear()
 	}
 }
 
@@ -239,7 +236,7 @@ func (d *daemon) reuseDepth(model string, matting bool) {
 // depth back on is instant; disabling clears the overlay. The registry write is
 // synchronous so the shell's toggle reflects at once.
 func (d *daemon) depthSetEnabled(on bool) {
-	wall := currentWall()
+	wall := d.currentWall()
 	reg := loadDepthWalls()
 	if wall != "" {
 		if on {
@@ -257,7 +254,8 @@ func (d *daemon) depthSetEnabled(on bool) {
 }
 
 // generateDepth reuses each on-screen wallpaper's saved cutout or regenerates it,
-// then publishes. The slow helper runs off the surface lock.
+// then publishes. The slow helper runs entirely off ryogami's surface: only the
+// finished cutout crosses the socket.
 func (d *daemon) generateDepth(model string, matting bool, force bool) {
 	targets := d.depthTargets()
 	if len(targets) == 0 {
@@ -285,7 +283,7 @@ func (d *daemon) generateDepth(model string, matting bool, force bool) {
 			idx[out] = depthMeta{Source: t.source, Model: model, AlphaMatting: matting}
 			changed = true
 		}
-		d.wall.setDepth(t.slot, t.source, out)
+		d.depthPublish(t.slot, t.source, out)
 	}
 	if changed {
 		saveDepthIndex(idx)
@@ -300,75 +298,24 @@ type depthTarget struct {
 }
 
 func (d *daemon) depthTargets() []depthTarget {
-	st := readWallState()
+	f := d.wallFrame()
 	var out []depthTarget
-	if st.Default != "" && !isVideo(st.Default) && isFile(st.Default) {
-		out = append(out, depthTarget{"", st.Default})
+	if p := f.Default.Path; p != "" && !f.Default.Live && !isVideo(p) && isFile(p) {
+		out = append(out, depthTarget{"", p})
 	}
-	for name, p := range st.Outputs {
-		if p != "" && !isVideo(p) && isFile(p) {
-			out = append(out, depthTarget{name, p})
+	for name, e := range f.Outputs {
+		if e.Path != "" && !e.Live && !isVideo(e.Path) && isFile(e.Path) {
+			out = append(out, depthTarget{name, e.Path})
 		}
 	}
 	return out
-}
-
-// setDepth publishes a slot's cutout unless a switch mid-generation already moved
-// it to another wallpaper. The revision is the cutout's mtime, so a regenerated
-// file at the same path still busts the image cache.
-func (w *wallSurface) setDepth(slot, source, out string) {
-	if w == nil {
-		return
-	}
-	if readWallState().currentFor(slot) != source {
-		return
-	}
-	rev := int(fileModTime(out))
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	e := &w.def
-	if slot != "" {
-		e = w.outputs[slot]
-		if e == nil {
-			return
-		}
-	}
-	e.depthPath = out
-	e.depthRev = rev
-	w.publishLocked()
-}
-
-func (w *wallSurface) clearDepth() {
-	if w == nil {
-		return
-	}
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	changed := false
-	if w.def.depthPath != "" {
-		w.def.depthPath = ""
-		w.def.depthRev = 0
-		changed = true
-	}
-	for _, e := range w.outputs {
-		if e.depthPath != "" {
-			e.depthPath = ""
-			e.depthRev = 0
-			changed = true
-		}
-	}
-	if changed {
-		w.publishLocked()
-	}
 }
 
 // depthClearCache clears the on-screen overlay and deletes every generated cutout
 // and the reuse index from ~/Pictures/Depth, freeing the space the engine cached.
 // Depth stays enabled per wall, so a re-render regenerates the current wallpaper.
 func (d *daemon) depthClearCache() {
-	if d.wall != nil {
-		d.wall.clearDepth()
-	}
+	d.depthClear()
 	entries, err := os.ReadDir(depthDir())
 	if err != nil {
 		return

@@ -53,7 +53,7 @@ var rows = [{
         "label": "Wallpaper",
         "desc": "Images from ~/Pictures/Wallpapers, picking one rethemes the desktop",
         "ctl": "text",
-        "src": "ryoku-wallpaper (read); written via `ryoku-shell wallpaper set <path>`"
+        "src": "ryoku-wallpaper (read); written via `ryogami wallpaper set <path>`"
     },{
         "tab": "Comfort",
         "group": "BACKLIGHT",

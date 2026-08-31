@@ -92,12 +92,6 @@ var (
 	// theme.theme accepts the two dynamic variants (which carry no static palette)
 	// plus every static catalog name (themes_gen.go). An unknown name is rejected.
 	themeThemeValues = append([]string{"Default", "Wallpaper"}, themeCatalogNames...)
-
-	// wallpaper.transition_preset accepts the "random" sentinel (the shipped
-	// default: a fresh no-repeat reveal per switch) plus every reveal preset name
-	// (transitions.go). A hand-edited unknown value is rejected like any bad enum;
-	// the daemon's transitionFor also falls back to random when it reads one.
-	transitionPresetValues = append([]string{transitionRandom}, transitionPresetNames()...)
 )
 
 // settings mirrors the reference configuration schema (contract 14), minus the
@@ -246,11 +240,8 @@ type notificationsSettings struct {
 }
 
 type wallpaperSettings struct {
-	WallpaperDir        string  `json:"wallpaper_dir"`
-	ContentFit          string  `json:"content_fit"`
-	TransitionPreset    string  `json:"transition_preset"`
-	ApplyThemeFilter    bool    `json:"apply_theme_filter"`
-	ThemeFilterStrength float64 `json:"theme_filter_strength"`
+	ContentFit       string `json:"content_fit"`
+	TransitionPreset string `json:"transition_preset"`
 }
 
 func ip(n int) *int { return &n }
@@ -317,7 +308,7 @@ func defaultSettings() *settings {
 			RightMenuExpansionType: "AlwaysExpanded",
 		},
 		Notifications: notificationsSettings{NotificationPosition: "Right", PopupWindowMargins: 0},
-		Wallpaper:     wallpaperSettings{WallpaperDir: "", ContentFit: "Cover", TransitionPreset: transitionRandom, ApplyThemeFilter: false, ThemeFilterStrength: 1},
+		Wallpaper:     wallpaperSettings{ContentFit: "Cover", TransitionPreset: "random"},
 	}
 }
 
@@ -528,8 +519,9 @@ func (n *notificationsSettings) normalize(v *validator) {
 
 func (w *wallpaperSettings) normalize(v *validator) {
 	v.enum("wallpaper.content_fit", w.ContentFit, contentFitValues)
-	v.enum("wallpaper.transition_preset", w.TransitionPreset, transitionPresetValues)
-	v.clampF(&w.ThemeFilterStrength, 0, 1)
+	// wallpaper.transition_preset is Ryogami's now: it reads the key from
+	// shell.json per-apply and falls back to random on an unknown name, so
+	// ryoku-shell keeps the key but no longer duplicates the preset name list.
 }
 
 // splitPath breaks a dotted patch path into segments, rejecting an empty path or

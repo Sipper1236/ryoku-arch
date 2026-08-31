@@ -15,25 +15,27 @@ negative space. Both are handled below.
 ## How the parts fit
 
 ```
-ryoku-shell daemon                     shell (QML)
-------------------                     -----------
-wallpaper apply / depth refresh        depth/Singletons/Config.qml  (depth.json)
-  -> scheduleDepth (async worker)          |  enabled, model, alphaMatting, feather, lift, shadow, front
-  -> ryoku-depth cutout <wp> <out.png>     v
-  -> wallEntry.depthPath                QuickSettingsDepth.qml (on/off, model, edge, COMPOSE)
-  -> wall.republish()                      |
-        |  wallpaper topic (+ "depth")     v
-        +------------------------------> Wallpaper.qml -> depthUrl -> Desktop.qml
-                                             |
-                                             v
-                                         DepthForeground.qml  (cutout above widgets)
+ryoku-shell daemon (Go)                ryogami daemon (Rust)       shell (QML)
+-----------------------                ---------------------       -----------
+depth refresh / set-enabled            wallpaper apply             depth/Singletons/Config.qml  (depth.json)
+  -> scheduleDepth (async worker)        -> publishes frame            |  enabled, model, alphaMatting, feather, lift, shadow, front
+  -> ryoku-depth cutout <wp> <out.png>      on `wallpaper` topic       v
+  -> `depth set` over ryogami.sock  ---------> folds depthPath     QuickSettingsDepth.qml (on/off, model, edge, COMPOSE)
+                                            into the frame            |
+     ^  subscribe wallpaper (mirror,        |  topic (+ "depth")      v
+     +--- wakes the worker on switch) <-----+------------------> Wallpaper.qml -> depthUrl -> Desktop.qml
+                                                                      |
+                                                                      v
+                                                                  DepthForeground.qml  (cutout above widgets)
 ```
 
-- **The daemon owns generation.** Producing the cutout is slow and must never
-  touch a frame, so it runs on a coalescing worker off the wallpaper hot path,
-  the same way `scheduleTheme`/`paintWorker` runs matugen (`ipc/matugen.go`).
-  The cutout path rides the existing wallpaper topic as a new `depth` field, so
-  no second socket or surface is introduced.
+- **The shell daemon owns generation; ryogami owns the surface.** Producing the
+  cutout is slow and must never touch a frame, so it runs on a coalescing worker
+  off the wallpaper hot path, the same way `scheduleTheme`/`paintWorker` runs
+  matugen (`ipc/matugen.go`). The worker mirrors ryogami's `wallpaper` topic to
+  know what is on screen (`ipc/ryogami.go`), and hands each finished cutout back
+  over `depth set`; ryogami folds it into the frame as the `depth` field, so no
+  second surface is introduced and a switch mid-generation drops the stale cut.
 - **QML only renders.** `DepthForeground` draws the published cutout above the
   widget slots with the wallpaper's own fill mode. It runs no model and makes no
   policy decision.
