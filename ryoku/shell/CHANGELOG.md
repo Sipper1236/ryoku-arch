@@ -45,6 +45,14 @@
   that tried to turn it off (`modules/wallpaper/skwd/`, `ryogami/daemon/`,
   `ipc/ryogami.go`, `ipc/theming.go`, `wall-ui/`).
 
+- **`ryoku update` on a checkout now restarts the ryogami daemon, so its
+  fixes actually take effect.** deploy.sh rebuilt and installed the ryogami
+  binary but only restarted ryoku-shell, never ryogami.service; systemd kept
+  the old daemon running, so every ryogami change (the folder watcher, the
+  video player, the picker) sat on disk unused until the next logout, and
+  `ryoku update` looked like it did nothing. deploy.sh now `try-restart`s
+  ryogami.service after installing the binary and pointing the unit at it
+  (`shell/deploy.sh`).
 - **Ryogami now notices wallpapers and videos dropped into the folders while
   it runs.** The Go rewrite kept a config-file poller but no library watcher,
   so a file added by hand to ~/Pictures/Wallpapers (or the livewalls dir)

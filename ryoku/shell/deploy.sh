@@ -571,6 +571,13 @@ sed -i -e "s|^ExecStart=.*|ExecStart=$bindir/ryogami|" \
   -e "/^\[Service\]/a Environment=RYOGAMI_SHELL_QML=$datadir/ryogami/wall-ui/shell.qml" \
   "$cfg/systemd/user/ryogami.service"
 systemctl --user daemon-reload 2>/dev/null || true
+# daemon-reload only re-reads the unit; it never restarts a running service, so
+# without this the freshly built ryogami binary sits on disk while the old
+# daemon keeps running until the next logout ("ran ryoku update, nothing
+# changed"). try-restart cycles it only when it is already up, so a pre-session
+# install deploy does not start it early; the restart relaunches the resident
+# wall-ui picker too.
+systemctl --user try-restart ryogami.service 2>/dev/null || true
 # ryoku-ai-usage.service ships three ExecStart=-/usr/bin/<collector> lines (the
 # package path); rewrite them to ~/.local/bin so the dev-deployed collectors
 # resolve, mirroring the ryoku-shell.service rewrite above.
