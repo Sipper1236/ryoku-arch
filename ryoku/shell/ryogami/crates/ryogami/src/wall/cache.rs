@@ -324,7 +324,7 @@ pub async fn process_single(
     src: &Path,
     wp_type: &str,
 ) {
-    let fsize = tokio::fs::metadata(src).await.map(|m| m.len()).unwrap_or(0);
+    let fsize = tokio::fs::metadata(src).await.map_or(0, |m| m.len());
     debug!("[cache] process_single name={name} type={wp_type} size={fsize}");
     let cache_dir = config.cache_dir().join("wallpaper");
     let (thumb_dir, thumb_sm_dir) = match wp_type {

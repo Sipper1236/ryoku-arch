@@ -750,6 +750,8 @@ struct ShellConfig {
     notifications: Option<NotificationsConfig>,
 }
 
+// keep Result: config IO/parse is conceptually fallible though fallbacks never error today
+#[allow(clippy::unnecessary_wraps)]
 pub fn load() -> anyhow::Result<Config> {
     let path = config_path();
     if !path.exists() {

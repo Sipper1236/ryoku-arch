@@ -316,7 +316,7 @@ async fn convert_one(
     let old_name = src_path.file_name().unwrap_or_default().to_string_lossy().to_string();
     let stem = src_path.file_stem().unwrap_or_default().to_string_lossy().to_string();
 
-    let orig_size = tokio::fs::metadata(src).await.map(|m| m.len()).unwrap_or(0);
+    let orig_size = tokio::fs::metadata(src).await.map_or(0, |m| m.len());
 
     let (codec, width, height) = probe_video(runner, src)
         .await

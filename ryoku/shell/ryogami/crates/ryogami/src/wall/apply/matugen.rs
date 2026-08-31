@@ -229,15 +229,13 @@ pub(super) async fn run_matugen(image_path: &str, config: &Config) {
         .silent()
         .status()
         .await
-        .map(|s| !s.success())
-        .unwrap_or(true)
+        .map_or(true, |s| !s.success())
         && Command::new("which")
             .arg("matugen")
             .silent()
             .status()
             .await
-            .map(|s| !s.success())
-            .unwrap_or(true)
+            .map_or(true, |s| !s.success())
     {
         warn!("matugen not found in PATH, skipping");
         return;

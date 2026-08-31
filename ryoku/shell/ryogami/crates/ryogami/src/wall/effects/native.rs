@@ -27,8 +27,7 @@ pub fn preview_path(cache_dir: &Path, input: &Path, suffix: &str) -> anyhow::Res
         .to_owned();
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_millis());
     Ok(preview_dir(cache_dir).join(format!("{ts}-{stem}-{suffix}.{ext}")))
 }
 

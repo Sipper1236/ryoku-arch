@@ -60,8 +60,7 @@ pub async fn refresh_for(config: &Config) {
 
 fn is_niri() -> bool {
     std::env::var("XDG_CURRENT_DESKTOP")
-        .map(|d| d.to_lowercase().contains("niri"))
-        .unwrap_or(false)
+        .is_ok_and(|d| d.to_lowercase().contains("niri"))
 }
 
 pub async fn refresh(source: &str, config: &Config) {

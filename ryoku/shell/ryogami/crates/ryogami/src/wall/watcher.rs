@@ -243,7 +243,7 @@ fn handle_notify_event(
                 }
                 drop(map);
 
-                let fsize = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+                let fsize = std::fs::metadata(path).map_or(0, |m| m.len());
                 debug!("[watcher] FileAdded name={name} size={fsize} type={}", ft.as_str());
                 let _ = tx.send(FsEvent::FileAdded {
                     name,

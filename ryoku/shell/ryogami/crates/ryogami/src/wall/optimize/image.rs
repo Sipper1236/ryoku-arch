@@ -297,7 +297,7 @@ async fn optimize_one(
     let new_name = format!("{stem}.webp");
     let staging_path = staging_dir.join(&new_name);
 
-    let orig_size = tokio::fs::metadata(src).await.map(|m| m.len()).unwrap_or(0);
+    let orig_size = tokio::fs::metadata(src).await.map_or(0, |m| m.len());
 
     let (new_size, new_w, new_h) = if ext == "gif" {
         optimize_gif(runner, src, staging_path.to_str().unwrap(), quality, max_w, max_h).await?
@@ -305,7 +305,7 @@ async fn optimize_one(
         optimize_static(runner, src, staging_path.to_str().unwrap(), quality, max_w, max_h).await?
     };
 
-    let trash_name = format!("{}_{}", &util::hash_prefix(src), old_name);
+    let trash_name = format!("{}_{}", util::hash_prefix(src), old_name);
     let trash_path = trash_dir.join(&trash_name);
     tokio::fs::rename(src, &trash_path).await.map_err(|e| anyhow::anyhow!("trash move: {e}"))?;
 

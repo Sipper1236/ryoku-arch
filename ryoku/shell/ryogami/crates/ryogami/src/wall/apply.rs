@@ -681,8 +681,7 @@ async fn linux_we_running() -> bool {
         .stderr(Stdio::null())
         .status()
         .await
-        .map(|s| s.success())
-        .unwrap_or(false)
+        .is_ok_and(|s| s.success())
 }
 
 async fn kill_legacy_video_procs() {
@@ -917,8 +916,7 @@ async fn pick_random_thumbs(wallpaper_dir: &Path, exclude: &[&str], n: usize) ->
     }
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.subsec_nanos() as usize)
-        .unwrap_or(0);
+        .map_or(0, |d| d.subsec_nanos() as usize);
     let mut picks = Vec::new();
     for i in 0..n.min(all.len()) {
         let idx = (nanos.wrapping_mul(2654435761).wrapping_add(i.wrapping_mul(48271))) % all.len();
@@ -1186,11 +1184,10 @@ pub async fn repoint_optimized_wallpaper(
 
 fn is_kde() -> bool {
     std::env::var("XDG_CURRENT_DESKTOP")
-        .map(|d| {
+        .is_ok_and(|d| {
             let lower = d.to_lowercase();
             lower.contains("kde") || lower.contains("plasma")
         })
-        .unwrap_or(false)
 }
 
 #[cfg(test)]
