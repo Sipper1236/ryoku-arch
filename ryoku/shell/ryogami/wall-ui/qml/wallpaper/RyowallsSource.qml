@@ -39,22 +39,6 @@ QtObject {
     signal failed(string reason)
 
     property string _buf: ""
-    property var _searchProc: Process {
-        stdout: SplitParser { splitMarker: ""; onRead: function(data) { src._buf += data } }
-        onExited: function(code) {
-            src.loading = false
-            if (code !== 0) { src.error = "search failed"; src.results = []; return }
-            var out = []
-            var lines = src._buf.split("\n")
-            for (var i = 0; i < lines.length; i++) {
-                var l = lines[i].trim()
-                if (!l) continue
-                try { out.push(JSON.parse(l)) } catch (e) {}
-            }
-            src.error = out.length === 0 ? "no results" : ""
-            src.results = out
-        }
-    }
 
     function search(query) {
         if (!searchVerb || loading) return
@@ -111,12 +95,8 @@ QtObject {
             _nativeSearchProc.running = true
             return
         }
-        var args = [searchVerb]
-        for (var e = 0; e < extraArgs.length; e++) args.push(extraArgs[e])
-        if (query && query.length > 0) { args.push("--query"); args.push(query) }
-        args.push("--json")
-        _searchProc.command = ["ryowalls"].concat(args)
-        _searchProc.running = true
+        loading = false
+        error = "unknown source"
     }
 
     // native ryostore: fetch the curated registry.json and reshape it into the
@@ -267,25 +247,8 @@ QtObject {
         }
     }
 
-    property string _dlBuf: ""
-    property var _dlProc: Process {
-        stdout: SplitParser { splitMarker: ""; onRead: function(data) { src._dlBuf += data } }
-        onExited: function(code) {
-            var lines = src._dlBuf.trim().split("\n")
-            var path = ""
-            for (var i = lines.length - 1; i >= 0; i--) {
-                var l = lines[i].trim()
-                if (l.length > 0) { path = l; break }
-            }
-            src.downloadingId = ""
-            if (code === 0 && path.length > 0) src.applied(path)
-            else src.failed("download failed")
-        }
-    }
-
     function download(item) {
         if (!downloadVerb || !item || downloadingId.length > 0) return
-        _dlBuf = ""
         _nativeDlBuf = ""
         downloadingId = "" + item.id
         if (downloadVerb === "extras-download") {
@@ -341,9 +304,7 @@ QtObject {
             _nativeDlProc.running = true
             return
         }
-        var args = [downloadVerb, ("" + item.id), ("" + (item.dl || item.video || ""))]
-        if (needsPost && item.moewalls_url) args.push("" + item.moewalls_url)
-        _dlProc.command = ["ryowalls"].concat(args)
-        _dlProc.running = true
+        downloadingId = ""
+        failed("unknown source")
     }
 }
