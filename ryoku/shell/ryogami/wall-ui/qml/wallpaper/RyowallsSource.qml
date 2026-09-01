@@ -21,9 +21,10 @@ QtObject {
     readonly property string _ua: "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
     readonly property string _ryostoreBase: "https://raw.githubusercontent.com/neur0map/ryostore/main"
     readonly property string _mbBase: "https://motionbgs.com"
+    readonly property string _mwBase: "https://moewalls.com"
     property string _nativeProvider: ""
     property string _pendingQuery: ""
-    property string _nativeDlPath: ""
+    property string _nativeDlBuf: ""
 
     property var results: []
     property bool loading: false
@@ -70,6 +71,15 @@ QtObject {
             var q2 = ("" + (query || "")).toLowerCase().replace(/ /g, "-")
             var mbPath = q2.length > 0 ? "/tag:" + q2 + "/" : "/"
             _nativeSearchProc.command = ["curl", "-fsSL", "-A", _ua, "-e", _mbBase + "/", _mbBase + mbPath]
+            _nativeSearchProc.running = true
+            return
+        }
+        if (searchVerb === "moewalls-search") {
+            _nativeProvider = "moewalls"
+            var mwUrl = (query && query.length > 0)
+                ? _mwBase + "/?s=" + encodeURIComponent(query)
+                : _mwBase + "/anime/"
+            _nativeSearchProc.command = ["curl", "-fsSL", "-A", _ua, "-e", _mwBase + "/", mwUrl]
             _nativeSearchProc.running = true
             return
         }
@@ -125,6 +135,30 @@ QtObject {
                         if (out.length >= 24) break
                     }
                 }
+                else if (src._nativeProvider === "moewalls") {
+                    var cards = src._buf.split("<article ")
+                    for (var ci = 0; ci < cards.length; ci++) {
+                        var card = cards[ci]
+                        if (card.indexOf("g1-frame") < 0) continue
+                        var msrc = card.match(new RegExp('src="(https://moewalls\\.com/wp-content/uploads/[0-9]{4}/[0-9]{2}/[^"]*-thumb-[0-9]+x[0-9]+\\.(?:jpe?g|png))"'))
+                        if (!msrc) continue
+                        var srcUrl = msrc[1]
+                        var mhref = card.match(new RegExp('class="g1-frame" href="(https://moewalls\\.com/[^"]*)"'))
+                        var mtitle = card.match(new RegExp('<a title="([^"]*)" class="g1-frame"'))
+                        var mwres = card.match(/resolutions-([0-9]+x[0-9]+)/)
+                        var rel = srcUrl.split("/uploads/")[1]
+                        var yy = rel.split("/")[0]
+                        var rp = rel.split("/")
+                        var mb2 = rp[rp.length - 1].split("-thumb-")[0]
+                        var webm = src._mwBase + "/wp-content/uploads/preview/" + yy + "/" + mb2 + "-preview.webm"
+                        var nm = mtitle ? mtitle[1].replace(/ Live Wallpaper$/, "") : mb2.replace(/-/g, " ")
+                        out.push({ id: mb2,
+                                   thumb: "https://wsrv.nl/?url=" + encodeURIComponent(srcUrl),
+                                   video: webm, dl: webm,
+                                   resolution: mwres ? mwres[1] : "",
+                                   name: nm, moewalls_url: (mhref ? mhref[1] : "") })
+                    }
+                }
             } catch (e) { src.error = "search failed"; src.results = []; return }
             src.error = out.length === 0 ? "no results" : ""
             src.results = out
@@ -132,10 +166,11 @@ QtObject {
     }
 
     property var _nativeDlProc: Process {
+        stdout: SplitParser { splitMarker: ""; onRead: function(data) { src._nativeDlBuf += data } }
         onExited: function(code) {
-            var dest = src._nativeDlPath
+            var p = src._nativeDlBuf.trim()
             src.downloadingId = ""
-            if (code === 0 && dest.length > 0) src.applied(dest)
+            if (code === 0 && p.length > 0) src.applied(p)
             else src.failed("download failed")
         }
     }
@@ -159,27 +194,46 @@ QtObject {
     function download(item) {
         if (!downloadVerb || !item || downloadingId.length > 0) return
         _dlBuf = ""
+        _nativeDlBuf = ""
         downloadingId = "" + item.id
         if (downloadVerb === "extras-download") {
             var url = "" + (item.dl || item.video || "")
             var ext = url.split(".").pop()
             if (!ext || ext.length > 5) ext = "mp4"
             var dir = Quickshell.env("HOME") + "/Pictures/livewalls"
-            _nativeDlPath = dir + "/ryoku-" + item.id + "." + ext
+            var xout = dir + "/ryoku-" + item.id + "." + ext
             _nativeDlProc.command = ["bash", "-lc",
                 "mkdir -p " + JSON.stringify(dir) + " && curl -fsSL -A " + JSON.stringify(_ua)
-                + " " + JSON.stringify(url) + " -o " + JSON.stringify(_nativeDlPath)]
+                + " " + JSON.stringify(url) + " -o " + JSON.stringify(xout)
+                + " && printf '%s' " + JSON.stringify(xout)]
             _nativeDlProc.running = true
             return
         }
         if (downloadVerb === "motionbgs-download") {
             var mUrl = "" + (item.dl || item.video || "")
             var mDir = Quickshell.env("HOME") + "/Pictures/livewalls"
-            _nativeDlPath = mDir + "/motionbgs-" + item.id + ".mp4"
+            var mOut = mDir + "/motionbgs-" + item.id + ".mp4"
             _nativeDlProc.command = ["bash", "-lc",
                 "mkdir -p " + JSON.stringify(mDir) + " && curl -fsSL -A " + JSON.stringify(_ua)
                 + " -e " + JSON.stringify(_mbBase + "/") + " " + JSON.stringify(mUrl)
-                + " -o " + JSON.stringify(_nativeDlPath)]
+                + " -o " + JSON.stringify(mOut) + " && printf '%s' " + JSON.stringify(mOut)]
+            _nativeDlProc.running = true
+            return
+        }
+        if (downloadVerb === "moewalls-download") {
+            var moeUrl = "" + (item.dl || item.video || "")
+            var post = "" + (item.moewalls_url || "")
+            var moeDir = Quickshell.env("HOME") + "/Pictures/livewalls"
+            var mp4 = moeDir + "/moewalls-" + item.id + ".mp4"
+            var wext = moeUrl.split(".").pop(); if (!wext || wext.length > 5) wext = "webm"
+            var wf = moeDir + "/moewalls-" + item.id + "." + wext
+            var sh = "mkdir -p " + JSON.stringify(moeDir) + "; "
+                + "ua=" + JSON.stringify(_ua) + "; post=" + JSON.stringify(post) + "; "
+                + "url=" + JSON.stringify(moeUrl) + "; mp4=" + JSON.stringify(mp4) + "; wf=" + JSON.stringify(wf) + "; "
+                + "tok=$(curl -fsSL -A \"$ua\" \"$post\" 2>/dev/null | grep -oE '<a[^>]*id=\"moe-download\"[^>]*>' | grep -oE 'data-url=\"[^\"]*\"' | sed -E 's/data-url=\"([^\"]*)\"/\\1/' | head -1); "
+                + "if [ -n \"$tok\" ] && curl -fsSL -A \"$ua\" -e \"$post\" \"https://go.moewalls.com/download.php?video=$tok\" -o \"$mp4\" 2>/dev/null; then printf '%s' \"$mp4\"; exit 0; fi; "
+                + "if curl -fsSL -A \"$ua\" " + JSON.stringify(moeUrl) + " -o \"$wf\" 2>/dev/null; then printf '%s' \"$wf\"; exit 0; fi; exit 1"
+            _nativeDlProc.command = ["bash", "-lc", sh]
             _nativeDlProc.running = true
             return
         }
