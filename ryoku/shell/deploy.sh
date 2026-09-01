@@ -153,9 +153,6 @@ for s in "$here/../hyprland/scripts"/ryoku-*; do
   [[ -f $s ]] || continue
   install -m755 "$s" "$bindir/${s##*/}"
 done
-# ryoku-summon lives with the ryowalls app, but the binds call it by bare name too.
-[[ -f "$here/../apps/ryowalls/bin/ryoku-summon" ]] &&
-  install -m755 "$here/../apps/ryowalls/bin/ryoku-summon" "$bindir/ryoku-summon"
 say "installed the hyprland leaf scripts to $bindir"
 
 # Build ryogami-live, the software-decode video-wallpaper daemon the shell drives

@@ -32,7 +32,7 @@ maps to a place under `~/.config` (except the small helper script noted below).
 These are full applications, not `~/.config` seeds. Three shapes live here:
 
 - a **Quickshell app** ships its `quickshell/` tree as `qs -c <name>`
-  (`ryowalls`, `ryovm`, `ryostore`);
+  (`ryovm`, `ryostore`);
 - a **wrapped app** brings no QML of its own and single-instances somebody
   else's binary (`ryotunes`, a Chromium app window);
 - a **compiled Qt app** builds from a `CMakeLists.txt` to `/usr/bin/<name>`.
@@ -42,8 +42,8 @@ A shell *surface* is a fourth thing and does not live here. `ryoshot` and
 `welcome` launch the same single-instance way but ship inside the shell at
 `ryoku/shell/quickshell/<name>/`, with no `.desktop` and no launcher entry.
 
-- `ryowalls/` Wallpaper browser: search wallhaven, preview the rice, set it.
-  Engine: the `ryowalls` script. Launcher only, no keybind.
+- Wallpaper browsing, grading, sources and the theme surface now live in the
+  shell's wallpaper picker (Super+W), not here; ryowalls was sunset.
 - `ryovm/` **Ryoport**, the machine hub: one console for local virtual machines,
   remote VPS, and SSH connections. Three plates behind a nav rail (Super+Shift+V,
   still `qs -c ryovm`): a **Dashboard** fleet overview, a **Machines** yard built
@@ -83,7 +83,7 @@ ryoku-summon <window-title> <launch command...>
 It moves a matching window to the active workspace and focuses it, and execs the
 launch command only when nothing matches. It matches the live title first and the
 initial title second, since an app that retitles itself would otherwise fall
-through to the launcher. It ships from `ryowalls/bin/` and lands on `PATH`, so
+through to the launcher. It ships from `hyprland/scripts/` and lands on `PATH`, so
 any app may call it.
 
 ## Adding one
@@ -111,7 +111,7 @@ Ryoku-owned: `ryoku materialize` converges it against the shipped tree and
 deletes whatever the repo does not ship, so an app dropped there by hand
 disappears on the next update. And a keybind belongs in
 `ryoku/hyprland/modules/binds.lua`, while a window that should float wants a rule
-in `window_rules.lua` (see `float-ryowalls`).
+in `window_rules.lua` (see `float-ryostore`).
 
 ## Install paths
 

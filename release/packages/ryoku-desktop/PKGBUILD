@@ -151,8 +151,8 @@ depends=(
   # live (video) wallpapers: the daemon grabs one frame with ffmpeg to derive the
   # wallpaper palette. official repo, so a hard depend reaches existing boxes.
   'ffmpeg'
-  # qt6-multimedia + qt6-declarative back the QML video surfaces: ryowalls' live
-  # previews, the shell's video-wallpaper preview, and the qylock lockscreen.
+  # qt6-multimedia + qt6-declarative back the QML video surfaces: the wallpaper
+  # picker's live previews, the shell's video-wallpaper preview, and qylock.
   # official repo, hard depends so they reach existing boxes on `ryoku update`.
   'qt6-multimedia'
   'qt6-declarative'
@@ -283,7 +283,7 @@ package() {
   install -Dm644 "$_repo/ryoku/shell/portals/hyprland-portals.conf" \
     "$cfg/xdg-desktop-portal/hyprland-portals.conf"
 
-  # First-party GUI apps: a Quickshell app (ryowalls, ryovm, ryostore) ships its
+  # First-party GUI apps: a Quickshell app (ryovm, ryostore) ships its
   # quickshell/ tree as qs -c <name>; a compiled app has a CMakeLists.txt and
   # builds to a /usr/bin/<name> binary (supported, none ship today). Either way
   # its bin/ helpers, .desktop and icon are installed. Dropping in an app dir
@@ -514,6 +514,8 @@ package() {
   # the desktop music widget's corner button: launch / minimise / restore.
   install -Dm755 "$_repo/ryoku/hyprland/scripts/ryoku-music-toggle" \
     "$pkgdir/usr/bin/ryoku-music-toggle"
+  # the single-instance window summoner the keybinds call by bare name (ryovm).
+  install -Dm755 "$_repo/ryoku/hyprland/scripts/ryoku-summon" "$pkgdir/usr/bin/ryoku-summon"
   for s in "$_repo"/system/hardware/*/ryoku-*; do
     [[ -f $s && -x $s ]] || continue
     install -Dm755 "$s" "$pkgdir/usr/bin/${s##*/}"

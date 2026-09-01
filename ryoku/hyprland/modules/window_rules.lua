@@ -65,14 +65,6 @@ hl.window_rule({
 })
 
 hl.window_rule({
-    name   = "float-ryowalls",
-    match  = { title = "^(ryowalls)$" },
-    float  = true,
-    size   = { 1180, 760 },
-    center = true,
-})
-
-hl.window_rule({
     name   = "float-ryostore",
     match  = { title = "^(Ryostore)$" },
     float  = true,
