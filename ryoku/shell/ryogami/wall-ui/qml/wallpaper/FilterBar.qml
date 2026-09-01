@@ -14,6 +14,7 @@ Item {
     property bool effectsOpen: false
     property bool browseOpen: false
     property bool themesOpen: false
+    property bool ricesOpen: false
     property bool cacheLoading: false
     property int cacheProgress: 0
     property int cacheTotal: 0
@@ -30,6 +31,7 @@ Item {
     signal effectsToggled()
     signal browseToggled()
     signal themesToggled()
+    signal ricesToggled()
     signal modeToggled(string mode)
 
     readonly property int _skew: 10 * Config.uiScale
@@ -590,6 +592,14 @@ Item {
             tooltip: "Themes"
             isActive: filterBar.themesOpen
             onClicked: filterBar.themesToggled()
+        }
+
+        FilterButton {
+            colors: filterBar.colors
+            icon: "\u{f0b84}"
+            tooltip: "Rices"
+            isActive: filterBar.ricesOpen
+            onClicked: filterBar.ricesToggled()
         }
 
         FilterButton {

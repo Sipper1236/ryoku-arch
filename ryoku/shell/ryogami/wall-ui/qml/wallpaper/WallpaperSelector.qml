@@ -224,7 +224,8 @@ Scope {
   property bool browseOpen: false
   property string browseSource: "wallhaven"
   property bool themesOpen: false
-  property bool anyBrowserOpen: browseOpen || themesOpen
+  property bool ricesOpen: false
+  property bool anyBrowserOpen: browseOpen || themesOpen || ricesOpen
   property bool isHexMode: Config.displayMode === "hex"
   property bool isGridMode: Config.displayMode === "wall"
   property bool isMosaicMode: Config.displayMode === "mosaic"
@@ -373,6 +374,7 @@ Scope {
         if (wallpaperSelector.anyBrowserOpen) {
           wallpaperSelector.browseOpen = false
           wallpaperSelector.themesOpen = false
+          wallpaperSelector.ricesOpen = false
         } else {
           wallpaperSelector.showing = false
         }
@@ -430,10 +432,12 @@ Scope {
       imageOptimizeFile: ImageOptimizeService.currentFile
       browseOpen: wallpaperSelector.browseOpen
       themesOpen: wallpaperSelector.themesOpen
+      ricesOpen: wallpaperSelector.ricesOpen
       onSettingsToggled: { wallpaperSelector.effectsOpen = false; wallpaperSelector.settingsOpen = !wallpaperSelector.settingsOpen; if (!wallpaperSelector.settingsOpen) wallpaperSelector._focusActiveList() }
       onEffectsToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = !wallpaperSelector.effectsOpen; if (!wallpaperSelector.effectsOpen) wallpaperSelector._focusActiveList() }
-      onBrowseToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.themesOpen = false; wallpaperSelector.browseOpen = !wallpaperSelector.browseOpen }
-      onThemesToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.browseOpen = false; wallpaperSelector.themesOpen = !wallpaperSelector.themesOpen }
+      onBrowseToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.themesOpen = false; wallpaperSelector.ricesOpen = false; wallpaperSelector.browseOpen = !wallpaperSelector.browseOpen }
+      onThemesToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.browseOpen = false; wallpaperSelector.ricesOpen = false; wallpaperSelector.themesOpen = !wallpaperSelector.themesOpen }
+      onRicesToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.browseOpen = false; wallpaperSelector.themesOpen = false; wallpaperSelector.ricesOpen = !wallpaperSelector.ricesOpen }
       onModeToggled: function(mode) {
         Config.saveKey("matugen.mode", mode)
         DaemonClient.retheme(Config.matugenScheme, mode, Config.matugenColorIndex)
@@ -591,6 +595,22 @@ Scope {
           colors: wallpaperSelector.colors
           browserVisible: true
           onEscapePressed: { wallpaperSelector.themesOpen = false; wallpaperSelector._focusActiveList() }
+        }
+      }
+    }
+
+    Loader {
+      id: ricesLoader
+      active: wallpaperSelector.ricesOpen
+      anchors.centerIn: parent
+      width: Math.min(cardContainer.width - 20, Screen.width - 140 * Config.uiScale)
+      z: 6
+      sourceComponent: Component {
+        RicesSurface {
+          width: parent ? parent.width : 0
+          colors: wallpaperSelector.colors
+          browserVisible: true
+          onEscapePressed: { wallpaperSelector.ricesOpen = false; wallpaperSelector._focusActiveList() }
         }
       }
     }
