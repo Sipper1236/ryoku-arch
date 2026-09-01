@@ -32,6 +32,14 @@ Item {
     swService.search(1)
   }
 
+  // pagination contract consumed by BrowseSurface's shared top bar
+  readonly property bool pageActive: browser.swService && (browser.swService.results.length > 0 || browser.swService.currentPage > 1)
+  readonly property int pageNum: browser.swService ? browser.swService.currentPage : 1
+  readonly property bool pageCanPrev: browser.swService && browser.swService.currentPage > 1 && !browser.swService.loading
+  readonly property bool pageCanNext: browser.swService && browser.swService.hasMore && !browser.swService.loading
+  function pagePrev() { if (pageCanPrev) { browser.swService.prevPage(); resultsGrid.positionViewAtBeginning() } }
+  function pageNext() { if (pageCanNext) { browser.swService.nextPage(); resultsGrid.positionViewAtBeginning() } }
+
   MouseArea { anchors.fill: parent }
 
   property Component filterBar: Component {
@@ -337,7 +345,7 @@ Item {
     anchors.top: contentCol.bottom; anchors.topMargin: 10
     anchors.horizontalCenter: parent.horizontalCenter
     anchors.bottom: parent.bottom
-    anchors.bottomMargin: (browser.swService && (browser.swService.results.length > 0 || browser.swService.currentPage > 1)) ? 46 * Config.uiScale : 12
+    anchors.bottomMargin: 12
     width: browser._gridTotalW
     clip: true
     cellWidth: browser._gridCellW
@@ -694,45 +702,6 @@ Item {
     }
   }
 
-  // ---- page navigation ----
-  Row {
-    id: pageBar
-    z: 15
-    visible: browser.swService && (browser.swService.results.length > 0 || browser.swService.currentPage > 1)
-    anchors.horizontalCenter: parent.horizontalCenter
-    anchors.bottom: parent.bottom
-    anchors.bottomMargin: 12
-    spacing: 8
-
-    readonly property bool _canPrev: browser.swService && browser.swService.currentPage > 1 && !browser.swService.loading
-    readonly property bool _canNext: browser.swService && browser.swService.hasMore && !browser.swService.loading
-
-    FilterButton {
-      colors: browser.colors
-      label: "\u2039"
-      register: false; skew: 8
-      height: 24 * Config.uiScale
-      activeOpacity: pageBar._canPrev ? 1 : 0.3
-      tooltip: "Previous page"
-      onClicked: { if (pageBar._canPrev) { browser.swService.prevPage(); resultsGrid.positionViewAtBeginning() } }
-    }
-    Text {
-      anchors.verticalCenter: parent.verticalCenter
-      text: "PAGE " + (browser.swService ? browser.swService.currentPage : 1)
-      font.family: Style.fontFamily; font.pixelSize: 10 * Config.uiScale
-      font.weight: Font.Medium; font.letterSpacing: 1.2
-      color: browser.colors ? Qt.rgba(browser.colors.surfaceText.r, browser.colors.surfaceText.g, browser.colors.surfaceText.b, 0.7) : "#c2c7cf"
-    }
-    FilterButton {
-      colors: browser.colors
-      label: "\u203a"
-      register: false; skew: 8
-      height: 24 * Config.uiScale
-      activeOpacity: pageBar._canNext ? 1 : 0.3
-      tooltip: "Next page"
-      onClicked: { if (pageBar._canNext) { browser.swService.nextPage(); resultsGrid.positionViewAtBeginning() } }
-    }
-  }
 
   Item {
     anchors.fill: resultsGrid

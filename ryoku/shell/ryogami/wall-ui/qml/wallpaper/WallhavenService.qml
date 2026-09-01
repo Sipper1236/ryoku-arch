@@ -145,6 +145,7 @@ QtObject {
         s[id] = "done"
         downloadStatus = s
         downloadFinished(id, _activeDownloads[id] ? _activeDownloads[id].dest : "")
+        scanLocalFiles()
       } else {
         s[id] = "error"
         downloadStatus = s

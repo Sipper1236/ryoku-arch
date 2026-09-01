@@ -28,6 +28,14 @@ Item {
     function runSearch(q) { svc.search(("" + q).trim(), 1) }
     property Component filterBar: null
 
+    // pagination contract consumed by BrowseSurface's shared top bar
+    readonly property bool pageActive: svc.results.length > 0 || svc.currentPage > 1
+    readonly property int pageNum: svc.currentPage
+    readonly property bool pageCanPrev: svc.currentPage > 1 && !svc.loading
+    readonly property bool pageCanNext: svc.hasMore && !svc.loading
+    function pagePrev() { if (pageCanPrev) { svc.prevPage(); flick.contentY = 0 } }
+    function pageNext() { if (pageCanNext) { svc.nextPage(); flick.contentY = 0 } }
+
     readonly property color _ink:    colors ? colors.surfaceText : "#e0e2e8"
     readonly property color _inkDim: colors ? colors.surfaceVariantText : "#c2c7cf"
     readonly property color _line:   colors ? colors.outline : Qt.rgba(1, 1, 1, 0.22)
@@ -78,7 +86,7 @@ Item {
         anchors.topMargin: 12
         anchors.leftMargin: 16
         anchors.rightMargin: 16
-        anchors.bottomMargin: pageBar.visible ? 42 * Config.uiScale : 12
+        anchors.bottomMargin: 12
         contentHeight: grid.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -189,41 +197,5 @@ Item {
         }
     }
 
-    // ---- page navigation ----
-    Row {
-        id: pageBar
-        z: 5
-        visible: svc.results.length > 0 || svc.currentPage > 1
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 10
-        spacing: 8
-
-        FilterButton {
-            colors: browser.colors
-            label: "\u2039"
-            register: false; skew: 8
-            height: 24 * Config.uiScale
-            activeOpacity: (svc.currentPage > 1 && !svc.loading) ? 1 : 0.3
-            tooltip: "Previous page"
-            onClicked: { if (svc.currentPage > 1 && !svc.loading) { svc.prevPage(); flick.contentY = 0 } }
-        }
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: "PAGE " + svc.currentPage
-            font.family: Style.fontFamily; font.pixelSize: 10 * Config.uiScale
-            font.weight: Font.Medium; font.letterSpacing: 1.2
-            color: browser._inkDim
-        }
-        FilterButton {
-            colors: browser.colors
-            label: "\u203a"
-            register: false; skew: 8
-            height: 24 * Config.uiScale
-            activeOpacity: (svc.hasMore && !svc.loading) ? 1 : 0.3
-            tooltip: "Next page"
-            onClicked: { if (svc.hasMore && !svc.loading) { svc.nextPage(); flick.contentY = 0 } }
-        }
-    }
 
 }
