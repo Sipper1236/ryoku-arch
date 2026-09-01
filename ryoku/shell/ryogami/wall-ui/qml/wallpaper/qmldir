@@ -23,6 +23,8 @@ ShaderPicker 1.0 ShaderPicker.qml
 SliceDelegate 1.0 SliceDelegate.qml
 BrowseSurface 1.0 BrowseSurface.qml
 ThemesSurface 1.0 ThemesSurface.qml
+RyowallsSource 1.0 RyowallsSource.qml
+LibraryBrowser 1.0 LibraryBrowser.qml
 WallhavenBrowser 1.0 WallhavenBrowser.qml
 WallhavenDownloadProc 1.0 WallhavenDownloadProc.qml
 WallhavenService 1.0 WallhavenService.qml

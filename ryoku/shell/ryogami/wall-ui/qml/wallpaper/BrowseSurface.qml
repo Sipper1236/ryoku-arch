@@ -26,10 +26,22 @@ Item {
   }
   function _saveConfigKey(path, value) { Config.saveKey(path, value) }
 
+  // ryowalls-shaped remote sources (scrape-based, no keys): one generic
+  // LibraryBrowser serves them all, keyed off these descriptors.
+  readonly property var _libDefs: ({
+    "moewalls":  { label: "MOEWALLS",  kana: "萌", search: "moewalls-search",  download: "moewalls-download",  post: true },
+    "motionbgs": { label: "MOTIONBGS", kana: "動", search: "motionbgs-search", download: "motionbgs-download", post: false },
+    "ryostore":  { label: "RYOSTORE",  kana: "蔵", search: "extras-search",     download: "extras-download",     post: false }
+  })
+  readonly property bool _isLib: _libDefs[source] !== undefined
+
   readonly property var _sources: {
     var s = []
     if (Config.wallhavenEnabled) s.push({ key: "wallhaven", label: "WALLHAVEN" })
     if (Config.steamEnabled) s.push({ key: "steam", label: "STEAM" })
+    s.push({ key: "moewalls", label: "MOEWALLS" })
+    s.push({ key: "motionbgs", label: "MOTIONBGS" })
+    s.push({ key: "ryostore", label: "RYOSTORE" })
     return s
   }
   function _validSource(k) {
@@ -42,9 +54,11 @@ Item {
   opacity: browserVisible ? 1 : 0
   Behavior on opacity { NumberAnimation { duration: Style.animNormal; easing.type: Easing.OutCubic } }
 
-  readonly property real _browserHeight: source === "wallhaven"
-    ? (whLoader.item ? whLoader.item.implicitHeight : 0)
-    : (swLoader.item ? swLoader.item.implicitHeight : 0)
+  readonly property real _browserHeight: {
+    if (source === "wallhaven") return whLoader.item ? whLoader.item.implicitHeight : 0
+    if (source === "steam") return swLoader.item ? swLoader.item.implicitHeight : 0
+    return libLoader.item ? libLoader.item.implicitHeight : 0
+  }
 
   implicitHeight: Math.max(240, _browserHeight)
   height: browserVisible ? implicitHeight : 0
@@ -76,6 +90,25 @@ Item {
         colors: root.colors
         swService: root.swService
         browserVisible: true
+        onEscapePressed: root.escapePressed()
+      }
+    }
+  }
+
+  Loader {
+    id: libLoader
+    anchors.fill: parent
+    active: root._isLib
+    visible: active
+    sourceComponent: Component {
+      LibraryBrowser {
+        colors: root.colors
+        browserVisible: true
+        sourceName: root._libDefs[root.source] ? root._libDefs[root.source].label : ""
+        kana: root._libDefs[root.source] ? root._libDefs[root.source].kana : ""
+        searchVerb: root._libDefs[root.source] ? root._libDefs[root.source].search : ""
+        downloadVerb: root._libDefs[root.source] ? root._libDefs[root.source].download : ""
+        needsPost: root._libDefs[root.source] ? root._libDefs[root.source].post : false
         onEscapePressed: root.escapePressed()
       }
     }
@@ -180,12 +213,26 @@ Item {
         }
 
         Text {
-          text: (root.source === "steam" ? "STEAM" : "WALLHAVEN") + " · KEYS & SETUP"
+          text: {
+            var d = root._libDefs[root.source]
+            if (d) return d.label + " · NO KEYS NEEDED"
+            return (root.source === "steam" ? "STEAM" : "WALLHAVEN") + " · KEYS & SETUP"
+          }
           font.family: Style.fontFamily
           font.pixelSize: 11 * Config.uiScale
           font.weight: Font.Medium
           font.letterSpacing: 1.2
           color: root.colors ? root.colors.surfaceVariantText : "#c2c7cf"
+        }
+
+        Text {
+          visible: root._isLib
+          width: parent.width
+          wrapMode: Text.WordWrap
+          text: "Scraped source. Browse and click to apply; downloads land in your video library."
+          font.family: Style.fontFamily
+          font.pixelSize: 10 * Config.uiScale
+          color: root.colors ? Qt.rgba(root.colors.surfaceVariantText.r, root.colors.surfaceVariantText.g, root.colors.surfaceVariantText.b, 0.7) : "#8a8f97"
         }
 
         Loader {
