@@ -32,6 +32,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ryoku/cli/go.mod
+
+      - name: Check Doctor's SDDM configuration
+        shell: bash
+        working-directory: ryoku/cli
+        run: go test ./internal/doctor -run '^TestSDDMWaylandBodyForcesQtWayland$'
       - name: Check the installer and packages
         shell: bash
         run: RYOKU_PATH="$PWD" tests/sddm-wayland.sh

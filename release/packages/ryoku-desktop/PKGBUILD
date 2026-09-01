@@ -46,6 +46,7 @@ depends=(
   # Qt6 plugin cannot provide the native Wayland platform to that greeter.
   'qt6-wayland'
   'qt5-wayland'
+  'qt6-5compat'
   'qt6-svg'
   # WebP/AVIF/etc image decoders (libqwebp.so and friends). qt6-base ships only
   # PNG/JPEG/GIF, but RyoStore and the ryostore catalogue deliver product
