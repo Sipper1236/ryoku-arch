@@ -21,6 +21,7 @@ Column {
     property string _previewPath: ""
     property int _previewVer: 0
     property bool _committing: false
+    property bool _desktopView: false
 
     property int _upScale: 2
     property var _up: ({ running: false, phase: "", progress: 0, total: 0, verdict: null })
@@ -78,17 +79,44 @@ Column {
         clip: true
         Image {
             anchors.fill: parent; anchors.margins: 1
+            visible: !root._desktopView
             source: root._previewPath ? ("file://" + root._previewPath + "?v=" + root._previewVer)
                    : (root.sourcePath ? ("file://" + root.sourcePath) : "")
             fillMode: Image.PreserveAspectFit
             asynchronous: true; cache: false; smooth: true; mipmap: true
             sourceSize: Qt.size(1200, 700)
         }
+        MockDesktop {
+            anchors.fill: parent; anchors.margins: 1
+            visible: root._desktopView && !!root.sourcePath && !root._isVideo
+            pv: palPreview
+            wallpaper: root._previewPath ? root._previewPath : root.sourcePath
+        }
         Text {
             visible: !root.sourcePath
             anchors.centerIn: parent
             text: "no wallpaper focused"
             font.family: Style.fontFamily; font.pixelSize: 12; color: root._inkDim
+        }
+        Row {
+            visible: !!root.sourcePath && !root._isVideo
+            anchors.top: parent.top; anchors.right: parent.right; anchors.margins: 8
+            spacing: 6
+            FilterButton {
+                colors: root.colors; icon: "\u{f02e9}"; tooltip: "Wallpaper"
+                isActive: !root._desktopView
+                onClicked: root._desktopView = false
+            }
+            FilterButton {
+                colors: root.colors; icon: "\u{f0379}"; tooltip: "Desktop preview"
+                isActive: root._desktopView
+                onClicked: root._desktopView = true
+            }
+        }
+        PalettePreview {
+            id: palPreview
+            visible: false
+            source: root._isVideo ? "" : (root._previewPath ? root._previewPath : root.sourcePath)
         }
     }
 
