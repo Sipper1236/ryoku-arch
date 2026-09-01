@@ -14,6 +14,7 @@ QtObject {
     property string searchVerb: ""       // e.g. "moewalls-search"
     property string downloadVerb: ""     // e.g. "moewalls-download"
     property bool needsPost: false       // moewalls download wants the post url
+    property var extraArgs: []            // e.g. ["--repo", "owner/repo"] for library-list
 
     property var results: []
     property bool loading: false
@@ -49,6 +50,7 @@ QtObject {
         loading = true
         results = []
         var args = [searchVerb]
+        for (var e = 0; e < extraArgs.length; e++) args.push(extraArgs[e])
         if (query && query.length > 0) { args.push("--query"); args.push(query) }
         args.push("--json")
         _searchProc.command = ["ryowalls"].concat(args)

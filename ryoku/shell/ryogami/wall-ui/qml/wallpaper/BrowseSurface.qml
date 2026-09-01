@@ -31,7 +31,8 @@ Item {
   readonly property var _libDefs: ({
     "moewalls":  { label: "MOEWALLS",  kana: "萌", search: "moewalls-search",  download: "moewalls-download",  post: true },
     "motionbgs": { label: "MOTIONBGS", kana: "動", search: "motionbgs-search", download: "motionbgs-download", post: false },
-    "ryostore":  { label: "RYOSTORE",  kana: "蔵", search: "extras-search",     download: "extras-download",     post: false }
+    "ryostore":  { label: "RYOSTORE",  kana: "蔵", search: "extras-search",     download: "extras-download",     post: false },
+    "repos":     { label: "REPOS",     kana: "庫", search: "library-list",      download: "library-download",    post: false }
   })
   readonly property bool _isLib: _libDefs[source] !== undefined
 
@@ -42,13 +43,34 @@ Item {
     s.push({ key: "moewalls", label: "MOEWALLS" })
     s.push({ key: "motionbgs", label: "MOTIONBGS" })
     s.push({ key: "ryostore", label: "RYOSTORE" })
+    s.push({ key: "repos", label: "REPOS" })
     return s
   }
   function _validSource(k) {
     for (var i = 0; i < _sources.length; i++) if (_sources[i].key === k) return true
     return false
   }
-  Component.onCompleted: if (_sources.length > 0 && !_validSource(source)) source = _sources[0].key
+  property var repos: []
+  property string activeRepo: ""
+  function _loadRepos() {
+    var r = (Config._data.sources && Config._data.sources.repos) || []
+    repos = r.slice()
+    if (activeRepo === "" && repos.length > 0) activeRepo = repos[0]
+  }
+  function _addRepo(raw) {
+    var v = ("" + raw).trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/+$/, "")
+    if (!v || v.indexOf("/") < 0) return
+    if (repos.indexOf(v) < 0) { var n = repos.slice(); n.push(v); repos = n; Config.saveKey("sources.repos", n) }
+    activeRepo = v
+  }
+  function _removeRepo(v) {
+    var n = repos.filter(function(x) { return x !== v }); repos = n; Config.saveKey("sources.repos", n)
+    if (activeRepo === v) activeRepo = n.length > 0 ? n[0] : ""
+  }
+  Component.onCompleted: {
+    _loadRepos()
+    if (_sources.length > 0 && !_validSource(source)) source = _sources[0].key
+  }
 
   visible: browserVisible
   opacity: browserVisible ? 1 : 0
@@ -109,6 +131,9 @@ Item {
         searchVerb: root._libDefs[root.source] ? root._libDefs[root.source].search : ""
         downloadVerb: root._libDefs[root.source] ? root._libDefs[root.source].download : ""
         needsPost: root._libDefs[root.source] ? root._libDefs[root.source].post : false
+        extraArgs: root.source === "repos" && root.activeRepo !== "" ? ["--repo", root.activeRepo] : []
+        searchable: root.source !== "repos" || root.activeRepo !== ""
+        idleHint: "Add a GitHub repo in the Sources drawer (owner/repo)."
         onEscapePressed: root.escapePressed()
       }
     }
@@ -256,6 +281,79 @@ Item {
             item.colors = Qt.binding(function() { return root.colors })
             item.saveField = function(k, v) { root._saveField(k, v) }
             item.saveConfigKey = function(k, v) { root._saveConfigKey(k, v) }
+          }
+        }
+
+        // user GitHub repos: add / select / remove
+        Column {
+          visible: root.source === "repos"
+          width: parent.width
+          spacing: 8
+
+          Flow {
+            width: parent.width
+            spacing: 6
+            visible: root.repos.length > 0
+            Repeater {
+              model: root.repos
+              Row {
+                spacing: 2
+                FilterButton {
+                  colors: root.colors
+                  label: modelData
+                  register: false
+                  skew: 8
+                  height: 26 * Config.uiScale
+                  isActive: root.activeRepo === modelData
+                  onClicked: root.activeRepo = modelData
+                }
+                FilterButton {
+                  colors: root.colors
+                  label: "\u00d7"
+                  register: false
+                  skew: 8
+                  height: 26 * Config.uiScale
+                  onClicked: root._removeRepo(modelData)
+                }
+              }
+            }
+          }
+
+          Row {
+            width: parent.width
+            spacing: 6
+            Rectangle {
+              width: parent.width - addBtn.width - parent.spacing
+              height: 28 * Config.uiScale
+              color: root.colors ? Qt.rgba(root.colors.surface.r, root.colors.surface.g, root.colors.surface.b, 0.8) : Qt.rgba(0.15, 0.17, 0.22, 0.8)
+              border.width: repoInput.activeFocus ? 2 : 1
+              border.color: repoInput.activeFocus ? (root.colors ? root.colors.primary : Style.fallbackAccent) : (root.colors ? Qt.rgba(root.colors.surfaceText.r, root.colors.surfaceText.g, root.colors.surfaceText.b, 0.2) : Qt.rgba(1, 1, 1, 0.16))
+              Text {
+                visible: repoInput.text.length === 0
+                anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter
+                text: "owner/repo"
+                font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
+                color: root.colors ? Qt.rgba(root.colors.surfaceVariantText.r, root.colors.surfaceVariantText.g, root.colors.surfaceVariantText.b, 0.7) : "#8a8f97"
+              }
+              TextInput {
+                id: repoInput
+                anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10
+                verticalAlignment: TextInput.AlignVCenter
+                font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
+                color: root.colors ? root.colors.surfaceText : "#e0e2e8"
+                clip: true; selectByMouse: true
+                onAccepted: { root._addRepo(text); text = "" }
+              }
+            }
+            FilterButton {
+              id: addBtn
+              colors: root.colors
+              label: "ADD"
+              register: false
+              skew: 8
+              height: 28 * Config.uiScale
+              onClicked: { root._addRepo(repoInput.text); repoInput.text = "" }
+            }
           }
         }
       }

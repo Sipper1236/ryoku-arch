@@ -19,6 +19,9 @@ Item {
     property string searchVerb: ""
     property string downloadVerb: ""
     property bool needsPost: false
+    property var extraArgs: []
+    property bool searchable: true
+    property string idleHint: ""
 
     signal escapePressed()
 
@@ -36,6 +39,7 @@ Item {
         searchVerb: browser.searchVerb
         downloadVerb: browser.downloadVerb
         needsPost: browser.needsPost
+        extraArgs: browser.extraArgs
         onApplied: function(path) {
             DaemonClient.applyVideo(path, [], [], [], null, null, function(res, err) {
                 if (!err) browser._applied = path
@@ -43,9 +47,16 @@ Item {
         }
     }
 
-    onBrowserVisibleChanged: if (browserVisible && svc.results.length === 0 && !svc.loading) svc.search("")
-    onSearchVerbChanged: if (browserVisible) svc.search("")
-    Component.onCompleted: if (browserVisible) svc.search("")
+    // Coalesce the reload triggers (visible / verb / repo / searchable all
+    // react to the same source switch) so one search runs after they settle,
+    // never with a half-updated repo arg.
+    Timer { id: reloadTimer; interval: 60; onTriggered: { if (browser.searchable) svc.search(""); else svc.results = [] } }
+    function _reload() { if (browserVisible) reloadTimer.restart(); else svc.results = [] }
+    onBrowserVisibleChanged: if (browserVisible) _reload()
+    onSearchVerbChanged: _reload()
+    onExtraArgsChanged: _reload()
+    onSearchableChanged: _reload()
+    Component.onCompleted: if (browserVisible) _reload()
 
     // ---- header: search field ----
     Row {
@@ -96,7 +107,7 @@ Item {
     Text {
         anchors.centerIn: parent
         visible: svc.loading || svc.results.length === 0
-        text: svc.loading ? "loading\u2026" : (svc.error ? svc.error : "nothing here")
+        text: !browser.searchable ? browser.idleHint : (svc.loading ? "loading\u2026" : (svc.error ? svc.error : "nothing here"))
         font.family: Style.fontFamily; font.pixelSize: 13 * Config.uiScale
         color: browser._inkDim
     }
