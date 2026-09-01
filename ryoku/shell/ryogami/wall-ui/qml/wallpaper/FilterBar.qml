@@ -12,8 +12,7 @@ Item {
     property var service
     property bool settingsOpen: false
     property bool effectsOpen: false
-    property bool wallhavenBrowserOpen: false
-    property bool steamWorkshopBrowserOpen: false
+    property bool browseOpen: false
     property bool cacheLoading: false
     property int cacheProgress: 0
     property int cacheTotal: 0
@@ -28,8 +27,7 @@ Item {
 
     signal settingsToggled()
     signal effectsToggled()
-    signal wallhavenToggled()
-    signal steamWorkshopToggled()
+    signal browseToggled()
     signal modeToggled(string mode)
 
     readonly property int _skew: 10 * Config.uiScale
@@ -576,21 +574,12 @@ Item {
         }
 
         FilterButton {
-            visible: Config.wallhavenEnabled
+            visible: Config.wallhavenEnabled || Config.steamEnabled
             colors: filterBar.colors
             icon: "\u{f01da}"
-            tooltip: "Browse wallhaven.cc"
-            isActive: filterBar.wallhavenBrowserOpen
-            onClicked: filterBar.wallhavenToggled()
-        }
-
-        FilterButton {
-            visible: Config.steamEnabled
-            colors: filterBar.colors
-            icon: "󰓓"
-            tooltip: "Browse Steam Workshop"
-            isActive: filterBar.steamWorkshopBrowserOpen
-            onClicked: filterBar.steamWorkshopToggled()
+            tooltip: "Browse online sources"
+            isActive: filterBar.browseOpen
+            onClicked: filterBar.browseToggled()
         }
 
         FilterButton {

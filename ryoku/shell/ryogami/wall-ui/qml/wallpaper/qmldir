@@ -21,6 +21,7 @@ EffectsPanel 1.0 EffectsPanel.qml
 BlurFramePreview 1.0 BlurFramePreview.qml
 ShaderPicker 1.0 ShaderPicker.qml
 SliceDelegate 1.0 SliceDelegate.qml
+BrowseSurface 1.0 BrowseSurface.qml
 WallhavenBrowser 1.0 WallhavenBrowser.qml
 WallhavenDownloadProc 1.0 WallhavenDownloadProc.qml
 WallhavenService 1.0 WallhavenService.qml

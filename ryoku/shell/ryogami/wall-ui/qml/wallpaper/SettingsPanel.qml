@@ -36,8 +36,7 @@ Item {
     var adv = ["general", "playlists", "paths", "performance", "postprocessing", "keybinds"]
     if (Config.matugenEnabled) adv.push("matugen")
     if (Config.isNiri) adv.push("niri")
-    if (Config.wallhavenEnabled) adv.push("wallhaven")
-    if (Config.steamEnabled) { adv.push("steam"); adv.push("wallpaper-engine") }
+    if (Config.steamEnabled) adv.push("wallpaper-engine")
     return adv.indexOf(key) >= 0
   }
 
@@ -53,11 +52,7 @@ Item {
         settingsPanel.activeTab = "general"
     }
     function onSteamEnabledChanged() {
-      if (!Config.steamEnabled && settingsPanel.activeTab === "steam")
-        settingsPanel.activeTab = "general"
-    }
-    function onWallhavenEnabledChanged() {
-      if (!Config.wallhavenEnabled && settingsPanel.activeTab === "wallhaven")
+      if (!Config.steamEnabled && settingsPanel.activeTab === "wallpaper-engine")
         settingsPanel.activeTab = "general"
     }
   }
@@ -229,8 +224,6 @@ Item {
         ]
         if (Config.matugenEnabled) tabs.push({ key: "matugen", label: "MATUGEN" })
         if (Config.isNiri) tabs.push({ key: "niri", label: "NIRI" })
-        if (Config.wallhavenEnabled) tabs.push({ key: "wallhaven", label: "WALLHAVEN" })
-        if (Config.steamEnabled) tabs.push({ key: "steam", label: "STEAM" })
         if (Config.steamEnabled) tabs.push({ key: "wallpaper-engine", label: "WALLPAPER ENGINE" })
         return tabs
       }
@@ -280,8 +273,6 @@ Item {
       if (settingsPanel.activeTab === "general") return generalContent.implicitHeight
       if (settingsPanel.activeTab === "playlists") return playlistsContent.implicitHeight
       if (settingsPanel.activeTab === "paths") return pathsContent.implicitHeight
-      if (settingsPanel.activeTab === "wallhaven") return wallhavenContent.implicitHeight
-      if (settingsPanel.activeTab === "steam") return steamContent.implicitHeight
       if (settingsPanel.activeTab === "wallpaper-engine") return wallpaperEngineContent.implicitHeight
       if (settingsPanel.activeTab === "performance") return performanceContent.implicitHeight
       if (settingsPanel.activeTab === "postprocessing") return Math.min(postprocessingContent.implicitHeight, 360)
@@ -399,34 +390,6 @@ Item {
       source: "settings/NiriSettings.qml"
       onLoaded: {
         item.colors = Qt.binding(function() { return settingsPanel.colors })
-        item.saveConfigKey = function(k, v) { settingsPanel._saveConfigKey(k, v) }
-      }
-    }
-
-    Loader {
-      id: wallhavenContent
-      anchors.left: parent.left
-      anchors.right: parent.right
-      active: settingsPanel.activeTab === "wallhaven"
-      visible: active
-      source: "settings/WallhavenSettings.qml"
-      onLoaded: {
-        item.colors = Qt.binding(function() { return settingsPanel.colors })
-        item.saveField = function(k, v) { settingsPanel._saveField(k, v) }
-        item.saveConfigKey = function(k, v) { settingsPanel._saveConfigKey(k, v) }
-      }
-    }
-
-    Loader {
-      id: steamContent
-      anchors.left: parent.left
-      anchors.right: parent.right
-      active: settingsPanel.activeTab === "steam"
-      visible: active
-      source: "settings/SteamSettings.qml"
-      onLoaded: {
-        item.colors = Qt.binding(function() { return settingsPanel.colors })
-        item.saveField = function(k, v) { settingsPanel._saveField(k, v) }
         item.saveConfigKey = function(k, v) { settingsPanel._saveConfigKey(k, v) }
       }
     }

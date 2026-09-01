@@ -221,9 +221,9 @@ Scope {
   property bool _filterBarManuallyShown: Config.filterBarAlwaysVisible
   property bool _filterBarHoverRevealed: false
   readonly property bool _filterBarShown: _filterBarManuallyShown || _filterBarHoverRevealed
-  property bool wallhavenBrowserOpen: false
-  property bool steamWorkshopBrowserOpen: false
-  property bool anyBrowserOpen: wallhavenBrowserOpen || steamWorkshopBrowserOpen
+  property bool browseOpen: false
+  property string browseSource: "wallhaven"
+  property bool anyBrowserOpen: browseOpen
   property bool isHexMode: Config.displayMode === "hex"
   property bool isGridMode: Config.displayMode === "wall"
   property bool isMosaicMode: Config.displayMode === "mosaic"
@@ -370,8 +370,7 @@ Scope {
       acceptedButtons: Qt.LeftButton | Qt.RightButton
       onClicked: {
         if (wallpaperSelector.anyBrowserOpen) {
-          wallpaperSelector.wallhavenBrowserOpen = false
-          wallpaperSelector.steamWorkshopBrowserOpen = false
+          wallpaperSelector.browseOpen = false
         } else {
           wallpaperSelector.showing = false
         }
@@ -427,12 +426,10 @@ Scope {
       imageOptimizeProgress: ImageOptimizeService.progress
       imageOptimizeTotal: ImageOptimizeService.total
       imageOptimizeFile: ImageOptimizeService.currentFile
-      wallhavenBrowserOpen: wallpaperSelector.wallhavenBrowserOpen
-      steamWorkshopBrowserOpen: wallpaperSelector.steamWorkshopBrowserOpen
+      browseOpen: wallpaperSelector.browseOpen
       onSettingsToggled: { wallpaperSelector.effectsOpen = false; wallpaperSelector.settingsOpen = !wallpaperSelector.settingsOpen; if (!wallpaperSelector.settingsOpen) wallpaperSelector._focusActiveList() }
       onEffectsToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = !wallpaperSelector.effectsOpen; if (!wallpaperSelector.effectsOpen) wallpaperSelector._focusActiveList() }
-      onWallhavenToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.steamWorkshopBrowserOpen = false; wallpaperSelector.wallhavenBrowserOpen = !wallpaperSelector.wallhavenBrowserOpen }
-      onSteamWorkshopToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.wallhavenBrowserOpen = false; wallpaperSelector.steamWorkshopBrowserOpen = !wallpaperSelector.steamWorkshopBrowserOpen }
+      onBrowseToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.browseOpen = !wallpaperSelector.browseOpen }
       onModeToggled: function(mode) {
         Config.saveKey("matugen.mode", mode)
         DaemonClient.retheme(Config.matugenScheme, mode, Config.matugenColorIndex)
@@ -559,35 +556,21 @@ Scope {
     }
 
     Loader {
-      id: whBrowserLoader
-      active: wallpaperSelector.wallhavenBrowserOpen
+      id: browseLoader
+      active: wallpaperSelector.browseOpen
       anchors.centerIn: parent
-      width: cardContainer.width - 20
+      width: Math.min(cardContainer.width - 20, Screen.width - 140 * Config.uiScale)
       z: 6
       sourceComponent: Component {
-        WallhavenBrowser {
+        BrowseSurface {
           width: parent ? parent.width : 0
           colors: wallpaperSelector.colors
           whService: wallpaperSelector._whService
-          browserVisible: true
-          onEscapePressed: { wallpaperSelector.wallhavenBrowserOpen = false; wallpaperSelector._focusActiveList() }
-        }
-      }
-    }
-
-    Loader {
-      id: swBrowserLoader
-      active: wallpaperSelector.steamWorkshopBrowserOpen
-      anchors.centerIn: parent
-      width: cardContainer.width - 20
-      z: 6
-      sourceComponent: Component {
-        SteamWorkshopBrowser {
-          width: parent ? parent.width : 0
-          colors: wallpaperSelector.colors
           swService: wallpaperSelector.swService
           browserVisible: true
-          onEscapePressed: { wallpaperSelector.steamWorkshopBrowserOpen = false; wallpaperSelector._focusActiveList() }
+          source: wallpaperSelector.browseSource
+          onSourceChanged: wallpaperSelector.browseSource = source
+          onEscapePressed: { wallpaperSelector.browseOpen = false; wallpaperSelector._focusActiveList() }
         }
       }
     }
