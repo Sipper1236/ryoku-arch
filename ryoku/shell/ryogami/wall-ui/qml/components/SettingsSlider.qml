@@ -15,6 +15,8 @@ Column {
     property var onCommit
     property var onChange
     property bool enabled: true
+    property bool resettable: false
+    property int defaultValue: 0
 
     readonly property color _ink:    colors ? colors.surfaceText : "#e0e2e8"
     readonly property color _inkDim: colors ? colors.surfaceVariantText : "#c2c7cf"
@@ -34,11 +36,34 @@ Column {
             font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale; font.weight: Font.Medium
             color: root._inkDim
         }
-        Text {
+        Row {
             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-            text: (root.value > 0 ? "+" : "") + root.value
-            font.family: Style.fontFamilyCode; font.pixelSize: 11 * Config.uiScale; font.weight: Font.Bold
-            color: root._ink
+            spacing: 6 * Config.uiScale
+            Text {
+                visible: root.resettable && root.enabled && root.value !== root.defaultValue
+                text: "\u{f0099}"
+                font.family: Style.fontFamilyNerdIcons; font.pixelSize: 12 * Config.uiScale
+                color: _resetMouse.containsMouse ? root._accent : root._inkDim
+                anchors.verticalCenter: parent.verticalCenter
+                MouseArea {
+                    id: _resetMouse
+                    anchors.fill: parent; anchors.margins: -5
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (root.value === root.defaultValue) return
+                        root.value = root.defaultValue
+                        if (root.onChange) root.onChange(root.value)
+                        if (root.onCommit) root.onCommit(root.value)
+                    }
+                }
+            }
+            Text {
+                text: (root.value > 0 ? "+" : "") + root.value
+                font.family: Style.fontFamilyCode; font.pixelSize: 11 * Config.uiScale; font.weight: Font.Bold
+                color: root._ink
+                anchors.verticalCenter: parent.verticalCenter
+            }
         }
     }
 

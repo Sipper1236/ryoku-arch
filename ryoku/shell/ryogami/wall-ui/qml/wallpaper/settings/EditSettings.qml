@@ -98,19 +98,26 @@ Column {
             text: "no wallpaper focused"
             font.family: Style.fontFamily; font.pixelSize: 12; color: root._inkDim
         }
-        Row {
+        Rectangle {
             visible: !!root.sourcePath && !root._isVideo
             anchors.top: parent.top; anchors.right: parent.right; anchors.margins: 8
-            spacing: 6
-            FilterButton {
-                colors: root.colors; icon: "\u{f02e9}"; tooltip: "Wallpaper"
-                isActive: !root._desktopView
-                onClicked: root._desktopView = false
-            }
-            FilterButton {
-                colors: root.colors; icon: "\u{f0379}"; tooltip: "Desktop preview"
-                isActive: root._desktopView
-                onClicked: root._desktopView = true
+            width: toggleRow.width + 12; height: toggleRow.height + 8
+            radius: Style.radiusSmall
+            color: Qt.rgba(0, 0, 0, 0.45)
+            Row {
+                id: toggleRow
+                anchors.centerIn: parent
+                spacing: 6
+                FilterButton {
+                    colors: root.colors; icon: "\u{f02e9}"; tooltip: "Wallpaper"
+                    isActive: !root._desktopView
+                    onClicked: root._desktopView = false
+                }
+                FilterButton {
+                    colors: root.colors; icon: "\u{f0379}"; tooltip: "Desktop preview"
+                    isActive: root._desktopView
+                    onClicked: root._desktopView = true
+                }
             }
         }
         PalettePreview {
@@ -129,10 +136,10 @@ Column {
             width: parent.width
             spacing: Style.spacingMedium
 
-            SettingsSlider { colors: root.colors; label: "Brightness"; value: root._brightness; min: -50; max: 50; onChange: function(v){ root._brightness = v; root._schedulePreview() } }
-            SettingsSlider { colors: root.colors; label: "Contrast";   value: root._contrast;   min: -50; max: 50; onChange: function(v){ root._contrast = v; root._schedulePreview() } }
-            SettingsSlider { colors: root.colors; label: "Saturation"; value: root._saturation; min: -100; max: 100; onChange: function(v){ root._saturation = v; root._schedulePreview() } }
-            SettingsSlider { colors: root.colors; label: "Warmth";     value: root._warmth;     min: -100; max: 100; onChange: function(v){ root._warmth = v; root._schedulePreview() } }
+            SettingsSlider { colors: root.colors; label: "Brightness"; value: root._brightness; min: -50; max: 50; resettable: true; onChange: function(v){ root._brightness = v; root._schedulePreview() } }
+            SettingsSlider { colors: root.colors; label: "Contrast";   value: root._contrast;   min: -50; max: 50; resettable: true; onChange: function(v){ root._contrast = v; root._schedulePreview() } }
+            SettingsSlider { colors: root.colors; label: "Saturation"; value: root._saturation; min: -100; max: 100; resettable: true; onChange: function(v){ root._saturation = v; root._schedulePreview() } }
+            SettingsSlider { colors: root.colors; label: "Warmth";     value: root._warmth;     min: -100; max: 100; resettable: true; onChange: function(v){ root._warmth = v; root._schedulePreview() } }
 
             RowToggle { colors: root.colors; title: "Vignette"; description: "Darken the frame edges."; checked: root._vignette; onToggle: function(v){ root._vignette = v; root._schedulePreview() } }
 
