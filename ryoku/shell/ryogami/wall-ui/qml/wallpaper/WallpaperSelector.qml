@@ -48,7 +48,14 @@ Scope {
       return
     }
     if (item && item.kind === "rice") {
-      Quickshell.execDetached(["ryoku-hub", "rice", "apply", item.slug])
+      wallpaperSelector._workshopRice = {
+        slug: "" + item.slug, name: "" + (item.name || item.slug || ""),
+        author: "" + (item.author || ""), blurb: "" + (item.blurb || ""),
+        tags: "" + (item.tags || ""), createdWith: "" + (item.createdWith || ""),
+        compat: "" + (item.compat || ""), active: item.active === true,
+        live: item.live === true, preview: "" + (item.preview || "")
+      }
+      wallpaperSelector._workshopOpen = true
       return
     }
     if (forcePicker || Config.wallpaperPerMonitor) {
@@ -214,7 +221,15 @@ Scope {
           favourite: false,
           videoFile: "",
           path: p,
-          thumb: p
+          thumb: p,
+          author: "" + (r.author || ""),
+          blurb: "" + (r.blurb || ""),
+          tags: (r.tags && r.tags.length) ? r.tags.join(", ") : "",
+          createdWith: "" + (r.createdWith || ""),
+          compat: "" + (r.compat || ""),
+          active: r.active === true,
+          live: r.live === true,
+          preview: "" + (r.preview || "")
         })
       }
       if (wallpaperSelector.ricesOpen) _bindActiveViewModel()
@@ -354,6 +369,8 @@ Scope {
   property bool _capturePromptOpen: false
   property string _deleteConfirmSlug: ""
   property string _deleteConfirmName: ""
+  property bool _workshopOpen: false
+  property var _workshopRice: null
   property bool anyBrowserOpen: browseOpen
   property var _activeModel: themesOpen ? themeModel : (ricesOpen ? riceModel : (service ? service.filteredModel : null))
   property bool isHexMode: Config.displayMode === "hex"
@@ -2658,6 +2675,54 @@ Scope {
       Config.saveKey("matugen.mode", mode)
       Config.saveKey("matugen.colorIndex", colorIndex)
       DaemonClient.retheme(scheme, mode, colorIndex)
+    }
+  }
+
+  Loader {
+    id: riceWorkshopLoader
+    active: wallpaperSelector._workshopOpen
+    anchors.fill: parent
+    z: 1090
+    sourceComponent: Component {
+      RiceWorkshop {
+        colors: wallpaperSelector.colors
+        open: true
+        rice: wallpaperSelector._workshopRice
+        onApplyRequested: function(slug) {
+          Quickshell.execDetached(["ryoku-hub", "rice", "apply", slug])
+          wallpaperSelector._workshopOpen = false
+          wallpaperSelector.ricesOpen = false
+        }
+        onForkRequested: function(slug) {
+          Quickshell.execDetached(["ryoku-hub", "rice", "fork", slug])
+          _riceReload.restart()
+        }
+        onRestoreRequested: {
+          Quickshell.execDetached(["ryoku-hub", "rice", "restore"])
+          wallpaperSelector._workshopOpen = false
+          wallpaperSelector.ricesOpen = false
+        }
+        onDeleteRequested: function(slug, name) {
+          wallpaperSelector._deleteConfirmSlug = slug
+          wallpaperSelector._deleteConfirmName = name
+          wallpaperSelector._workshopOpen = false
+        }
+        onSaveLookRequested: {
+          wallpaperSelector._workshopOpen = false
+          wallpaperSelector._capturePromptOpen = true
+        }
+        onExportRequested: function(slug, folder) {
+          Quickshell.execDetached(["ryoku-hub", "rice", "export", slug, folder])
+        }
+        onImportRequested: function(folder) {
+          Quickshell.execDetached(["ryoku-hub", "rice", "import", folder])
+          _riceReload.restart()
+        }
+        onCloseRequested: {
+          wallpaperSelector._workshopOpen = false
+          wallpaperSelector._focusActiveList()
+        }
+      }
     }
   }
 
