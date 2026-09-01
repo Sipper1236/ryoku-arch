@@ -12,7 +12,7 @@ import (
 
 // Grader ports ryowalls' `adjust` verb (bin/ryowalls adjust_image) into the
 // daemon: an imagemagick colour grade (brightness / contrast / saturation /
-// warmth, optional vignette). The same magick pipeline drives the fast preview
+// warmth, optional vignette and negate). The same magick pipeline drives the fast preview
 // (long edge capped) and the full-resolution commit, so the specimen editor's
 // preview is exactly what commit writes -- the guarantee the ryowalls GradeSheet
 // relied on. Images only; ryowalls never graded video.
@@ -32,6 +32,7 @@ type gradeParams struct {
 	saturation int
 	warmth     int
 	vignette   bool
+	negate     bool
 	size       int
 }
 
@@ -58,6 +59,7 @@ func gradeParamsFrom(p map[string]interface{}) gradeParams {
 		saturation: int(intParam(p, "saturation", 0)),
 		warmth:     int(intParam(p, "warmth", 0)),
 		vignette:   boolParam(p, "vignette", false),
+		negate:     boolParam(p, "negate", false),
 	}
 }
 
@@ -134,6 +136,7 @@ func runGrade(input, output string, p gradeParams) error {
 //	  -modulate <100+brightness>,<100+saturation>,100
 //	  [-brightness-contrast 0x<contrast>]               (contrast != 0)
 //	  [-background black -vignette 0x18]                 (vignette)
+//	  [-negate]                                          (negate)
 //	  <out>
 //
 // warmth reweights the red/blue channels (warm = redder, cool = bluer) by the
@@ -156,6 +159,9 @@ func buildGradeArgs(input, output string, p gradeParams) []string {
 	}
 	if p.vignette {
 		args = append(args, "-background", "black", "-vignette", "0x18")
+	}
+	if p.negate {
+		args = append(args, "-negate")
 	}
 	return append(args, output)
 }

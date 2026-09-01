@@ -23,6 +23,7 @@ Column {
     property int _saturation: 0
     property int _warmth: 0
     property bool _vignette: false
+    property bool _negate: false
     property string _gradePath: ""
     property bool _committing: false
     property bool _desktopView: false
@@ -41,7 +42,7 @@ Column {
 
     property int _previewVer: 0
 
-    readonly property bool _dirty: _brightness !== 0 || _contrast !== 0 || _saturation !== 0 || _warmth !== 0 || _vignette
+    readonly property bool _dirty: _brightness !== 0 || _contrast !== 0 || _saturation !== 0 || _warmth !== 0 || _vignette || _negate
     readonly property color _ink:    colors ? colors.surfaceText : "#e0e2e8"
     readonly property color _inkDim: colors ? colors.surfaceVariantText : "#c2c7cf"
     readonly property color _line:   colors ? colors.outline : Qt.rgba(1, 1, 1, 0.22)
@@ -83,7 +84,7 @@ Column {
             root._scheduleFxPreview()
     }
     function _reset() {
-        _brightness = 0; _contrast = 0; _saturation = 0; _warmth = 0; _vignette = false; _gradePath = ""
+        _brightness = 0; _contrast = 0; _saturation = 0; _warmth = 0; _vignette = false; _negate = false; _gradePath = ""
         root._discardFx()
     }
 
@@ -93,7 +94,7 @@ Column {
     function _doPreview() {
         DaemonClient.call("grade.preview", {
             input: root.sourcePath, brightness: root._brightness, contrast: root._contrast,
-            saturation: root._saturation, warmth: root._warmth, vignette: root._vignette
+            saturation: root._saturation, warmth: root._warmth, vignette: root._vignette, negate: root._negate
         }, function(res, err) { if (!err && res && res.output) { root._gradePath = res.output; root._previewVer++ } })
     }
     function _apply() {
@@ -101,7 +102,7 @@ Column {
         root._committing = true
         DaemonClient.call("grade.commit", {
             input: root.sourcePath, brightness: root._brightness, contrast: root._contrast,
-            saturation: root._saturation, warmth: root._warmth, vignette: root._vignette
+            saturation: root._saturation, warmth: root._warmth, vignette: root._vignette, negate: root._negate
         }, function(res, err) { root._committing = false; if (!err) root._reset() })
     }
 
@@ -296,6 +297,7 @@ Column {
             SettingsSlider { colors: root.colors; label: "Warmth";     value: root._warmth;     min: -100; max: 100; resettable: true; onChange: function(v){ root._warmth = v; root._schedulePreview() } }
 
             RowToggle { colors: root.colors; title: "Vignette"; description: "Darken the frame edges."; checked: root._vignette; onToggle: function(v){ root._vignette = v; root._schedulePreview() } }
+            RowToggle { colors: root.colors; title: "Negate"; description: "Invert the colours. Baked in on Apply."; checked: root._negate; onToggle: function(v){ root._negate = v; root._schedulePreview() } }
 
             Item {
                 width: parent.width; height: 32

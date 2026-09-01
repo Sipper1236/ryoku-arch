@@ -62,6 +62,11 @@ func TestBuildGradeArgs(t *testing.T) {
 			want: []string{"in.png", "-modulate", "100,100,100", "-background", "black", "-vignette", "0x18", "out.png"},
 		},
 		{
+			name: "negate inverts after vignette",
+			p:    gradeParams{vignette: true, negate: true},
+			want: []string{"in.png", "-modulate", "100,100,100", "-background", "black", "-vignette", "0x18", "-negate", "out.png"},
+		},
+		{
 			name: "full grade keeps operator order",
 			p:    gradeParams{brightness: -4, contrast: 18, saturation: -8, warmth: 12, vignette: true, size: 1100},
 			want: []string{
@@ -93,9 +98,10 @@ func TestGradeParamsFrom(t *testing.T) {
 		"saturation": float64(30),
 		"warmth":     float64(-40),
 		"vignette":   true,
+		"negate":     true,
 	}
 	got := gradeParamsFrom(p)
-	want := gradeParams{brightness: 12, contrast: -7, saturation: 30, warmth: -40, vignette: true}
+	want := gradeParams{brightness: 12, contrast: -7, saturation: 30, warmth: -40, vignette: true, negate: true}
 	if got != want {
 		t.Fatalf("gradeParamsFrom: got %+v, want %+v", got, want)
 	}
