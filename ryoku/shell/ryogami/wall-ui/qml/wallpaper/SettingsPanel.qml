@@ -16,12 +16,35 @@ Item {
   property bool openDownward: false
   property string sourcePath: ""
 
+  // Basic (visual) vs Advanced (backend) tab set. Off by default so the picker
+  // opens on the four look tabs; the ADVANCED toggle in the strip reveals the
+  // behaviour/backend tabs so the surface never feels bloated.
+  property bool showAdvanced: false
+
   property string _lastConvertResult: ""
   property string _lastOptimizeResult: ""
 
   signal themeChanged(string scheme, string mode, var colorIndex)
 
   function _s(v) { return v * Config.uiScale }
+
+  // Which tab keys are valid in the current mode. Keep in step with the strip
+  // Repeater below; used only to clamp activeTab when the mode flips.
+  function _validTab(key) {
+    if (!showAdvanced)
+      return ["selector", "paper", "edit", "theme"].indexOf(key) >= 0
+    var adv = ["general", "playlists", "paths", "performance", "postprocessing", "keybinds"]
+    if (Config.matugenEnabled) adv.push("matugen")
+    if (Config.isNiri) adv.push("niri")
+    if (Config.wallhavenEnabled) adv.push("wallhaven")
+    if (Config.steamEnabled) { adv.push("steam"); adv.push("wallpaper-engine") }
+    return adv.indexOf(key) >= 0
+  }
+
+  onShowAdvancedChanged: {
+    if (!_validTab(activeTab))
+      activeTab = showAdvanced ? "general" : "selector"
+  }
 
   Connections {
     target: Config
@@ -189,23 +212,26 @@ Item {
 
     Repeater {
       model: {
+        if (!settingsPanel.showAdvanced)
+          return [
+            { key: "selector", label: "SELECTOR" },
+            { key: "paper",    label: "PAPER" },
+            { key: "edit",     label: "EDIT" },
+            { key: "theme",    label: "THEME" }
+          ]
         var tabs = [
-          { key: "selector",  label: "SELECTOR" },
-          { key: "edit",      label: "EDIT" },
-          { key: "paper",     label: "PAPER" },
-          { key: "general",   label: "GENERAL" },
-          { key: "playlists", label: "PLAYLISTS" },
-          { key: "paths",     label: "PATHS" },
+          { key: "general",     label: "GENERAL" },
+          { key: "playlists",   label: "PLAYLISTS" },
+          { key: "paths",       label: "PATHS" },
           { key: "performance", label: "PERFORMANCE" },
           { key: "postprocessing", label: "EXTERNAL" },
-          { key: "keybinds",  label: "KEYBINDS" },
-          { key: "theme",     label: "THEME" }
+          { key: "keybinds",    label: "KEYBINDS" }
         ]
+        if (Config.matugenEnabled) tabs.push({ key: "matugen", label: "MATUGEN" })
+        if (Config.isNiri) tabs.push({ key: "niri", label: "NIRI" })
         if (Config.wallhavenEnabled) tabs.push({ key: "wallhaven", label: "WALLHAVEN" })
         if (Config.steamEnabled) tabs.push({ key: "steam", label: "STEAM" })
         if (Config.steamEnabled) tabs.push({ key: "wallpaper-engine", label: "WALLPAPER ENGINE" })
-        if (Config.matugenEnabled) tabs.push({ key: "matugen", label: "MATUGEN" })
-        if (Config.isNiri) tabs.push({ key: "niri", label: "NIRI" })
         return tabs
       }
 
@@ -217,6 +243,26 @@ Item {
         isActive: settingsPanel.activeTab === modelData.key
         onClicked: settingsPanel.activeTab = modelData.key
       }
+    }
+
+    // divider before the mode toggle so it reads as a control, not a tab
+    Rectangle {
+      width: 1; height: 18
+      anchors.verticalCenter: parent.verticalCenter
+      color: settingsPanel.colors ? Qt.rgba(settingsPanel.colors.surfaceText.r, settingsPanel.colors.surfaceText.g, settingsPanel.colors.surfaceText.b, 0.22) : Qt.rgba(1, 1, 1, 0.18)
+    }
+
+    FilterButton {
+      colors: settingsPanel.colors
+      label: "ADVANCED"
+      register: false
+      skew: settingsPanel._tabSkew
+      height: 28
+      isActive: settingsPanel.showAdvanced
+      tooltip: settingsPanel.showAdvanced
+        ? "Showing backend settings. Click for the visual tabs."
+        : "Show advanced / backend settings."
+      onClicked: settingsPanel.showAdvanced = !settingsPanel.showAdvanced
     }
   }
 
