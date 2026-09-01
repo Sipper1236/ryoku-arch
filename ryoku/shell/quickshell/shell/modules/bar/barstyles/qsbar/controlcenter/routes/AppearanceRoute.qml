@@ -280,6 +280,7 @@ Item {
                         WidgetCard { width: widgetGrid.cellW; visible: page.root && page.root.modGpu !== undefined;            modProp: "modGpu";            gid: "G17"; flag: "compactGpu";            title: "GPU" }
                         WidgetCard { width: widgetGrid.cellW; visible: page.root && page.root.modCpuTemperature !== undefined; modProp: "modCpuTemperature"; gid: "G16"; flag: "compactCpuTemperature"; title: "CPU Temp" }
                         WidgetCard { width: widgetGrid.cellW; visible: page.root && page.root.modStorage !== undefined;        modProp: "modStorage";        gid: "G18"; flag: "compactStorage";        title: "Storage" }
+                        WidgetCard { width: widgetGrid.cellW; modProp: "modLayout"; gid: "G19"; flag: "compactLayout"; title: "Keyboard Layout" }
                     }
                 }
             }

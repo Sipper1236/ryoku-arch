@@ -1052,6 +1052,15 @@ PanelWindow {
         }
     }
     Component {
+        id: compLayout
+
+        LayoutWidget {
+            root: barSlot.root
+            readonly property real barContentLeftInset: 9
+            readonly property real barContentRightInset: 9
+        }
+    }
+    Component {
         id: compClaude
         ClaudeWidget {
             root: barSlot.root
@@ -1291,7 +1300,7 @@ PanelWindow {
         "G8": compCenter,
         "G9": compMpris, "G10": compQuick, "G11": compNetwork,
         "G12": compBattery, "G13": compBrightness, "G14": compPower, "G15": compBluetooth,
-        "G16": compCpuTemperature, "G17": compGpu, "G18": compStorage
+        "G16": compCpuTemperature, "G17": compGpu, "G18": compStorage, "G19": compLayout
     })
 
     // ───────────────────── reusable region row of slots ─────────────────────
@@ -2103,7 +2112,7 @@ PanelWindow {
             ListElement { gid: "G9"; extra: false }  ListElement { gid: "G10"; extra: false } ListElement { gid: "G11"; extra: false }
             ListElement { gid: "G14"; extra: false } ListElement { gid: "G12"; extra: false } ListElement { gid: "G13"; extra: false }
             ListElement { gid: "G16"; extra: false } ListElement { gid: "G18"; extra: true }  ListElement { gid: "G17"; extra: true }
-            ListElement { gid: "G15"; extra: true }  ListElement { gid: ""; extra: true }     ListElement { gid: ""; extra: true }
+            ListElement { gid: "G15"; extra: true }  ListElement { gid: "G19"; extra: true }     ListElement { gid: ""; extra: true }
             ListElement { gid: ""; extra: true }
         }
 

@@ -290,7 +290,8 @@ Item {
         { id: "bluetooth", label: qsTr("Bluetooth"), def: false, desc: qsTr("Bluetooth pill.") },
         { id: "gpu", label: qsTr("GPU"), def: true, desc: qsTr("GPU load.") },
         { id: "cpuTemperature", label: qsTr("CPU temperature"), def: true, desc: qsTr("CPU temperature.") },
-        { id: "storage", label: qsTr("Storage"), def: true, desc: qsTr("Root filesystem usage.") }
+        { id: "storage", label: qsTr("Storage"), def: true, desc: qsTr("Root filesystem usage.") },
+        { id: "layout", label: qsTr("Keyboard Layout"), def: true, desc: qsTr("Current keyboard layout.") }
     ]
     readonly property var qsbarColors: ["color01", "color02", "color03", "color04", "color05", "color06", "color07", "foreground"]
     property var qsbarPalette: ({})
