@@ -44,6 +44,7 @@ Scope {
   function _applyItem(item, forcePicker) {
     if (item && item.kind === "theme") {
       Quickshell.execDetached(["ryoku-shell", "theme", item.id])
+      wallpaperSelector.themesOpen = false
       return
     }
     if (item && item.kind === "rice") {
@@ -173,6 +174,7 @@ Scope {
         themeModel.append({
           id: "" + t.id,
           name: "" + (t.label || t.id),
+          provider: "" + (t.provider || ""),
           sw: (t.sw || []).join(","),
           dark: t.dark === true,
           kind: "theme",
@@ -358,6 +360,20 @@ Scope {
   property bool isGridMode: Config.displayMode === "wall"
   property bool isMosaicMode: Config.displayMode === "mosaic"
   property bool isSliceMode: !isHexMode && !isGridMode && !isMosaicMode
+
+  property var _focusedItem: {
+    var m = _activeModel
+    if (!m || m.count === 0) return null
+    var idx = -1
+    if (isHexMode && hexListView) idx = hexListView._selectedCol * hexListView._rows + hexListView._selectedRow
+    else if (isGridMode && thumbGridView) idx = thumbGridView.hoveredIdx
+    else if (isMosaicMode && mosaicView) idx = mosaicView.hoveredIdx
+    else idx = sliceListView.currentIndex
+    if (idx < 0 || idx >= m.count) return null
+    return m.get(idx)
+  }
+  readonly property string _focusedThemeName: (themesOpen && _focusedItem) ? ("" + (_focusedItem.name || "")) : ""
+  readonly property string _focusedThemeCreator: (themesOpen && _focusedItem && _focusedItem.provider) ? ("" + _focusedItem.provider) : ""
 
   onIsHexModeChanged: if (showing) _bindActiveViewModel()
   onIsGridModeChanged: if (showing) _bindActiveViewModel()
@@ -587,7 +603,6 @@ Scope {
         }
       }
     }
-
     
     MouseArea {
       id: filterHoverZone
@@ -1709,6 +1724,93 @@ Scope {
 
       onItemActivated: function(item) {
         if (item) wallpaperSelector._applyItem(item)
+      }
+    }
+
+    // Momentary-detour header: entering themes/rices is not a sticky mode, so a
+    // temporary banner announces the detour and one click walks it back to the
+    // wallpaper carousel. In themes mode the focused theme's name (and creator,
+    // when the scheme came from RyoStore) rides just beneath it. Anchored over
+    // the top of the carousel so it reads above the tiles.
+    Column {
+      id: detourHeader
+      anchors.top: cardContainer.top
+      anchors.topMargin: wallpaperSelector.topBarHeight + 12
+      anchors.horizontalCenter: parent.horizontalCenter
+      spacing: 10
+      z: 210
+      visible: (wallpaperSelector.themesOpen || wallpaperSelector.ricesOpen) && wallpaperSelector.cardVisible
+
+      readonly property color _ink: wallpaperSelector.colors ? wallpaperSelector.colors.surfaceText : "#e0e2e8"
+      readonly property color _inkDim: wallpaperSelector.colors ? wallpaperSelector.colors.surfaceVariantText : "#c2c7cf"
+      readonly property color _surface: wallpaperSelector.colors ? wallpaperSelector.colors.surface : Qt.rgba(0.06, 0.07, 0.09, 1)
+
+      Rectangle {
+        anchors.horizontalCenter: parent.horizontalCenter
+        height: 26 * Config.uiScale
+        width: _bannerRow.implicitWidth + 24 * Config.uiScale
+        radius: Style.radiusRound
+        color: Qt.rgba(detourHeader._surface.r, detourHeader._surface.g, detourHeader._surface.b, 0.92)
+        border.width: 1
+        border.color: Qt.rgba(detourHeader._ink.r, detourHeader._ink.g, detourHeader._ink.b, 0.2)
+
+        Row {
+          id: _bannerRow
+          anchors.centerIn: parent
+          spacing: 8
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "\u2190 WALLPAPERS"
+            font.family: Style.fontFamily; font.pixelSize: 10 * Config.uiScale
+            font.weight: Font.Medium; font.letterSpacing: 1.2
+            color: detourHeader._ink
+          }
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "\u00b7"
+            font.family: Style.fontFamily; font.pixelSize: 10 * Config.uiScale
+            color: detourHeader._inkDim
+          }
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: wallpaperSelector.themesOpen ? "THEMES" : "RICES"
+            font.family: Style.fontFamily; font.pixelSize: 10 * Config.uiScale
+            font.weight: Font.Medium; font.letterSpacing: 1.2
+            color: detourHeader._inkDim
+          }
+        }
+
+        MouseArea {
+          anchors.fill: parent
+          cursorShape: Qt.PointingHandCursor
+          onClicked: {
+            wallpaperSelector.themesOpen = false
+            wallpaperSelector.ricesOpen = false
+            wallpaperSelector._focusActiveList()
+          }
+        }
+      }
+
+      Column {
+        anchors.horizontalCenter: parent.horizontalCenter
+        spacing: 2
+        visible: wallpaperSelector.themesOpen && wallpaperSelector._focusedThemeName !== ""
+        Text {
+          anchors.horizontalCenter: parent.horizontalCenter
+          visible: wallpaperSelector._focusedThemeCreator !== ""
+          text: wallpaperSelector._focusedThemeCreator
+          font.family: Style.fontFamily; font.pixelSize: 9 * Config.uiScale
+          font.weight: Font.Medium; font.letterSpacing: 2
+          color: detourHeader._inkDim
+        }
+        Text {
+          anchors.horizontalCenter: parent.horizontalCenter
+          text: wallpaperSelector._focusedThemeName
+          font.family: Style.fontFamilyHeading; font.pixelSize: 22 * Config.uiScale
+          color: detourHeader._ink
+          style: Text.Outline
+          styleColor: Qt.rgba(0, 0, 0, 0.55)
+        }
       }
     }
 

@@ -406,6 +406,39 @@ Item {
         }
     }
 
+    Item {
+        id: themeNameStrip
+        visible: delegateItem.model.kind === "theme"
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: delegateItem._skAbs
+        anchors.rightMargin: delegateItem._skAbs
+        height: 30
+        z: 9
+
+        Rectangle {
+            anchors.fill: parent
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "transparent" }
+                GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.72) }
+            }
+        }
+
+        Text {
+            anchors.left: parent.left; anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.margins: 8
+            text: "" + (delegateItem.model.name || "")
+            elide: Text.ElideRight
+            horizontalAlignment: Text.AlignHCenter
+            font.family: Style.fontFamily
+            font.pixelSize: 11
+            font.weight: Font.Medium
+            color: "#ffffff"
+        }
+    }
+
     }
 
     Item {

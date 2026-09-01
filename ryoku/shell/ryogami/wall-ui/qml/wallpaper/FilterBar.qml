@@ -601,7 +601,6 @@ Item {
             colors: filterBar.colors
             icon: "\u{f0334}"
             tooltip: "Themes"
-            isActive: filterBar.themesOpen
             onClicked: filterBar.themesToggled()
         }
 
@@ -609,7 +608,6 @@ Item {
             colors: filterBar.colors
             icon: "\u{f0b84}"
             tooltip: "Rices"
-            isActive: filterBar.ricesOpen
             onClicked: filterBar.ricesToggled()
         }
 
