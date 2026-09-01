@@ -20,6 +20,7 @@ Scope {
   property alias _whService: whService
   property string mainMonitor: Config.mainMonitor
   property string _activeThemeName: ""
+  property var _depthWalls: ({})
   signal wallpaperChanged()
   signal uiReady()
 
@@ -34,6 +35,30 @@ Scope {
         wallpaperSelector._activeThemeName = (d.theme && d.theme.theme) || ""
       } catch (e) {}
     }
+  }
+
+  FileView {
+    id: depthFile
+    property string _stateHome: {
+      var x = Quickshell.env("XDG_STATE_HOME")
+      return (x && x.length > 0) ? x : (Quickshell.env("HOME") + "/.local/state")
+    }
+    path: _stateHome + "/ryoku/depth-walls.json"
+    watchChanges: true
+    onFileChanged: reload()
+    onLoaded: {
+      try {
+        var d = JSON.parse(depthFile.text())
+        wallpaperSelector._depthWalls = (d && d.walls) ? d.walls : ({})
+      } catch (e) {
+        wallpaperSelector._depthWalls = ({})
+      }
+    }
+    onLoadFailed: wallpaperSelector._depthWalls = ({})
+  }
+
+  function _isDepthWall(path) {
+    return !!(path && wallpaperSelector._depthWalls && wallpaperSelector._depthWalls[path] === true)
   }
 
   function _resetFilters() {
@@ -1058,6 +1083,7 @@ Scope {
         skewOffset: wallpaperSelector.skewOffset
         service: wallpaperSelector.selectorService
         suppressWidthAnim: wallpaperSelector.suppressWidthAnim
+        isDepth: wallpaperSelector._isDepthWall(model.path)
         applyRequest: function(item, forcePicker) { wallpaperSelector._applyItem(item, forcePicker) }
         deleteRequest: function(item) {
           wallpaperSelector._deleteConfirmSlug = "" + item.slug
@@ -1280,6 +1306,7 @@ Scope {
             itemData: wallpaperSelector._activeModel ? wallpaperSelector._activeModel.get(flatIdx) : null
             isSelected: hexCol.colIdx === hexListView._selectedCol && rowIdx === hexListView._selectedRow
             viewMoving: hexListView.contentMoving
+            isDepth: wallpaperSelector._isDepthWall(itemData ? itemData.path : "")
             applyRequest: function(item, forcePicker) { wallpaperSelector._applyItem(item, forcePicker) }
 
             x: 0
@@ -1736,6 +1763,7 @@ Scope {
       service: service
       model: wallpaperSelector._activeModel
       colors: wallpaperSelector.colors
+      depthCheck: function(p) { return wallpaperSelector._isDepthWall(p) }
       active: wallpaperSelector.cardVisible && !wallpaperSelector.anyBrowserOpen && wallpaperSelector.isMosaicMode
       visible: active
 

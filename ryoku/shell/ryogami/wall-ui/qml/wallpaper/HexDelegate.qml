@@ -17,6 +17,7 @@ Item {
     property bool isHovered: hexMouse.containsMouse
     property bool pulledOut: false
     property bool viewMoving: false
+    property bool isDepth: false
 
     property real parallaxX: 0
     property real parallaxY: 0
@@ -234,6 +235,7 @@ Item {
     }
 
     Rectangle {
+        id: typeBadge
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: hexItem._r * 0.18
@@ -252,6 +254,27 @@ Item {
             text: hexItem.itemData ? (hexItem.itemData.type === "static" ? "PIC" : ((hexItem.itemData.type === "video" || hexItem.itemData.videoFile) ? "VID" : "WE")) : ""
             font.family: Style.fontFamily; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 0.5
             color: hexItem.colors ? hexItem.colors.tertiary : "#8bceff"
+        }
+    }
+
+    Rectangle {
+        anchors.verticalCenter: typeBadge.verticalCenter
+        anchors.right: typeBadge.left
+        anchors.rightMargin: 4
+        width: height
+        height: 18
+        radius: 9
+        color: Qt.rgba(0, 0, 0, 0.75)
+        border.width: 1
+        border.color: hexItem.colors ? hexItem.colors.primary : Style.fallbackAccent
+        z: 5
+        visible: hexItem.isDepth && hexItem.itemData && hexItem.itemData.kind !== "theme" && hexItem.itemData.kind !== "rice"
+
+        Text {
+            anchors.centerIn: parent
+            text: "深"
+            font.family: Style.fontFamily; font.pixelSize: 9; font.weight: Font.Bold
+            color: hexItem.colors ? hexItem.colors.primary : Style.fallbackAccent
         }
     }
 

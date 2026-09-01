@@ -9,6 +9,7 @@ Item {
     property var service
     property var model: service ? service.filteredModel : null
     property var colors
+    property var depthCheck: null
     property bool active: false
     property int requestedCount: Config.mosaicCells
     property int relaxIterations: Config.mosaicRelaxation
@@ -453,6 +454,10 @@ Item {
                         if (n === 0) return null
                         var i = ((stripe.imageOffset + modelData.idx) % n + n) % n
                         return mosaicView.model.get(i)
+                    }
+                    isDepth: {
+                        var it = itemData
+                        return !!(mosaicView.depthCheck && it && it.path && mosaicView.depthCheck(it.path))
                     }
                     cellKey: stripe.stripeIdx * 100000 + modelData.idx
                     hovered: mosaicView.hoveredIdx === cellKey

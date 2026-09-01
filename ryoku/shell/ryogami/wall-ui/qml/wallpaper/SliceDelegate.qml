@@ -19,6 +19,7 @@ Item {
     property var service
     property var applyRequest: null
     property var deleteRequest: null
+    property bool isDepth: false
 
     property int selectedIdx: -1
     property bool isCurrent: ListView.isCurrentItem
@@ -403,6 +404,32 @@ Item {
             font.weight: Font.Bold
             font.letterSpacing: 0.5
             color: delegateItem.colors ? delegateItem.colors.tertiary : "#8bceff"
+        }
+    }
+
+    Rectangle {
+        id: depthBadge
+        anchors.bottom: typeBadge.bottom
+        anchors.right: typeBadge.onRight ? typeBadge.left : undefined
+        anchors.rightMargin: typeBadge.onRight ? 4 : 0
+        anchors.left: typeBadge.onRight ? undefined : typeBadge.right
+        anchors.leftMargin: typeBadge.onRight ? 0 : 4
+        width: height
+        height: typeBadge.height
+        radius: typeBadge.radius
+        z: 10
+        color: Qt.rgba(0, 0, 0, 0.75)
+        border.width: 1
+        border.color: delegateItem.colors ? delegateItem.colors.primary : Style.fallbackAccent
+        visible: delegateItem.isDepth && delegateItem.model.kind !== "theme" && delegateItem.model.kind !== "rice"
+
+        Text {
+            anchors.centerIn: parent
+            text: "深"
+            font.family: Style.fontFamily
+            font.pixelSize: 9
+            font.weight: Font.Bold
+            color: delegateItem.colors ? delegateItem.colors.primary : Style.fallbackAccent
         }
     }
 

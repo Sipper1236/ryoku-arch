@@ -11,6 +11,7 @@ Item {
     property var colors
     property var itemData
     property bool hovered: false
+    property bool isDepth: false
     property real cloudOpacity: 1.0
     property int cellKey: 0
     property real _imageAlpha: 0.0
@@ -187,6 +188,26 @@ Item {
                     return pts
                 }
             }
+        }
+    }
+
+    Rectangle {
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 8
+        width: height
+        height: 16
+        radius: 8
+        color: Qt.rgba(0, 0, 0, 0.75)
+        border.width: 1
+        border.color: cell.colors ? cell.colors.primary : Style.fallbackAccent
+        visible: cell.isDepth
+
+        Text {
+            anchors.centerIn: parent
+            text: "深"
+            font.family: Style.fontFamily; font.pixelSize: 9; font.weight: Font.Bold
+            color: cell.colors ? cell.colors.primary : Style.fallbackAccent
         }
     }
 
