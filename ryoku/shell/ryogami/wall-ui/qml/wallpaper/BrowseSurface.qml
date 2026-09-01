@@ -46,6 +46,10 @@ Item {
     s.push({ key: "repos", label: "REPOS" })
     return s
   }
+  readonly property string _activeLabel: {
+    for (var i = 0; i < _sources.length; i++) if (_sources[i].key === source) return _sources[i].label
+    return "SOURCES"
+  }
   function _validSource(k) {
     for (var i = 0; i < _sources.length; i++) if (_sources[i].key === k) return true
     return false
@@ -147,7 +151,7 @@ Item {
     anchors.leftMargin: 12
     anchors.topMargin: 12
     colors: root.colors
-    label: "SOURCES"
+    label: "源  " + root._activeLabel
     register: false
     skew: 8
     height: 26 * Config.uiScale
