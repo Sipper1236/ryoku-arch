@@ -554,6 +554,24 @@ Item {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     divider: true
+                    controlWidth: 58
+                    label: qsTr("Size")
+                    unit: "%"
+                    value: String(Math.round(page.qval("barScale", 1) * 100))
+                    desc: qsTr("Scale the QS Bar without changing display scaling.")
+                    source: "shell.json"
+                    Step {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        from: 100; to: 200; stepBy: 10
+                        value: page.qval("barScale", 1) * 100
+                        onModified: value => page.qset("barScale", value / 100)
+                    }
+                }
+                SettingRow {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    divider: true
                     controlWidth: 54
                     label: qsTr("Bar border")
                     desc: qsTr("Draw the outer border around the bar.")

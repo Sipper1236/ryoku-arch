@@ -69,5 +69,13 @@ var rows = [{
         "desc": "Show a now-playing chip at the end of the dock",
         "ctl": "sw",
         "src": "shell.json"
+    },{
+        "tab": "Bar Studio",
+        "group": "QS BAR",
+        "key": "barScale",
+        "label": "Size",
+        "desc": "Scale the QS Bar without changing display scaling",
+        "ctl": "step",
+        "src": "shell.json"
     }
 ];

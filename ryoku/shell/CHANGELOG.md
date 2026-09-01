@@ -29,6 +29,12 @@
   actions/`).
 
 ### Added
+- **QS Bar size is independently adjustable.** A 100–200% Size control in
+  Bar Studio and Shell Studio scales the bar's height live without changing
+  monitor display scaling (`quickshell/shell/modules/bar/barstyles/qsbar/
+  {Theme.qml,BarSlot.qml,controlcenter/routes/BarsRoute.qml}`,
+  `hub/quickshell/pages/BarStudioPage.qml`).
+
 - **The wallpaper's subject can be cut out and drawn in front of the desktop
   widgets, composed from the Super+Esc Desktop route.** A DEPTH card turns the
   effect on, picks the model, and enters a COMPOSE mode where the clock is

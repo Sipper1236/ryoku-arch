@@ -534,6 +534,10 @@ function shows(id) { return !Config.qsbar || Config.qsbar[id] !== false; }
 W.Media { visible: win.shows("media") && Media.present }
 ```
 
+QS Bar's `barScale` setting is a 1.0–2.0 multiplier for its height. Bar Studio
+and Shell Studio expose it as **Size** (100–200%), so a high-DPI output can use a
+larger bar without changing its display scale.
+
 Where that key is edited is the style's call. The built-in Sumi bar is edited from
 **Bar Studio** in Ryoku Settings (`hub/quickshell/pages/BarStudioPage.qml`), which
 snapshots the keys and applies them live. A folder style usually ships its own

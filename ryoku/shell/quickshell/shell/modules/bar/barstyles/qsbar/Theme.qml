@@ -488,7 +488,7 @@ Item {
     // screen-facing edge and a shadow cast away from that edge. Keeping these
     // separate from the pill recipe lets widgets and panels retain their
     // established hierarchy.
-    readonly property int v2BarHeight: 33
+    readonly property int v2BarHeight: Math.round(33 * barScale)
     readonly property int v2NotchFrameThickness: 6
     readonly property int v2NotchFrameRadius: 14
     // Horizontal rhythm for the bar. Closely related icon buttons use the
@@ -2203,6 +2203,13 @@ Item {
     // fit     = centered content-width capsule
     // dock    = centered content-width surface attached to the screen edge
     // notch   = attached content-width surface with desktop-facing side wings
+    // Scale the bar itself without changing the display's UI scale.
+    property real barScale: 1
+    function clampBarScale(value) {
+        var n = Number(value)
+        return isFinite(n) ? Math.round(Math.max(1, Math.min(2, n)) * 10) / 10 : 1
+    }
+
     property string barShellStyle: "full"
     property bool barBorderEnabled: true
     // Outer bar-shell corner radius in px, applied to the fitted shell forms.
@@ -2539,6 +2546,7 @@ Item {
     onClock12hChanged:        if (_widgetsLoaded) saveWidgets()
     onWorkspaceStyleChanged:   if (_widgetsLoaded) saveWidgets()
     onBarPositionChanged:      if (_widgetsLoaded) saveWidgets()
+    onBarScaleChanged:         if (_widgetsLoaded) saveWidgets()
     onBarShellStyleChanged:    if (_widgetsLoaded) saveWidgets()
     onBarBorderEnabledChanged: if (_widgetsLoaded) saveWidgets()
     onPanelTooltipBorderEnabledChanged: if (_widgetsLoaded) saveWidgets()
@@ -2829,6 +2837,7 @@ Item {
         q.audioBoost = audioBoost
         q.barTemperatureSource = barTemperatureSource
         q.barShellStyle = barShellStyle
+        q.barScale = barScale
         q.barBorderEnabled = barBorderEnabled
         q.panelTooltipBorderEnabled = panelTooltipBorderEnabled
         q.barCornerRadius = barCornerRadius
@@ -2890,6 +2899,7 @@ Item {
         if (q.audioBoost !== undefined) audioBoost = q.audioBoost === true
         if (q.barTemperatureSource !== undefined && barTemperatureSourceValid(q.barTemperatureSource)) barTemperatureSource = q.barTemperatureSource
         if (q.barShellStyle !== undefined && barShellStyleValid(q.barShellStyle)) barShellStyle = q.barShellStyle
+        if (q.barScale !== undefined) barScale = clampBarScale(q.barScale)
         if (q.barBorderEnabled !== undefined) barBorderEnabled = q.barBorderEnabled
         if (q.panelTooltipBorderEnabled !== undefined) panelTooltipBorderEnabled = q.panelTooltipBorderEnabled
         if (q.barCornerRadius !== undefined) barCornerRadius = Math.max(0, Math.min(40, q.barCornerRadius))
