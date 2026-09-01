@@ -175,7 +175,7 @@ Item {
   // ---- sources & setup drawer ----
   Rectangle {
     id: drawer
-    width: 440 * Config.uiScale
+    width: 520 * Config.uiScale
     anchors.top: parent.top
     anchors.bottom: parent.bottom
     x: root.drawerOpen ? 0 : -width
@@ -190,7 +190,7 @@ Item {
 
     Flickable {
       anchors.fill: parent
-      anchors.margins: 14
+      anchors.margins: 22
       contentHeight: drawerCol.implicitHeight
       clip: true
       boundsBehavior: Flickable.StopAtBounds
@@ -198,30 +198,39 @@ Item {
       Column {
         id: drawerCol
         width: parent.width
-        spacing: 10
+        spacing: Style.spacingXLarge
 
-        Row {
-          spacing: 6
-          Text {
-            text: "SOURCES"
-            font.family: Style.fontFamily
-            font.pixelSize: 12 * Config.uiScale
-            font.weight: Font.Medium
-            font.letterSpacing: 1.4
-            color: root.colors ? root.colors.surfaceText : "#e0e2e8"
+        Column {
+          width: parent.width
+          spacing: Style.spacingTiny
+          Row {
+            spacing: Style.spacingMedium
+            Text {
+              text: "SOURCES"
+              font.family: Style.fontFamilyHeading
+              font.pixelSize: 20 * Config.uiScale
+              font.weight: Font.Medium
+              color: root.colors ? root.colors.surfaceText : "#e0e2e8"
+            }
+            Text {
+              text: "源"
+              font.family: Style.fontFamilyJp
+              font.pixelSize: 18 * Config.uiScale
+              color: root.colors ? Qt.rgba(root.colors.surfaceVariantText.r, root.colors.surfaceVariantText.g, root.colors.surfaceVariantText.b, 0.6) : "#8a8f97"
+              anchors.verticalCenter: parent.verticalCenter
+            }
           }
           Text {
-            text: "源"
+            text: "Pick where wallpapers come from."
             font.family: Style.fontFamily
-            font.pixelSize: 12 * Config.uiScale
-            color: root.colors ? Qt.rgba(root.colors.surfaceVariantText.r, root.colors.surfaceVariantText.g, root.colors.surfaceVariantText.b, 0.6) : "#8a8f97"
-            anchors.verticalCenter: parent.verticalCenter
+            font.pixelSize: 11 * Config.uiScale
+            color: root.colors ? Qt.rgba(root.colors.surfaceVariantText.r, root.colors.surfaceVariantText.g, root.colors.surfaceVariantText.b, 0.7) : "#8a8f97"
           }
         }
 
         Flow {
           width: parent.width
-          spacing: 6
+          spacing: Style.spacingMedium
           Repeater {
             model: root._sources
             FilterButton {
