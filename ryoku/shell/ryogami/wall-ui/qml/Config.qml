@@ -168,6 +168,8 @@ QtObject {
     readonly property int videoTrashDays: _data.performance?.videoTrashDays ?? 7
     readonly property bool autoDeleteImageTrash: _data.performance?.autoDeleteImageTrash === true
     readonly property bool autoDeleteVideoTrash: _data.performance?.autoDeleteVideoTrash === true
+    readonly property int videoCacheDays: _data.performance?.videoCacheDays ?? 30
+    readonly property bool autoCleanVideoCache: _data.performance?.autoCleanVideoCache !== false
 
     readonly property int maxThumbJobs: _data.performance?.maxThumbJobs ?? 16
 

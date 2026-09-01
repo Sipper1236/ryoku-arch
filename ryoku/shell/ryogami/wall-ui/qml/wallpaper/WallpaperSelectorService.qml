@@ -34,6 +34,7 @@ QtObject {
   property var favouritesDb: ({})
   property bool favouriteFilterActive: false
   property bool _favouritesLoaded: false
+  property bool _videoCachePruned: false
 
   function _loadFromDaemon() {
     console.log("[WSS] _loadFromDaemon called, DaemonClient.ready=" + DaemonClient.ready)
@@ -89,6 +90,11 @@ QtObject {
 
       FileMetadataService.loadFromDaemonData(walls)
       updateFilteredModel()
+
+      if (!service._videoCachePruned && Config.autoCleanVideoCache) {
+        service._videoCachePruned = true
+        DaemonClient.clearVideoCache(Config.videoCacheDays)
+      }
     })
   }
 

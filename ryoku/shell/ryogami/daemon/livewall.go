@@ -160,7 +160,7 @@ func livewallSource(pic string, src liveShape, capW int, fps string) string {
 	if liveDirect(src, capW, fps) {
 		return pic
 	}
-	dir := filepath.Join(cacheHome(), "ryogami", "livewall")
+	dir := livewallCacheDir()
 	name := strings.TrimSuffix(filepath.Base(pic), filepath.Ext(pic))
 	cap := strconv.Itoa(capW)
 	out := filepath.Join(dir, name+"-"+strconv.FormatInt(st.ModTime().Unix(), 10)+"-"+cap+"-"+fps+"-r"+liveEncRev+".mp4")
@@ -224,7 +224,7 @@ func liveStill(video string, sec float64) string {
 		sec = 1
 	}
 	secStr := strconv.FormatFloat(sec, 'f', 1, 64)
-	dir := filepath.Join(cacheHome(), "ryogami", "livewall")
+	dir := livewallCacheDir()
 	name := strings.TrimSuffix(filepath.Base(video), filepath.Ext(video))
 	out := filepath.Join(dir, name+"-"+strconv.FormatInt(st.ModTime().Unix(), 10)+"-still-"+secStr+".jpg")
 	if fileExists(out) {

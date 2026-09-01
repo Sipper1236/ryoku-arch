@@ -170,6 +170,10 @@ func (d *daemon) dispatchRequest(req *request) response {
 	case "wall.cache_status":
 		return ok(req.ID, map[string]interface{}{"ready": true, "count": len(d.store.list(false))})
 
+	case "wall.clear_video_cache":
+		removed, freed := pruneLivewallCache(int(intParam(p, "days", 0)))
+		return ok(req.ID, map[string]interface{}{"removed": removed, "freed": freed})
+
 	case "wall.toggle":
 		if d.ui.ensure() {
 			d.broadcast("ryogami.wall.toggle", map[string]interface{}{})

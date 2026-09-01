@@ -10,6 +10,7 @@ Row {
     property var service
     property var openOptimizeConfirm
     property string lastOptimizeResult: ""
+    property string _videoCacheResult: ""
 
     width: parent ? parent.width : 0
     spacing: 12
@@ -184,6 +185,46 @@ Row {
                             if (root.service && root.service.refreshFromDb) root.service.refreshFromDb()
                         }
                     }
+                }
+            }
+        }
+
+        SettingsCard {
+            colors: root.colors
+            title: "Video cache"
+            subtitle: "Transcoded copies of video wallpapers, rebuilt automatically when a clip plays. Clearing them is safe."
+            width: parent.width
+
+            RowInput {
+                colors: root.colors
+                title: "Cache retention (days)"
+                description: "Days to keep transcoded video clips before auto-clean removes them."
+                value: Config.videoCacheDays
+                min: 1; max: 365
+                onCommit: function(v) { if (root.saveConfigKey) root.saveConfigKey("performance.videoCacheDays", v) }
+            }
+
+            RowToggle {
+                colors: root.colors
+                title: "Auto-clean cached transcodes"
+                description: "Remove transcoded clips older than the retention period when the picker opens."
+                checked: Config.autoCleanVideoCache
+                onToggle: function(v) { if (root.saveConfigKey) root.saveConfigKey("performance.autoCleanVideoCache", v) }
+            }
+
+            RowAction {
+                colors: root.colors
+                title: "Clear video cache"
+                description: root._videoCacheResult || "Delete all transcoded video clips now."
+                onClicked: {
+                    DaemonClient.clearVideoCache(0, function(res, err) {
+                        if (err || !res) { root._videoCacheResult = "Clear failed"; return }
+                        var freed = res.freed || 0
+                        var mb = (freed / 1048576).toFixed(freed >= 10485760 ? 0 : 1)
+                        root._videoCacheResult = (res.removed || 0) > 0
+                            ? ("Cleared " + res.removed + " clips \u00b7 " + mb + " MB freed")
+                            : "Cache already empty"
+                    })
                 }
             }
         }

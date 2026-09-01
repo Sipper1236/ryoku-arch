@@ -248,6 +248,7 @@ QtObject {
     function rebuildCache(callback)    { call("wall.cache_rebuild", {}, callback) }
     function clearData(callback)       { call("wall.clear_data", {}, callback) }
     function cacheStatus(callback)     { call("wall.cache_status", {}, callback) }
+    function clearVideoCache(days, callback) { call("wall.clear_video_cache", { days: days | 0 }, callback) }
 
     function listWallpapers(favouritesOnly, callback) {
         call("wall.list", {favourites: !!favouritesOnly}, callback)
