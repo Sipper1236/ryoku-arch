@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import ".."
 import "../.."
 import "../../components"
@@ -96,16 +97,88 @@ Flow {
     title: "Playlists"
     width: (parent.width - parent.spacing) * 0.42
 
-    RowTextInput {
-      colors: root.colors
-      title: "New playlist"
-      placeholder: "Name, then Enter"
-      onCommit: function(v) {
-        var name = (v || "").trim()
-        if (name === "") return
-        DaemonClient.call("playlist.create", { name: name }, function(res) {
-          if (res && res.id !== undefined) { root.refresh(); root.select(res.id) }
-        })
+    // Stacked creator: label above a full-width field. The stock RowTextInput
+    // pins a fixed 220px input beside the title, which collides with the title
+    // in this narrow 42%-wide card.
+    Item {
+      width: parent ? parent.width : 0
+      implicitHeight: newCol.implicitHeight + 14 * Config.uiScale
+
+      Column {
+        id: newCol
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.leftMargin: 18 * Config.uiScale
+        anchors.rightMargin: 14 * Config.uiScale
+        spacing: 4 * Config.uiScale
+
+        Text {
+          text: "New playlist"
+          font.family: Style.fontFamily
+          font.pixelSize: 12 * Config.uiScale
+          font.weight: Font.Medium
+          color: root.colors ? root.colors.surfaceText : "#ffffff"
+        }
+
+        Item {
+          id: tinBox
+          width: parent.width
+          height: 28 * Config.uiScale
+          readonly property int _ch: 5
+
+          Shape {
+            id: tinShape
+            anchors.fill: parent
+            antialiasing: true
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+              fillColor: root.colors ? Qt.rgba(root.colors.surfaceContainer.r, root.colors.surfaceContainer.g, root.colors.surfaceContainer.b, 0.92) : Qt.rgba(0.15, 0.15, 0.2, 0.92)
+              strokeColor: newInput.activeFocus
+                ? (root.colors ? root.colors.primary : Qt.rgba(0.5, 0.7, 1.0, 1.0))
+                : (root.colors ? Qt.rgba(root.colors.outline.r, root.colors.outline.g, root.colors.outline.b, 0.28) : Qt.rgba(1, 1, 1, 0.14))
+              strokeWidth: newInput.activeFocus ? 2 : 1
+              Behavior on strokeColor { ColorAnimation { duration: 120 } }
+              startX: tinBox._ch; startY: 0
+              PathLine { x: tinShape.width;              y: 0 }
+              PathLine { x: tinShape.width;              y: tinShape.height - tinBox._ch }
+              PathLine { x: tinShape.width - tinBox._ch; y: tinShape.height }
+              PathLine { x: 0;                           y: tinShape.height }
+              PathLine { x: 0;                           y: tinBox._ch }
+              PathLine { x: tinBox._ch;                  y: 0 }
+            }
+          }
+
+          TextInput {
+            id: newInput
+            anchors.fill: parent
+            anchors.leftMargin: 10 * Config.uiScale
+            anchors.rightMargin: 10 * Config.uiScale
+            verticalAlignment: TextInput.AlignVCenter
+            font.family: Style.fontFamily
+            font.pixelSize: 12 * Config.uiScale
+            color: root.colors ? root.colors.surfaceText : "#ffffff"
+            clip: true
+            selectByMouse: true
+            onAccepted: {
+              var name = (text || "").trim()
+              if (name === "") return
+              DaemonClient.call("playlist.create", { name: name }, function(res) {
+                if (res && res.id !== undefined) { root.refresh(); root.select(res.id) }
+              })
+              text = ""
+            }
+
+            Text {
+              anchors.fill: parent
+              verticalAlignment: Text.AlignVCenter
+              text: "Name, then Enter"
+              font: parent.font
+              color: root.colors ? Qt.rgba(root.colors.surfaceText.r, root.colors.surfaceText.g, root.colors.surfaceText.b, 0.3) : Qt.rgba(1, 1, 1, 0.2)
+              visible: !parent.text && !parent.activeFocus
+            }
+          }
+        }
       }
     }
 
