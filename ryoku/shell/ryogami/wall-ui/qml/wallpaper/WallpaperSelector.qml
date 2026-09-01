@@ -293,7 +293,6 @@ Scope {
 
   property bool settingsOpen: false
   property bool effectsOpen: false
-  property bool editOpen: false
 
   property string _currentSelectedPath: {
     if (!service || !service.filteredModel) return ""
@@ -417,7 +416,6 @@ Scope {
       service: service
       settingsOpen: wallpaperSelector.settingsOpen
       effectsOpen: wallpaperSelector.effectsOpen
-      editOpen: wallpaperSelector.editOpen
       cacheLoading: service.cacheLoading
       cacheProgress: service.cacheProgress
       cacheTotal: service.cacheTotal
@@ -431,9 +429,8 @@ Scope {
       imageOptimizeFile: ImageOptimizeService.currentFile
       wallhavenBrowserOpen: wallpaperSelector.wallhavenBrowserOpen
       steamWorkshopBrowserOpen: wallpaperSelector.steamWorkshopBrowserOpen
-      onSettingsToggled: { wallpaperSelector.effectsOpen = false; wallpaperSelector.editOpen = false; wallpaperSelector.settingsOpen = !wallpaperSelector.settingsOpen; if (!wallpaperSelector.settingsOpen) wallpaperSelector._focusActiveList() }
-      onEffectsToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.editOpen = false; wallpaperSelector.effectsOpen = !wallpaperSelector.effectsOpen; if (!wallpaperSelector.effectsOpen) wallpaperSelector._focusActiveList() }
-      onEditToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.editOpen = !wallpaperSelector.editOpen; if (!wallpaperSelector.editOpen) wallpaperSelector._focusActiveList() }
+      onSettingsToggled: { wallpaperSelector.effectsOpen = false; wallpaperSelector.settingsOpen = !wallpaperSelector.settingsOpen; if (!wallpaperSelector.settingsOpen) wallpaperSelector._focusActiveList() }
+      onEffectsToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = !wallpaperSelector.effectsOpen; if (!wallpaperSelector.effectsOpen) wallpaperSelector._focusActiveList() }
       onWallhavenToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.steamWorkshopBrowserOpen = false; wallpaperSelector.wallhavenBrowserOpen = !wallpaperSelector.wallhavenBrowserOpen }
       onSteamWorkshopToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.wallhavenBrowserOpen = false; wallpaperSelector.steamWorkshopBrowserOpen = !wallpaperSelector.steamWorkshopBrowserOpen }
       onModeToggled: function(mode) {
@@ -515,13 +512,15 @@ Scope {
       active: true
       asynchronous: true
       anchors.horizontalCenter: parent.horizontalCenter
-      y: Math.max(8, (selectorPanel.height - height) / 2)
+      y: 16 * Config.uiScale
       z: 999
       sourceComponent: Component {
         SettingsPanel {
           colors: wallpaperSelector.colors
           service: wallpaperSelector.selectorService
           settingsOpen: wallpaperSelector.settingsOpen
+          openDownward: true
+          sourcePath: wallpaperSelector._currentSelectedPath
           onCloseRequested: { wallpaperSelector.settingsOpen = false; wallpaperSelector._focusActiveList() }
           onThemeChanged: function(scheme, mode, colorIndex) {
             console.log("WallpaperSelector: themeChanged scheme=" + scheme + " mode=" + mode + " colorIndex=" + colorIndex)
@@ -554,34 +553,6 @@ Scope {
             effectsOpen: wallpaperSelector.effectsOpen
             selectedPath: wallpaperSelector._currentSelectedPath
             onCloseRequested: { wallpaperSelector.effectsOpen = false; wallpaperSelector._focusActiveList() }
-          }
-        }
-      }
-    }
-
-    Loader {
-      id: editLoader
-      active: wallpaperSelector.editOpen
-      anchors.fill: parent
-      z: 999
-      sourceComponent: Component {
-        Item {
-          anchors.fill: parent
-
-          Rectangle {
-            anchors.fill: parent
-            color: Qt.rgba(0, 0, 0, 0.55)
-            MouseArea {
-              anchors.fill: parent
-              onClicked: { wallpaperSelector.editOpen = false; wallpaperSelector._focusActiveList() }
-            }
-          }
-
-          EditPanel {
-            anchors.centerIn: parent
-            colors: wallpaperSelector.colors
-            sourcePath: wallpaperSelector._currentSelectedPath
-            onClosed: { wallpaperSelector.editOpen = false; wallpaperSelector._focusActiveList() }
           }
         }
       }

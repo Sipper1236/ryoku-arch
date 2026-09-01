@@ -14,6 +14,7 @@ Item {
   property bool settingsOpen: false
   property string activeTab: "selector"
   property bool openDownward: false
+  property string sourcePath: ""
 
   property string _lastConvertResult: ""
   property string _lastOptimizeResult: ""
@@ -50,7 +51,7 @@ Item {
   }
 
   z: 102
-  width: (settingsPanel.activeTab === "performance" ? 1080 : settingsPanel.activeTab === "general" ? 900 : 760) * Config.uiScale
+  width: (settingsPanel.activeTab === "performance" ? 1080 : (settingsPanel.activeTab === "general" || settingsPanel.activeTab === "edit") ? 900 : 760) * Config.uiScale
   Behavior on width { NumberAnimation { duration: Style.animFast; easing.type: Easing.OutCubic } }
   height: tabRow.height + contentLoader.height + 36
 
@@ -190,6 +191,7 @@ Item {
       model: {
         var tabs = [
           { key: "selector",  label: "SELECTOR" },
+          { key: "edit",      label: "EDIT" },
           { key: "paper",     label: "PAPER" },
           { key: "general",   label: "GENERAL" },
           { key: "playlists", label: "PLAYLISTS" },
@@ -227,6 +229,7 @@ Item {
     anchors.topMargin: 8
     height: {
       if (settingsPanel.activeTab === "selector") return selectorContent.implicitHeight
+      if (settingsPanel.activeTab === "edit") return editContent.implicitHeight
       if (settingsPanel.activeTab === "paper") return paperContent.implicitHeight
       if (settingsPanel.activeTab === "general") return generalContent.implicitHeight
       if (settingsPanel.activeTab === "playlists") return playlistsContent.implicitHeight
@@ -273,6 +276,19 @@ Item {
         item.applyPreset = function(ew, sh, sw, vc, gap, sk) { settingsPanel._applyPreset(ew, sh, sw, vc, gap, sk) }
         item.saveCustomPreset = function(slot) { settingsPanel._saveCustomPreset(slot) }
         item.loadCustomPreset = function(slot) { settingsPanel._loadCustomPreset(slot) }
+      }
+    }
+
+    Loader {
+      id: editContent
+      anchors.left: parent.left
+      anchors.right: parent.right
+      active: settingsPanel.activeTab === "edit"
+      visible: active
+      source: "settings/EditSettings.qml"
+      onLoaded: {
+        item.colors = Qt.binding(function() { return settingsPanel.colors })
+        item.sourcePath = Qt.binding(function() { return settingsPanel.sourcePath })
       }
     }
 
