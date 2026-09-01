@@ -1783,6 +1783,7 @@ Item {
     property bool modVolume:     true
     property bool modWeather:    true
     property bool modNetwork:    true
+    property bool modLayout:     true
     property string networkMode: "none"   // mirrored from NetworkWidget: wifi/ethernet/none
     // Centralized status indicators. These live on Theme so BarSlot-per-monitor
     // widgets don't each spawn their own status poller.
@@ -2305,7 +2306,7 @@ Item {
         var m = String(gid || "").match(/^G(\d{1,2})$/)
         if (!m) return false
         var n = Number(m[1])
-        return n >= 1 && n <= 18
+        return n >= 1 && n <= 19
     }
     function widgetColorModeValid(mode) {
         return mode === "fill" || mode === "border" || mode === "both"
@@ -2477,7 +2478,7 @@ Item {
     }
     function serializeWidgetColorStyles() {
         var out = []
-        for (var n = 1; n <= 18; n++) {
+        for (var n = 1; n <= 19; n++) {
             var gid = "G" + n
             var style = widgetColorStyle(gid)
             if (style.color !== "inherit" || style.mode === "border")
@@ -2598,6 +2599,7 @@ Item {
                  + (barBorderEnabled ? "1" : "0") + " "                 // +43 outer bar border
                  + (panelTooltipBorderEnabled ? "1" : "0") + " "        // +44 panel + tooltip outer border
                  + barAnim                                              // +45 gap-animation mode
+                 + (modLayout ? "1" : "0")                              // +46 keyboard layout
         widgetSaveProc.command = ["bash", "-c",
             "echo '" + line + "' > '" + widgetsCachePath + "'"]
         widgetSaveProc.running = false
@@ -2793,6 +2795,8 @@ Item {
                         var ba = parseInt(parts[wsField + 45], 10)
                         if (isFinite(ba) && ba >= 0 && ba <= 8) theme.barAnim = ba
                     }
+                    if (parts.length > wsField + 46)
+                        theme.modLayout = parts[wsField + 46] !== "0"
                 }
                 theme._widgetsLoaded = true
                 theme.applyStudioSettings()
@@ -2849,7 +2853,7 @@ Item {
             "media": modMedia, "mpris": modMpris, "quick": modQuick, "claude": modClaude,
             "power": modPower, "bluetooth": modBluetooth, "gpu": modGpu,
             "cpuTemperature": modCpuTemperature, "storage": modStorage,
-            "battery": modBattery
+            "battery": modBattery, "layout": modLayout
         }
         _cfgCtl.queued += "call settings.patch " + JSON.stringify({ path: "qsbar", value: q }) + "\n"
         if (_cfgCtl.connected) _cfgCtl.flushQueued()
@@ -2923,6 +2927,7 @@ Item {
             if (w.cpuTemperature !== undefined) modCpuTemperature = w.cpuTemperature
             if (w.storage        !== undefined) modStorage        = w.storage
             if (w.battery        !== undefined) modBattery        = w.battery
+            if (w.layout         !== undefined) modLayout         = w.layout
         }
         _widgetsLoaded = wl
     }
