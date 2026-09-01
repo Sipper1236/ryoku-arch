@@ -28,12 +28,14 @@ Item {
 
   function _s(v) { return v * Config.uiScale }
 
+  readonly property real _keybindsColW: _s(198)
+
   // Which tab keys are valid in the current mode. Keep in step with the strip
   // Repeater below; used only to clamp activeTab when the mode flips.
   function _validTab(key) {
     if (!showAdvanced)
       return ["selector", "paper", "edit", "theme"].indexOf(key) >= 0
-    var adv = ["general", "playlists", "paths", "comfort", "lighting", "performance", "postprocessing", "keybinds"]
+    var adv = ["general", "playlists", "paths", "comfort", "lighting", "performance", "postprocessing"]
     if (Config.matugenEnabled) adv.push("matugen")
     if (Config.isNiri) adv.push("niri")
     if (Config.steamEnabled) adv.push("wallpaper-engine")
@@ -69,7 +71,7 @@ Item {
   }
 
   z: 102
-  width: (settingsPanel.activeTab === "performance" ? 1080 : (settingsPanel.activeTab === "general" || settingsPanel.activeTab === "edit") ? 900 : 760) * Config.uiScale
+  width: ((settingsPanel.activeTab === "performance" ? 1080 : (settingsPanel.activeTab === "general" || settingsPanel.activeTab === "edit") ? 900 : 760) * Config.uiScale) + _keybindsColW + _s(24)
   Behavior on width { NumberAnimation { duration: Style.animFast; easing.type: Easing.OutCubic } }
   height: tabRow.height + contentLoader.height + 36
 
@@ -177,6 +179,34 @@ Item {
 
   property int _tabSkew: 14
 
+  // Persistent slim keybind cheat-sheet down the left edge, shown for every tab.
+  Item {
+    id: keybindsColumn
+    anchors.left: parent.left
+    anchors.top: parent.top
+    anchors.leftMargin: settingsPanel._s(12)
+    anchors.topMargin: settingsPanel._s(12)
+    width: settingsPanel._keybindsColW
+    height: keybindsList.height + settingsPanel._s(28)
+    z: 11
+
+    Rectangle {
+      anchors.fill: parent
+      radius: Style.radiusLarge
+      color: settingsPanel.colors ? Qt.rgba(settingsPanel.colors.surface.r, settingsPanel.colors.surface.g, settingsPanel.colors.surface.b, 0.95) : Qt.rgba(0.06, 0.07, 0.09, 0.95)
+      border.width: 1
+      border.color: settingsPanel.colors ? Qt.rgba(settingsPanel.colors.surfaceText.r, settingsPanel.colors.surfaceText.g, settingsPanel.colors.surfaceText.b, 0.18) : Qt.rgba(1, 1, 1, 0.12)
+    }
+
+    Loader {
+      id: keybindsList
+      anchors { left: parent.left; right: parent.right; top: parent.top }
+      anchors.leftMargin: settingsPanel._s(14); anchors.rightMargin: settingsPanel._s(14); anchors.topMargin: settingsPanel._s(14)
+      source: "settings/KeybindsSettings.qml"
+      onLoaded: item.colors = Qt.binding(function() { return settingsPanel.colors })
+    }
+  }
+
   // backdrop behind the tab row so the tabs read over the dimmed wallpaper
   Rectangle {
     anchors.fill: tabRow
@@ -192,6 +222,7 @@ Item {
   Row {
     id: tabRow
     anchors.horizontalCenter: parent.horizontalCenter
+    anchors.horizontalCenterOffset: (keybindsColumn.width + settingsPanel._s(24)) / 2
     anchors.top: parent.top
     anchors.topMargin: 12
     spacing: Style.spacingSmall
@@ -221,8 +252,7 @@ Item {
           { key: "comfort",     label: "COMFORT" },
           { key: "lighting",    label: "LIGHTING" },
           { key: "performance", label: "PERFORMANCE" },
-          { key: "postprocessing", label: "EXTERNAL" },
-          { key: "keybinds",    label: "KEYBINDS" }
+          { key: "postprocessing", label: "EXTERNAL" }
         ]
         if (Config.matugenEnabled) tabs.push({ key: "matugen", label: "MATUGEN" })
         if (Config.isNiri) tabs.push({ key: "niri", label: "NIRI" })
@@ -264,7 +294,7 @@ Item {
   Item {
     id: contentLoader
     anchors.top: tabRow.bottom
-    anchors.left: parent.left
+    anchors.left: keybindsColumn.right
     anchors.right: parent.right
     anchors.margins: 12
     anchors.topMargin: 8
@@ -282,7 +312,6 @@ Item {
       if (settingsPanel.activeTab === "postprocessing") return Math.min(postprocessingContent.implicitHeight, 360)
       if (settingsPanel.activeTab === "theme") return themeContent.implicitHeight
       if (settingsPanel.activeTab === "matugen") return Math.min(matugenContent.implicitHeight, 360)
-      if (settingsPanel.activeTab === "keybinds") return keybindsContent.implicitHeight
       if (settingsPanel.activeTab === "niri") return niriContent.implicitHeight
       return 0
     }
@@ -484,18 +513,6 @@ Item {
         item.colors = Qt.binding(function() { return settingsPanel.colors })
         item.saveConfigKey = function(k, v) { settingsPanel._saveConfigKey(k, v) }
         item.cloneIntegrations = function() { return settingsPanel._cloneIntegrations() }
-      }
-    }
-
-    Loader {
-      id: keybindsContent
-      anchors.left: parent.left
-      anchors.right: parent.right
-      active: settingsPanel.activeTab === "keybinds"
-      visible: active
-      source: "settings/KeybindsSettings.qml"
-      onLoaded: {
-        item.colors = Qt.binding(function() { return settingsPanel.colors })
       }
     }
   }

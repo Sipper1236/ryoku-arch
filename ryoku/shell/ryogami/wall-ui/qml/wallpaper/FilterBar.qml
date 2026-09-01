@@ -11,7 +11,6 @@ Item {
     property var colors
     property var service
     property bool settingsOpen: false
-    property bool effectsOpen: false
     property bool browseOpen: false
     property bool themesOpen: false
     property bool ricesOpen: false
@@ -29,7 +28,6 @@ Item {
     property string imageOptimizeFile: ""
 
     signal settingsToggled()
-    signal effectsToggled()
     signal browseToggled()
     signal themesToggled()
     signal ricesToggled()
@@ -625,14 +623,6 @@ Item {
             tooltip: "Settings"
             isActive: filterBar.settingsOpen
             onClicked: filterBar.settingsToggled()
-        }
-
-        FilterButton {
-            colors: filterBar.colors
-            icon: "\u{f0a0e}"
-            tooltip: "Effects"
-            isActive: filterBar.effectsOpen
-            onClicked: filterBar.effectsToggled()
         }
 
         Item {

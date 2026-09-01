@@ -481,7 +481,6 @@ Scope {
   Behavior on cardHeight { NumberAnimation { duration: Style.animExpand; easing.type: Easing.OutCubic } }
 
   property bool settingsOpen: false
-  property bool effectsOpen: false
 
   property string _currentSelectedPath: {
     if (!service || !service.filteredModel) return ""
@@ -605,7 +604,6 @@ Scope {
       colors: wallpaperSelector.colors
       service: service
       settingsOpen: wallpaperSelector.settingsOpen
-      effectsOpen: wallpaperSelector.effectsOpen
       cacheLoading: service.cacheLoading
       cacheProgress: service.cacheProgress
       cacheTotal: service.cacheTotal
@@ -621,11 +619,10 @@ Scope {
       themesOpen: wallpaperSelector.themesOpen
       ricesOpen: wallpaperSelector.ricesOpen
       followActive: wallpaperSelector._activeThemeName === "Wallpaper"
-      onSettingsToggled: { wallpaperSelector.effectsOpen = false; wallpaperSelector.settingsOpen = !wallpaperSelector.settingsOpen; if (!wallpaperSelector.settingsOpen) wallpaperSelector._focusActiveList() }
-      onEffectsToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = !wallpaperSelector.effectsOpen; if (!wallpaperSelector.effectsOpen) wallpaperSelector._focusActiveList() }
-      onBrowseToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.themesOpen = false; wallpaperSelector.ricesOpen = false; wallpaperSelector.browseOpen = !wallpaperSelector.browseOpen }
-      onThemesToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.browseOpen = false; wallpaperSelector.ricesOpen = false; wallpaperSelector.themesOpen = !wallpaperSelector.themesOpen }
-      onRicesToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.browseOpen = false; wallpaperSelector.themesOpen = false; wallpaperSelector.ricesOpen = !wallpaperSelector.ricesOpen }
+      onSettingsToggled: { wallpaperSelector.settingsOpen = !wallpaperSelector.settingsOpen; if (!wallpaperSelector.settingsOpen) wallpaperSelector._focusActiveList() }
+      onBrowseToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.themesOpen = false; wallpaperSelector.ricesOpen = false; wallpaperSelector.browseOpen = !wallpaperSelector.browseOpen }
+      onThemesToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.browseOpen = false; wallpaperSelector.ricesOpen = false; wallpaperSelector.themesOpen = !wallpaperSelector.themesOpen }
+      onRicesToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.browseOpen = false; wallpaperSelector.themesOpen = false; wallpaperSelector.ricesOpen = !wallpaperSelector.ricesOpen }
       onSaveLookRequested: wallpaperSelector._capturePromptOpen = true
       onModeToggled: function(mode) {
         Config.saveKey("matugen.mode", mode)
@@ -719,34 +716,6 @@ Scope {
           onThemeChanged: function(scheme, mode, colorIndex) {
             console.log("WallpaperSelector: themeChanged scheme=" + scheme + " mode=" + mode + " colorIndex=" + colorIndex)
             DaemonClient.retheme(scheme, mode, (typeof colorIndex === "number") ? colorIndex : Config.matugenColorIndex)
-          }
-        }
-      }
-    }
-    Loader {
-      id: effectsLoader
-      active: wallpaperSelector.effectsOpen
-      anchors.fill: parent
-      z: 999
-      sourceComponent: Component {
-        Item {
-          anchors.fill: parent
-
-          Rectangle {
-            anchors.fill: parent
-            color: Qt.rgba(0, 0, 0, 0.55)
-            MouseArea {
-              anchors.fill: parent
-              onClicked: { wallpaperSelector.effectsOpen = false; wallpaperSelector._focusActiveList() }
-            }
-          }
-
-          EffectsPanel {
-            anchors.centerIn: parent
-            colors: wallpaperSelector.colors
-            effectsOpen: wallpaperSelector.effectsOpen
-            selectedPath: wallpaperSelector._currentSelectedPath
-            onCloseRequested: { wallpaperSelector.effectsOpen = false; wallpaperSelector._focusActiveList() }
           }
         }
       }
