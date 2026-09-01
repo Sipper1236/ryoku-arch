@@ -223,7 +223,8 @@ Scope {
   readonly property bool _filterBarShown: _filterBarManuallyShown || _filterBarHoverRevealed
   property bool browseOpen: false
   property string browseSource: "wallhaven"
-  property bool anyBrowserOpen: browseOpen
+  property bool themesOpen: false
+  property bool anyBrowserOpen: browseOpen || themesOpen
   property bool isHexMode: Config.displayMode === "hex"
   property bool isGridMode: Config.displayMode === "wall"
   property bool isMosaicMode: Config.displayMode === "mosaic"
@@ -371,6 +372,7 @@ Scope {
       onClicked: {
         if (wallpaperSelector.anyBrowserOpen) {
           wallpaperSelector.browseOpen = false
+          wallpaperSelector.themesOpen = false
         } else {
           wallpaperSelector.showing = false
         }
@@ -427,9 +429,11 @@ Scope {
       imageOptimizeTotal: ImageOptimizeService.total
       imageOptimizeFile: ImageOptimizeService.currentFile
       browseOpen: wallpaperSelector.browseOpen
+      themesOpen: wallpaperSelector.themesOpen
       onSettingsToggled: { wallpaperSelector.effectsOpen = false; wallpaperSelector.settingsOpen = !wallpaperSelector.settingsOpen; if (!wallpaperSelector.settingsOpen) wallpaperSelector._focusActiveList() }
       onEffectsToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = !wallpaperSelector.effectsOpen; if (!wallpaperSelector.effectsOpen) wallpaperSelector._focusActiveList() }
-      onBrowseToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.browseOpen = !wallpaperSelector.browseOpen }
+      onBrowseToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.themesOpen = false; wallpaperSelector.browseOpen = !wallpaperSelector.browseOpen }
+      onThemesToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.browseOpen = false; wallpaperSelector.themesOpen = !wallpaperSelector.themesOpen }
       onModeToggled: function(mode) {
         Config.saveKey("matugen.mode", mode)
         DaemonClient.retheme(Config.matugenScheme, mode, Config.matugenColorIndex)
@@ -571,6 +575,22 @@ Scope {
           source: wallpaperSelector.browseSource
           onSourceChanged: wallpaperSelector.browseSource = source
           onEscapePressed: { wallpaperSelector.browseOpen = false; wallpaperSelector._focusActiveList() }
+        }
+      }
+    }
+
+    Loader {
+      id: themesLoader
+      active: wallpaperSelector.themesOpen
+      anchors.centerIn: parent
+      width: Math.min(cardContainer.width - 20, Screen.width - 140 * Config.uiScale)
+      z: 6
+      sourceComponent: Component {
+        ThemesSurface {
+          width: parent ? parent.width : 0
+          colors: wallpaperSelector.colors
+          browserVisible: true
+          onEscapePressed: { wallpaperSelector.themesOpen = false; wallpaperSelector._focusActiveList() }
         }
       }
     }

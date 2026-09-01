@@ -13,6 +13,7 @@ Item {
     property bool settingsOpen: false
     property bool effectsOpen: false
     property bool browseOpen: false
+    property bool themesOpen: false
     property bool cacheLoading: false
     property int cacheProgress: 0
     property int cacheTotal: 0
@@ -28,6 +29,7 @@ Item {
     signal settingsToggled()
     signal effectsToggled()
     signal browseToggled()
+    signal themesToggled()
     signal modeToggled(string mode)
 
     readonly property int _skew: 10 * Config.uiScale
@@ -580,6 +582,14 @@ Item {
             tooltip: "Browse online sources"
             isActive: filterBar.browseOpen
             onClicked: filterBar.browseToggled()
+        }
+
+        FilterButton {
+            colors: filterBar.colors
+            icon: "\u{f0334}"
+            tooltip: "Themes"
+            isActive: filterBar.themesOpen
+            onClicked: filterBar.themesToggled()
         }
 
         FilterButton {
