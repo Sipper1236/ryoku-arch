@@ -347,7 +347,8 @@ not look broken; it looks fine and then eats the edit on the way out.
   `adv` folds away entirely rather than leaving a bare header. Search still
   reaches them, and the open section always counts as visible, so turning
   Advanced off never strands you on a page the rail no longer lists.
-- **The rail foot.** A `Barcode`, the edition chip (`BETA // 18`), the `RYOKU
+- **The rail foot.** A `Barcode`, the edition chip (driven by `ryoku version`,
+  e.g. `BETA // 19` on beta builds), the `RYOKU
   HUB` label, and that Advanced switch.
 - **The page head.** A `力 <GROUP>` eyebrow, the title in Fraunces at `fTitle`,
   and a one-sentence description.
