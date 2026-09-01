@@ -49,6 +49,7 @@ Item {
         { v: 1, label: "Stream" },
         { v: 2, label: "Surge" },
         { v: 3, label: "Bolt" },
+	{ v: 4, label: "Bolt-2"},
         { v: 7, label: "Reactor" },
         { v: 8, label: "Quotes" }
     ]

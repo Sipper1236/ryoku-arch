@@ -232,6 +232,7 @@ Item {
         { v: 1, label: qsTr("Stream") },
         { v: 2, label: qsTr("Surge") },
         { v: 3, label: qsTr("Bolt") },
+	{ v: 4, label: qsTr("Bolt-2") },
         { v: 7, label: qsTr("Reactor") },
         { v: 8, label: qsTr("Quotes") }
     ]
