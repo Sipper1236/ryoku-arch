@@ -10,6 +10,7 @@ import "../services"
 // live in one place instead of scattered across browser buttons and settings tabs.
 Item {
   id: root
+  clip: true
 
   property var colors
   property var whService
@@ -256,6 +257,38 @@ Item {
         skew: 8
         height: 26 * Config.uiScale
         onClicked: root._runSearch(searchInput.text)
+      }
+
+      Row {
+        id: pageNav
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 6
+        visible: !!(root._activeItem && root._activeItem.pageActive)
+        FilterButton {
+          colors: root.colors
+          label: "\u2039"
+          register: false; skew: 8
+          height: 26 * Config.uiScale
+          activeOpacity: (root._activeItem && root._activeItem.pageCanPrev) ? 1 : 0.3
+          tooltip: "Previous page"
+          onClicked: if (root._activeItem) root._activeItem.pagePrev()
+        }
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: "PAGE " + (root._activeItem ? root._activeItem.pageNum : 1)
+          font.family: Style.fontFamily; font.pixelSize: 10 * Config.uiScale
+          font.weight: Font.Medium; font.letterSpacing: 1.2
+          color: root.colors ? Qt.rgba(root.colors.surfaceText.r, root.colors.surfaceText.g, root.colors.surfaceText.b, 0.7) : "#c2c7cf"
+        }
+        FilterButton {
+          colors: root.colors
+          label: "\u203a"
+          register: false; skew: 8
+          height: 26 * Config.uiScale
+          activeOpacity: (root._activeItem && root._activeItem.pageCanNext) ? 1 : 0.3
+          tooltip: "Next page"
+          onClicked: if (root._activeItem) root._activeItem.pageNext()
+        }
       }
 
       Loader {

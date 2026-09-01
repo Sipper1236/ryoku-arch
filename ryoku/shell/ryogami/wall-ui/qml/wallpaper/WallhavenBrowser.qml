@@ -18,6 +18,14 @@ Item {
 
   property string _pendingApplyId: ""
 
+  // pagination contract consumed by BrowseSurface's shared top bar
+  readonly property bool pageActive: browser.whService && (browser.whService.results.length > 0 || browser.whService.currentPage > 1)
+  readonly property int pageNum: browser.whService ? browser.whService.currentPage : 1
+  readonly property bool pageCanPrev: browser.whService && browser.whService.currentPage > 1 && !browser.whService.loading
+  readonly property bool pageCanNext: browser.whService && browser.whService.hasMore && !browser.whService.loading
+  function pagePrev() { if (pageCanPrev) { browser.whService.prevPage(); resultsGrid.positionViewAtBeginning() } }
+  function pageNext() { if (pageCanNext) { browser.whService.nextPage(); resultsGrid.positionViewAtBeginning() } }
+
   clip: !_previewOpen
 
   visible: browserVisible
@@ -236,7 +244,7 @@ Item {
     anchors.top: parent.top; anchors.topMargin: 10
     anchors.horizontalCenter: parent.horizontalCenter
     anchors.bottom: parent.bottom
-    anchors.bottomMargin: (browser.whService && (browser.whService.results.length > 0 || browser.whService.currentPage > 1)) ? 46 * Config.uiScale : 12
+    anchors.bottomMargin: 12
     width: browser._gridTotalW
     clip: true
     cellWidth: browser._gridCellW
@@ -908,10 +916,10 @@ Item {
         _deleteFileProc.running = true
       }
       if (_whId !== "" && browser.whService) {
-        var ids = browser.whService.localWallhavenIds
+        var ids = Object.assign({}, browser.whService.localWallhavenIds)
         delete ids[_whId]
         browser.whService.localWallhavenIds = ids
-        var st = browser.whService.downloadStatus
+        var st = Object.assign({}, browser.whService.downloadStatus)
         delete st[_whId]
         browser.whService.downloadStatus = st
       }
@@ -926,45 +934,6 @@ Item {
     }
   }
 
-  // ---- page navigation ----
-  Row {
-    id: pageBar
-    z: 15
-    visible: browser.whService && (browser.whService.results.length > 0 || browser.whService.currentPage > 1)
-    anchors.horizontalCenter: parent.horizontalCenter
-    anchors.bottom: parent.bottom
-    anchors.bottomMargin: 12
-    spacing: 8
-
-    readonly property bool _canPrev: browser.whService && browser.whService.currentPage > 1 && !browser.whService.loading
-    readonly property bool _canNext: browser.whService && browser.whService.hasMore && !browser.whService.loading
-
-    FilterButton {
-      colors: browser.colors
-      label: "\u2039"
-      register: false; skew: 8
-      height: 24 * Config.uiScale
-      activeOpacity: pageBar._canPrev ? 1 : 0.3
-      tooltip: "Previous page"
-      onClicked: { if (pageBar._canPrev) { browser.whService.prevPage(); resultsGrid.positionViewAtBeginning() } }
-    }
-    Text {
-      anchors.verticalCenter: parent.verticalCenter
-      text: "PAGE " + (browser.whService ? browser.whService.currentPage : 1)
-      font.family: Style.fontFamily; font.pixelSize: 10 * Config.uiScale
-      font.weight: Font.Medium; font.letterSpacing: 1.2
-      color: browser.colors ? Qt.rgba(browser.colors.surfaceText.r, browser.colors.surfaceText.g, browser.colors.surfaceText.b, 0.7) : "#c2c7cf"
-    }
-    FilterButton {
-      colors: browser.colors
-      label: "\u203a"
-      register: false; skew: 8
-      height: 24 * Config.uiScale
-      activeOpacity: pageBar._canNext ? 1 : 0.3
-      tooltip: "Next page"
-      onClicked: { if (pageBar._canNext) { browser.whService.nextPage(); resultsGrid.positionViewAtBeginning() } }
-    }
-  }
 
   function _formatSize(bytes) {
     if (!bytes || bytes <= 0) return ""
