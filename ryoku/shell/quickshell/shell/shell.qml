@@ -14,7 +14,6 @@ import shell.services
 import "modules/visualizer/Singletons" as VizCfg
 import "components"
 import "modules/wallpaper"
-import "modules/wallpaper/switcher"
 import "modules/desktop"
 import "modules/visualizer"
 import "modules/bar"
@@ -218,11 +217,6 @@ ShellRoot {
                 active: perScreen.st ? perScreen.st.overviewOpen : false
                 onRequestClose: if (perScreen.st) perScreen.st.overviewOpen = false
             }
-            Switcher {
-                screen: perScreen.modelData
-                active: perScreen.st ? perScreen.st.wallpaperSwitcherOpen : false
-                onRequestClose: if (perScreen.st) perScreen.st.wallpaperSwitcherOpen = false
-            }
             // Shell-wide per-monitor surfaces: the three OSDs, the notification
             // popup column, the capture/region/camera overlays, and the
             // session-confirm dialog. Each binds this screen's modelData; the
@@ -299,15 +293,6 @@ ShellRoot {
             const st = ShellState.forActive();
             if (st)
                 st.overviewOpen = !st.overviewOpen;
-        }
-    }
-    CustomShortcut {
-        name: "wallpaper-switcher"
-        description: "Toggle the wallpaper switcher on the active monitor"
-        onPressed: {
-            const st = ShellState.forActive();
-            if (st)
-                st.wallpaperSwitcherOpen = !st.wallpaperSwitcherOpen;
         }
     }
     // On/off is the persisted key, so the keybind, the Hub switch and the next

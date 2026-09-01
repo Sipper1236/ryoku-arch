@@ -975,15 +975,6 @@ func (d *daemon) dispatch(line string) string {
 			return d.hub(args[0], args[1])
 		}
 		return "err hub: expected open [section] or close"
-	case "wallpaper-switcher":
-		// spawn the picker as a one-shot modal (like ryoshot or the hub), not a
-		// resident surface: it shows on launch and quits on close, so it holds no
-		// memory while idle. flock keeps a second press from stacking a duplicate;
-		// the goroutine reaps qs when it exits.
-		go func() {
-			_ = exec.Command("flock", append([]string{"-n", "-o", "/tmp/ryoku-wallpaper.lock", "qs"}, qsSelect("wallpaper")...)...).Run()
-		}()
-		return "ok"
 	case "depth":
 		// refresh forces a regenerate for the current wallpaper (model change);
 		// the worker no-ops when depth is off for it or the engine is absent.

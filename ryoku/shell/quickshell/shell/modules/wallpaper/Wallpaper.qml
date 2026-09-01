@@ -18,8 +18,8 @@ import Quickshell.Io
  * the depth-cutout foreground (modules/depth/DepthForeground) composite against.
  * Contract 08 sec 1, 2.6, 5, 7.
  *
- * The wallpaper switcher (modules/wallpaper/switcher) sets wallpapers through
- * ryogami, which feeds this same topic.
+ * The ryogami wallpaper picker (Super+W) sets wallpapers through ryogami,
+ * which feeds this same topic.
  */
 Item {
     id: root

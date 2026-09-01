@@ -162,9 +162,7 @@ Item {
                             compact: true
                             text: I18n.tr("SWITCH")
                             onAct: {
-                                const st = Services.ShellState.forActive();
-                                if (st)
-                                    st.wallpaperSwitcherOpen = true;
+                                Quickshell.execDetached(["ryogami", "wallpaper", "ui"]);
                                 if (page.cc)
                                     page.cc.close();
                             }
