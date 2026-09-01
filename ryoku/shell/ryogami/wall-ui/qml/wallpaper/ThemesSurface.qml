@@ -162,86 +162,78 @@ Item {
     Repeater {
       model: root.catalog
 
-      Rectangle {
-        id: card
+      PreviewCard {
+        id: themeCard
         width: 220 * Config.uiScale
-        height: 92 * Config.uiScale
-        radius: Style.radiusMedium
+        height: 132 * Config.uiScale
+        colors: root.colors
         readonly property bool _dyn: modelData.dynamic === true
         readonly property var _sw: modelData.sw || []
-        readonly property bool _active: root.activeTheme === modelData.id
-        color: _dyn
-          ? (root.colors ? root.colors.surfaceContainer : "#1d100e")
-          : (_sw.length > 0 ? _sw[0] : "#151515")
-        border.width: _active ? 2 : 1
-        border.color: _active
-          ? (root.colors ? root.colors.primary : Style.fallbackAccent)
-          : (root.colors ? Qt.rgba(root.colors.surfaceText.r, root.colors.surfaceText.g, root.colors.surfaceText.b, 0.18) : Qt.rgba(1, 1, 1, 0.14))
-        Behavior on border.color { ColorAnimation { duration: Style.animVeryFast } }
+        readonly property string _id: modelData.id
+        label: modelData.label
+        badge: _dyn ? "自動" : (modelData.dark ? "夜" : "昼")
+        selected: root.activeTheme === modelData.id
+        onClicked: root.apply(_id)
 
-        Column {
-          anchors.left: parent.left
-          anchors.right: parent.right
-          anchors.top: parent.top
-          anchors.margins: 12
-          spacing: 8
+        content: Item {
+          anchors.fill: parent
+          readonly property color _bg: (themeCard._sw.length > 0 && !themeCard._dyn) ? themeCard._sw[0]
+                            : (root.colors ? root.colors.surfaceContainer : "#1d100e")
+          readonly property color _accent: (themeCard._sw.length > 2) ? themeCard._sw[2]
+                            : (root.colors ? root.colors.primary : Style.fallbackAccent)
 
-          Row {
-            width: parent.width
-            Text {
-              width: parent.width - sealText.width
-              elide: Text.ElideRight
-              text: modelData.label
-              font.family: Style.fontFamily
-              font.pixelSize: 13 * Config.uiScale
-              font.weight: Font.Medium
-              color: card._dyn
-                ? (root.colors ? root.colors.surfaceText : "#e0e2e8")
-                : (card._sw.length > 1 ? card._sw[1] : "#ffffff")
-            }
-            Text {
-              id: sealText
-              text: card._dyn ? "自動" : (modelData.dark ? "夜" : "昼")
-              font.family: Style.fontFamily
-              font.pixelSize: 10 * Config.uiScale
-              color: card._dyn
-                ? (root.colors ? Qt.rgba(root.colors.surfaceVariantText.r, root.colors.surfaceVariantText.g, root.colors.surfaceVariantText.b, 0.7) : "#8a8f97")
-                : (card._sw.length > 6 ? card._sw[6] : "#888888")
-              anchors.verticalCenter: parent.verticalCenter
+          // wallpaper field, painted in the theme's own background
+          Rectangle { anchors.fill: parent; color: parent._bg }
+
+          // a bar across the top, like the desktop
+          Rectangle {
+            anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+            height: 12 * Config.uiScale
+            color: Qt.rgba(0, 0, 0, 0.22)
+          }
+
+          // a floating window to show the theme's surface + accent
+          Rectangle {
+            anchors.centerIn: parent
+            width: parent.width * 0.56
+            height: parent.height * 0.46
+            radius: 4
+            color: (themeCard._sw.length > 3) ? themeCard._sw[3] : Qt.rgba(1, 1, 1, 0.08)
+            border.width: 1
+            border.color: Qt.rgba(0, 0, 0, 0.2)
+            Rectangle {
+              anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+              height: 8 * Config.uiScale
+              radius: 4
+              color: parent.parent._accent
             }
           }
 
-          // dynamic: hint line; static: accent swatch strip
-          Text {
-            visible: card._dyn
-            text: modelData.id === "Wallpaper" ? "follows the wallpaper" : "system default"
-            font.family: Style.fontFamily
-            font.pixelSize: 10 * Config.uiScale
-            color: root.colors ? root.colors.surfaceVariantText : "#c2c7cf"
-          }
-
+          // accent swatches, top-right (clear of the badge and label strip)
           Row {
-            visible: !card._dyn
-            spacing: 4
+            anchors.top: parent.top; anchors.right: parent.right
+            anchors.topMargin: 6; anchors.rightMargin: 6
+            spacing: 3
+            visible: !themeCard._dyn
             Repeater {
-              model: card._sw.length > 1 ? card._sw.slice(1) : []
+              model: themeCard._sw.length > 1 ? themeCard._sw.slice(1, 5) : []
               Rectangle {
-                width: 20 * Config.uiScale
-                height: 20 * Config.uiScale
-                radius: 3
+                width: 11 * Config.uiScale; height: 11 * Config.uiScale; radius: 2
                 color: modelData
-                border.width: 1
-                border.color: Qt.rgba(0, 0, 0, 0.25)
+                border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.25)
               }
             }
           }
-        }
 
-        MouseArea {
-          anchors.fill: parent
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: root.apply(modelData.id)
+          // dynamic themes carry no fixed palette: name what they follow
+          Text {
+            visible: themeCard._dyn
+            anchors.centerIn: parent
+            horizontalAlignment: Text.AlignHCenter
+            text: themeCard._id === "Wallpaper" ? "follows\nwallpaper" : "system\ndefault"
+            font.family: Style.fontFamily; font.pixelSize: 10 * Config.uiScale
+            color: root.colors ? root.colors.surfaceText : "#e0e2e8"
+          }
         }
       }
     }

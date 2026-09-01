@@ -134,114 +134,62 @@ Item {
         Repeater {
             model: root.rices
 
-            Rectangle {
-                id: card
+            PreviewCard {
+                id: riceCard
                 width: 300 * Config.uiScale
-                height: 132 * Config.uiScale
-                radius: Style.radiusMedium
-                color: root.colors ? root.colors.surfaceContainer : "#1d100e"
-                readonly property bool _active: modelData.active === true
-                border.width: _active ? 2 : 1
-                border.color: _active ? root._accent
-                    : (_cardMouse.containsMouse ? Qt.rgba(root._ink.r, root._ink.g, root._ink.b, 0.35) : Qt.rgba(root._ink.r, root._ink.g, root._ink.b, 0.14))
-                Behavior on border.color { ColorAnimation { duration: Style.animVeryFast } }
+                height: 168 * Config.uiScale
+                colors: root.colors
+                readonly property var _rice: modelData
+                label: modelData.name || modelData.slug || ""
+                badge: modelData.active === true ? "適用中" : (modelData.live === true ? "LIVE" : "")
+                badgeColor: modelData.active === true ? root._accent : (root.colors ? root.colors.primary : Style.fallbackAccent)
+                selected: modelData.active === true
+                onClicked: { root._confirmMode = "apply"; root._confirmSlug = "" + _rice.slug; root._confirmName = "" + (_rice.name || _rice.slug) }
+                onRightClicked: { root._confirmMode = "delete"; root._confirmSlug = "" + _rice.slug; root._confirmName = "" + (_rice.name || _rice.slug) }
 
-                Column {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.margins: 12
-                    spacing: 5
-
-                    Row {
-                        width: parent.width
-                        Text {
-                            width: parent.width - activeSeal.width
-                            elide: Text.ElideRight
-                            text: modelData.name || modelData.slug || ""
-                            font.family: Style.fontFamily; font.pixelSize: 14 * Config.uiScale; font.weight: Font.Medium
-                            color: root._ink
-                        }
-                        Text {
-                            id: activeSeal
-                            visible: card._active
-                            text: "適用中"
-                            font.family: Style.fontFamily; font.pixelSize: 9 * Config.uiScale
-                            color: root._accent
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                    }
-
-                    Text {
-                        text: (modelData.author ? ("by " + modelData.author) : "")
-                        font.family: Style.fontFamily; font.pixelSize: 9 * Config.uiScale
-                        color: Qt.rgba(root._inkDim.r, root._inkDim.g, root._inkDim.b, 0.8)
-                    }
-
-                    Text {
-                        width: parent.width
-                        wrapMode: Text.WordWrap
-                        maximumLineCount: 2
-                        elide: Text.ElideRight
-                        text: modelData.blurb || ""
-                        font.family: Style.fontFamily; font.pixelSize: 10 * Config.uiScale
-                        color: root._inkDim
-                    }
-                }
-
-                // tag pills along the bottom
-                Row {
-                    anchors.left: parent.left
-                    anchors.bottom: parent.bottom
-                    anchors.margins: 12
-                    spacing: 5
-                    Repeater {
-                        model: (modelData.tags || []).slice(0, 4)
-                        Rectangle {
-                            height: 15 * Config.uiScale
-                            width: tagTxt.width + 10
-                            radius: 3
-                            color: Qt.rgba(root._ink.r, root._ink.g, root._ink.b, 0.08)
-                            border.width: 1
-                            border.color: Qt.rgba(root._ink.r, root._ink.g, root._ink.b, 0.14)
-                            Text {
-                                id: tagTxt
-                                anchors.centerIn: parent
-                                text: modelData
-                                font.family: Style.fontFamily; font.pixelSize: 8 * Config.uiScale; font.letterSpacing: 0.5
-                                color: root._inkDim
-                            }
-                        }
-                    }
-                }
-
-                MouseArea {
-                    id: _cardMouse
+                content: Item {
                     anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: { root._confirmMode = "apply"; root._confirmSlug = "" + modelData.slug; root._confirmName = "" + (modelData.name || modelData.slug) }
+                    // the saved look's own preview: a still, or a live wall's tuned frame
+                    Image {
+                        id: ricePreview
+                        anchors.fill: parent
+                        source: riceCard._rice.preview || ""
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true; cache: true; smooth: true
+                        opacity: status === Image.Ready ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: Style.animNormal; easing.type: Easing.OutCubic } }
+                    }
+                    // silhouette when there is no rendered preview
+                    Rectangle {
+                        anchors.fill: parent
+                        visible: ricePreview.status !== Image.Ready
+                        color: root.colors ? Qt.rgba(root.colors.surfaceVariant.r, root.colors.surfaceVariant.g, root.colors.surfaceVariant.b, 0.6) : Qt.rgba(0.18, 0.20, 0.25, 0.6)
+                        Text {
+                            anchors.centerIn: parent
+                            text: "\u{f0553}"
+                            font.family: Style.fontFamilyNerdIcons; font.pixelSize: 24 * Config.uiScale
+                            color: root.colors ? Qt.rgba(root.colors.surfaceText.r, root.colors.surfaceText.g, root.colors.surfaceText.b, 0.15) : Qt.rgba(1, 1, 1, 0.1)
+                        }
+                    }
                 }
 
-                Rectangle {
-                    anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 8
-                    width: 20 * Config.uiScale; height: 20 * Config.uiScale
-                    radius: 4
-                    z: 5
-                    visible: _cardMouse.containsMouse || _delMouse.containsMouse
-                    color: _delMouse.containsMouse ? Qt.rgba(root._ink.r, root._ink.g, root._ink.b, 0.16) : "transparent"
+                overlay: Rectangle {
+                    anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 6
+                    width: 22 * Config.uiScale; height: 22 * Config.uiScale; radius: 4
+                    visible: riceCard.hovered || _delMouse.containsMouse
+                    color: _delMouse.containsMouse ? Qt.rgba(0, 0, 0, 0.7) : Qt.rgba(0, 0, 0, 0.45)
                     Text {
                         anchors.centerIn: parent
                         text: "\u{f0a7a}"
-                        font.family: Style.fontFamilyNerdIcons; font.pixelSize: 12 * Config.uiScale
-                        color: root._inkDim
+                        font.family: Style.fontFamilyNerdIcons; font.pixelSize: 13 * Config.uiScale
+                        color: root.colors ? root.colors.surfaceText : "#e0e2e8"
                     }
                     MouseArea {
                         id: _delMouse
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: { root._confirmMode = "delete"; root._confirmSlug = "" + modelData.slug; root._confirmName = "" + (modelData.name || modelData.slug) }
+                        onClicked: { root._confirmMode = "delete"; root._confirmSlug = "" + riceCard._rice.slug; root._confirmName = "" + (riceCard._rice.name || riceCard._rice.slug) }
                     }
                 }
             }

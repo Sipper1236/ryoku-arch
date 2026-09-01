@@ -1,5 +1,6 @@
 DimOverlay 1.0 DimOverlay.qml
 SectionTitle 1.0 SectionTitle.qml
+PreviewCard 1.0 PreviewCard.qml
 SettingsCard 1.0 SettingsCard.qml
 SettingsRow 1.0 SettingsRow.qml
 SettingsDropdown 1.0 SettingsDropdown.qml
