@@ -29,6 +29,11 @@ Column {
     readonly property color _ink:    colors ? colors.surfaceText : "#e0e2e8"
     readonly property color _inkDim: colors ? colors.surfaceVariantText : "#c2c7cf"
     readonly property color _line:   colors ? colors.outline : Qt.rgba(1, 1, 1, 0.22)
+    readonly property bool _isVideo: {
+        var p = ("" + root.sourcePath).toLowerCase()
+        return p.endsWith(".mp4") || p.endsWith(".webm") || p.endsWith(".mkv") || p.endsWith(".mov") || p.endsWith(".m4v") || p.endsWith(".avi")
+    }
+    Component.onCompleted: DaemonClient.paletteFrameStatus()
 
     width: parent ? parent.width : 0
     spacing: 12
@@ -173,6 +178,22 @@ Column {
                 isActive: true
                 onClicked: root._up.running ? root._cancelUpscale() : root._startUpscale()
             }
+        }
+    }
+
+    SettingsCard {
+        visible: root._isVideo
+        colors: root.colors
+        title: "Palette frame"; kana: "採色"
+        width: parent.width
+
+        RowInput {
+            colors: root.colors
+            title: "Sample second"
+            description: "Which second of a video clip matugen samples for the colour scheme. Re-derives the palette from that frame."
+            value: Math.round(DaemonClient.paletteFrame)
+            min: 0; max: 20; suffix: "s"
+            onCommit: function(v) { DaemonClient.setPaletteFrame(v) }
         }
     }
 }

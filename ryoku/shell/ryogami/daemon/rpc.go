@@ -218,6 +218,25 @@ func (d *daemon) dispatchRequest(req *request) response {
 		d.broadcast("ryogami.wall.random_stopped", map[string]interface{}{})
 		return ok(req.ID, map[string]interface{}{"stopped": true})
 
+	// Palette frame: which second of a video clip the still (and so the matugen
+	// palette the shell derives) is sampled from. With a "frame" param it
+	// persists the second and re-applies the current wallpaper so the new still
+	// is painted and republished; the shell's bridge re-runs matugen off it.
+	// Without a param it reports the current second.
+	case "wall.palette_frame":
+		if _, has := p["frame"]; has {
+			sec := floatParam(p, "frame", 1)
+			if sec < 0 {
+				sec = 0
+			}
+			persistVideoFrame(sec)
+			d.reloadConfig()
+			d.restoreOutputs()
+			d.broadcast("ryogami.wall.palette_frame", map[string]interface{}{"frame": sec})
+			return ok(req.ID, map[string]interface{}{"frame": sec})
+		}
+		return ok(req.ID, map[string]interface{}{"frame": d.config().videoFrame()})
+
 	case "playlist.list", "pl.list":
 		return ok(req.ID, d.playlists.snapshot())
 

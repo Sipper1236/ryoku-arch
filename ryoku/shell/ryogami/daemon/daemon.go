@@ -53,6 +53,13 @@ func (d *daemon) config() config {
 	return d.cfg
 }
 
+func (d *daemon) reloadConfig() {
+	fresh := loadConfig()
+	d.cfgMu.Lock()
+	d.cfg = fresh
+	d.cfgMu.Unlock()
+}
+
 func (d *daemon) setCurrent(name string) {
 	d.currentMu.Lock()
 	d.current = name

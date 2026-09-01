@@ -29,7 +29,7 @@ func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mut
 	live := wpType == "video"
 	paint := path
 	if live {
-		if still := liveStill(path); still != "" {
+		if still := liveStill(path, d.config().videoFrame()); still != "" {
 			paint = still
 		}
 	} else if d.video.Playing() {
@@ -158,7 +158,7 @@ func (d *daemon) restoreOutputs() {
 			if out != "*" {
 				outs = []string{out}
 			}
-			if still := liveStill(p); still != "" {
+			if still := liveStill(p, d.config().videoFrame()); still != "" {
 				paint = still
 			}
 			seq := d.paintSeq.Add(1)

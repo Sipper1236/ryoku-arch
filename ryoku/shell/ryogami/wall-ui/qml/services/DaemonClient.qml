@@ -53,6 +53,19 @@ QtObject {
         })
     }
 
+    // Palette frame: which second of a video clip drives the matugen palette.
+    property real paletteFrame: 1
+    function paletteFrameStatus(callback) {
+        call("wall.palette_frame", {}, function(result, err) {
+            if (!err && result && result.frame !== undefined) client.paletteFrame = result.frame
+            if (callback) callback(result, err)
+        })
+    }
+    function setPaletteFrame(sec, callback) {
+        client.paletteFrame = sec
+        call("wall.palette_frame", { frame: sec }, callback)
+    }
+
     property int audioCapableCount: 0
     property int audioPlayingCount: 0
     property var audioOutputs: ({})

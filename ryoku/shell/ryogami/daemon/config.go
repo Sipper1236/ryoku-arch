@@ -12,9 +12,10 @@ import (
 // the persist path because the file is rewritten by targeted patches only.
 type config struct {
 	Matugen struct {
-		Mode       string `json:"mode"`
-		SchemeType string `json:"schemeType"`
-		ColorIndex uint32 `json:"colorIndex"`
+		Mode       string  `json:"mode"`
+		SchemeType string  `json:"schemeType"`
+		ColorIndex uint32  `json:"colorIndex"`
+		VideoFrame float64 `json:"videoFrame"`
 	} `json:"matugen"`
 	ResourceTier     string `json:"resource_tier"`
 	RestoreOnStartup *bool  `json:"restoreOnStartup"`
@@ -116,6 +117,38 @@ func (c config) matugenEnabled() bool {
 
 func (c config) restoreEnabled() bool {
 	return c.RestoreOnStartup == nil || *c.RestoreOnStartup
+}
+
+// videoFrame is the second of a clip liveStill samples for the frame the shell
+// paints and matugen reads. Defaults to 1s; the picker's palette-frame slider
+// scrubs it.
+func (c config) videoFrame() float64 {
+	if c.Matugen.VideoFrame <= 0 {
+		return 1
+	}
+	return c.Matugen.VideoFrame
+}
+
+// persistVideoFrame patches only matugen.videoFrame so hand-edited keys survive.
+func persistVideoFrame(sec float64) {
+	raw := map[string]json.RawMessage{}
+	loadJSON(configPath(), &raw)
+	mat := map[string]interface{}{}
+	if m, ok := raw["matugen"]; ok {
+		_ = json.Unmarshal(m, &mat)
+	}
+	mat["videoFrame"] = sec
+	b, err := json.Marshal(mat)
+	if err != nil {
+		return
+	}
+	raw["matugen"] = b
+	_ = os.MkdirAll(ryokuConfigDir(), 0o755)
+	out, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return
+	}
+	saveRaw(configPath(), out)
 }
 
 // persistResourceTier patches only the resource_tier key so hand-edited keys in

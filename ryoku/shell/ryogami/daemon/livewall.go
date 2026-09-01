@@ -215,14 +215,18 @@ func runTranscode(pic, tmp string, src liveShape, capW int, fps string) bool {
 // The shell paints it as the frame under the player: the reveal transition, the
 // depth cutout and the palette all read this still, and it holds the screen
 // through the one-time transcode and if the player ever dies. "" on failure.
-func liveStill(video string) string {
+func liveStill(video string, sec float64) string {
 	st, err := os.Stat(video)
 	if err != nil {
 		return ""
 	}
+	if sec <= 0 {
+		sec = 1
+	}
+	secStr := strconv.FormatFloat(sec, 'f', 1, 64)
 	dir := filepath.Join(cacheHome(), "ryogami", "livewall")
 	name := strings.TrimSuffix(filepath.Base(video), filepath.Ext(video))
-	out := filepath.Join(dir, name+"-"+strconv.FormatInt(st.ModTime().Unix(), 10)+"-still.jpg")
+	out := filepath.Join(dir, name+"-"+strconv.FormatInt(st.ModTime().Unix(), 10)+"-still-"+secStr+".jpg")
 	if fileExists(out) {
 		return out
 	}
@@ -230,7 +234,7 @@ func liveStill(video string) string {
 		return ""
 	}
 	tmp := out + ".tmp." + strconv.Itoa(os.Getpid()) + ".jpg"
-	err = exec.Command("ffmpeg", "-y", "-v", "error", "-ss", "1", "-i", video,
+	err = exec.Command("ffmpeg", "-y", "-v", "error", "-ss", secStr, "-i", video,
 		"-frames:v", "1", "-q:v", "2", tmp).Run()
 	if err != nil || !fileExists(tmp) {
 		// Clips shorter than a second: take the first frame instead.
