@@ -23,12 +23,16 @@ Item {
   signal escapePressed()
 
   clip: true
+  focus: browserVisible
+  onBrowserVisibleChanged: if (browserVisible) forceActiveFocus()
+  Keys.onEscapePressed: (event) => { root.escapePressed(); event.accepted = true }
 
   visible: browserVisible
   opacity: browserVisible ? 1 : 0
   Behavior on opacity { NumberAnimation { duration: Style.animNormal; easing.type: Easing.OutCubic } }
 
-  implicitHeight: Math.max(300, grid.y + grid.implicitHeight + 24)
+  readonly property real _maxH: (Screen.height > 0 ? Screen.height : 1000) - 150 * Config.uiScale
+  implicitHeight: Math.min(Math.max(300, header.height + 28 + grid.implicitHeight + 24), _maxH)
   height: browserVisible ? implicitHeight : 0
   Behavior on height { NumberAnimation { duration: Style.animEnter; easing.type: Easing.OutCubic } }
 
@@ -137,13 +141,23 @@ Item {
   }
 
   // ---- theme card grid ----
-  Flow {
-    id: grid
+  Flickable {
+    id: gridFlick
     anchors.top: header.bottom
-    anchors.horizontalCenter: parent.horizontalCenter
     anchors.topMargin: 14
-    width: Math.min(parent.width - 48, 5 * (220 + 10) * Config.uiScale)
-    spacing: 10
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    anchors.bottomMargin: 12
+    clip: true
+    contentHeight: grid.implicitHeight
+    boundsBehavior: Flickable.StopAtBounds
+
+    Flow {
+      id: grid
+      anchors.horizontalCenter: parent.horizontalCenter
+      width: Math.min(gridFlick.width - 48, 5 * (220 + 10) * Config.uiScale)
+      spacing: 10
 
     Repeater {
       model: root.catalog
@@ -231,6 +245,7 @@ Item {
         }
       }
     }
+  }
   }
 
   // ---- scrim + TUNE drawer (recent + matugen knobs) ----
