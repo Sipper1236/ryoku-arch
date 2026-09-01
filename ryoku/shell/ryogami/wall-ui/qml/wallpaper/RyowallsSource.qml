@@ -20,6 +20,7 @@ QtObject {
     // binary stays the fallback until every provider is ported (then it sunsets).
     readonly property string _ua: "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
     readonly property string _ryostoreBase: "https://raw.githubusercontent.com/neur0map/ryostore/main"
+    readonly property string _mbBase: "https://motionbgs.com"
     property string _nativeProvider: ""
     property string _pendingQuery: ""
     property string _nativeDlPath: ""
@@ -64,6 +65,14 @@ QtObject {
             _nativeSearchProc.running = true
             return
         }
+        if (searchVerb === "motionbgs-search") {
+            _nativeProvider = "motionbgs"
+            var q2 = ("" + (query || "")).toLowerCase().replace(/ /g, "-")
+            var mbPath = q2.length > 0 ? "/tag:" + q2 + "/" : "/"
+            _nativeSearchProc.command = ["curl", "-fsSL", "-A", _ua, "-e", _mbBase + "/", _mbBase + mbPath]
+            _nativeSearchProc.running = true
+            return
+        }
         var args = [searchVerb]
         for (var e = 0; e < extraArgs.length; e++) args.push(extraArgs[e])
         if (query && query.length > 0) { args.push("--query"); args.push(query) }
@@ -95,6 +104,25 @@ QtObject {
                         out.push({ id: w.id, thumb: src._ryostoreBase + "/" + w.poster,
                                    video: w.video, dl: w.video, resolution: "",
                                    name: w.name, author: (w.author || "") })
+                    }
+                }
+                else if (src._nativeProvider === "motionbgs") {
+                    var re = new RegExp("/i/c/[0-9]+x[0-9]+/media/[0-9]+/[^\"' ]+\\.jpe?g", "g")
+                    var seen = {}, m
+                    while ((m = re.exec(src._buf)) !== null) {
+                        var p = m[0]
+                        var parts = p.split("/")           // ['','i','c',WxH,'media',id,fname]
+                        var wxh = parts[3], mid = parts[5], fname = parts[6]
+                        if (parseInt(wxh.split("x")[0]) < 300) continue
+                        if (seen[mid]) continue
+                        seen[mid] = true
+                        var mbase = ("" + fname).replace(/\.[0-9]+x[0-9]+/, "").replace(/\.jpe?g$/, "")
+                        var rmt = ("" + fname).match(/\.([0-9]+x[0-9]+)\.jpe?g$/)
+                        out.push({ id: mid, thumb: src._mbBase + p,
+                                   video: src._mbBase + "/dl/hd/" + mid + "/",
+                                   dl: src._mbBase + "/dl/4k/" + mid + "/",
+                                   resolution: rmt ? rmt[1] : "", name: mbase.replace(/-/g, " ") })
+                        if (out.length >= 24) break
                     }
                 }
             } catch (e) { src.error = "search failed"; src.results = []; return }
@@ -141,6 +169,17 @@ QtObject {
             _nativeDlProc.command = ["bash", "-lc",
                 "mkdir -p " + JSON.stringify(dir) + " && curl -fsSL -A " + JSON.stringify(_ua)
                 + " " + JSON.stringify(url) + " -o " + JSON.stringify(_nativeDlPath)]
+            _nativeDlProc.running = true
+            return
+        }
+        if (downloadVerb === "motionbgs-download") {
+            var mUrl = "" + (item.dl || item.video || "")
+            var mDir = Quickshell.env("HOME") + "/Pictures/livewalls"
+            _nativeDlPath = mDir + "/motionbgs-" + item.id + ".mp4"
+            _nativeDlProc.command = ["bash", "-lc",
+                "mkdir -p " + JSON.stringify(mDir) + " && curl -fsSL -A " + JSON.stringify(_ua)
+                + " -e " + JSON.stringify(_mbBase + "/") + " " + JSON.stringify(mUrl)
+                + " -o " + JSON.stringify(_nativeDlPath)]
             _nativeDlProc.running = true
             return
         }
