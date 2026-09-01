@@ -19,8 +19,22 @@ Scope {
   property alias swService: swService
   property alias _whService: whService
   property string mainMonitor: Config.mainMonitor
+  property string _activeThemeName: ""
   signal wallpaperChanged()
   signal uiReady()
+
+  FileView {
+    id: shellFile
+    path: Quickshell.env("HOME") + "/.config/ryoku/shell.json"
+    watchChanges: true
+    onFileChanged: reload()
+    onLoaded: {
+      try {
+        var d = JSON.parse(shellFile.text())
+        wallpaperSelector._activeThemeName = (d.theme && d.theme.theme) || ""
+      } catch (e) {}
+    }
+  }
 
   function _resetFilters() {
     service.selectedColorFilter = -1
@@ -530,6 +544,7 @@ Scope {
       browseOpen: wallpaperSelector.browseOpen
       themesOpen: wallpaperSelector.themesOpen
       ricesOpen: wallpaperSelector.ricesOpen
+      followActive: wallpaperSelector._activeThemeName === "Wallpaper"
       onSettingsToggled: { wallpaperSelector.effectsOpen = false; wallpaperSelector.settingsOpen = !wallpaperSelector.settingsOpen; if (!wallpaperSelector.settingsOpen) wallpaperSelector._focusActiveList() }
       onEffectsToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = !wallpaperSelector.effectsOpen; if (!wallpaperSelector.effectsOpen) wallpaperSelector._focusActiveList() }
       onBrowseToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.themesOpen = false; wallpaperSelector.ricesOpen = false; wallpaperSelector.browseOpen = !wallpaperSelector.browseOpen }
@@ -539,6 +554,7 @@ Scope {
         Config.saveKey("matugen.mode", mode)
         DaemonClient.retheme(Config.matugenScheme, mode, Config.matugenColorIndex)
       }
+      onFollowToggled: Quickshell.execDetached(["ryoku-shell", "theme", "Wallpaper"])
       visible: !wallpaperSelector.browseOpen
       enabled: wallpaperSelector._filterBarShown
       opacity: (wallpaperSelector.browseOpen || !wallpaperSelector._filterBarShown) ? 0 : 1
@@ -1502,6 +1518,7 @@ Scope {
             anchors.margins: 4
             width: gridTypeBadge.implicitWidth + 6; height: 14; radius: 3
             color: Qt.rgba(0, 0, 0, 0.6)
+            visible: gridThumbDelegate.model.kind !== "theme" && gridThumbDelegate.model.kind !== "rice"
             Text {
               id: gridTypeBadge
               anchors.centerIn: parent
@@ -1520,7 +1537,7 @@ Scope {
             border.color: gridThumbDelegate.videoActive
                 ? "transparent"
                 : (wallpaperSelector.colors ? Qt.rgba(wallpaperSelector.colors.primary.r, wallpaperSelector.colors.primary.g, wallpaperSelector.colors.primary.b, 0.6) : Qt.rgba(1,1,1,0.4))
-            visible: gridThumbDelegate.hasVideo
+            visible: gridThumbDelegate.hasVideo && gridThumbDelegate.model.kind !== "theme" && gridThumbDelegate.model.kind !== "rice"
             z: 5
 
             Behavior on color { ColorAnimation { duration: Style.animFast } }
@@ -1540,7 +1557,7 @@ Scope {
             text: "\u{f0134}"
             font.family: Style.fontFamilyNerdIcons; font.pixelSize: 14
             color: wallpaperSelector.colors ? wallpaperSelector.colors.primary : "#ff8800"
-            visible: gridThumbDelegate.model.favourite === true
+            visible: gridThumbDelegate.model.favourite === true && gridThumbDelegate.model.kind !== "theme" && gridThumbDelegate.model.kind !== "rice"
           }
           }
         }
@@ -1557,6 +1574,7 @@ Scope {
       height: Config.mosaicHeight
 
       service: service
+      model: wallpaperSelector._activeModel
       colors: wallpaperSelector.colors
       active: wallpaperSelector.cardVisible && !wallpaperSelector.anyBrowserOpen && wallpaperSelector.isMosaicMode
       visible: active

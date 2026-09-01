@@ -244,6 +244,7 @@ Item {
         border.width: 1
         border.color: hexItem.colors ? Qt.rgba(hexItem.colors.primary.r, hexItem.colors.primary.g, hexItem.colors.primary.b, 0.4) : Qt.rgba(1,1,1,0.2)
         z: 5
+        visible: hexItem.itemData && hexItem.itemData.kind !== "theme" && hexItem.itemData.kind !== "rice"
 
         Text {
             id: typeBadgeLabel
@@ -263,7 +264,7 @@ Item {
         border.color: hexItem.videoActive
             ? "transparent"
             : (hexItem.colors ? Qt.rgba(hexItem.colors.primary.r, hexItem.colors.primary.g, hexItem.colors.primary.b, 0.6) : Qt.rgba(1,1,1,0.4))
-        visible: hexItem.hasVideo
+        visible: hexItem.hasVideo && hexItem.itemData && hexItem.itemData.kind !== "theme" && hexItem.itemData.kind !== "rice"
         z: 5
 
         Behavior on color { ColorAnimation { duration: Style.animFast } }

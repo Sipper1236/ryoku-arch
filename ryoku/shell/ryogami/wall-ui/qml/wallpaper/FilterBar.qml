@@ -15,6 +15,7 @@ Item {
     property bool browseOpen: false
     property bool themesOpen: false
     property bool ricesOpen: false
+    property bool followActive: false
     property bool cacheLoading: false
     property int cacheProgress: 0
     property int cacheTotal: 0
@@ -33,6 +34,7 @@ Item {
     signal themesToggled()
     signal ricesToggled()
     signal modeToggled(string mode)
+    signal followToggled()
 
     readonly property int _skew: 10 * Config.uiScale
     property real maxWidth: 99999
@@ -559,6 +561,14 @@ Item {
             onValueSelected: function(v) {
                 if (filterBar.service) filterBar.service.selectedColorFilter = v
             }
+        }
+
+        FilterButton {
+            colors: filterBar.colors
+            icon: "\u{f020a}"
+            tooltip: "Follow wallpaper colours"
+            isActive: filterBar.followActive
+            onClicked: filterBar.followToggled()
         }
 
         FilterButton {

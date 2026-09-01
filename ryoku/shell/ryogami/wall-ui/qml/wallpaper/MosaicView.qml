@@ -7,6 +7,7 @@ Item {
     id: mosaicView
 
     property var service
+    property var model: service ? service.filteredModel : null
     property var colors
     property bool active: false
     property int requestedCount: Config.mosaicCells
@@ -19,8 +20,8 @@ Item {
     property real _worldX: 0
     property real _velocity: 0
     property int _warmupCount: Math.max(0, Math.min(64,
-                              service && service.filteredModel
-                                  ? service.filteredModel.count : 0))
+                              mosaicView.model
+                                  ? mosaicView.model.count : 0))
 
     property int hoveredIdx: -1
     property real shardGap: 0.0
@@ -55,7 +56,7 @@ Item {
     }
 
     Connections {
-        target: mosaicView.service ? mosaicView.service.filteredModel : null
+        target: mosaicView.model
         function onCountChanged() {
             if (!mosaicView.active) return
             _filterFadeOut.restart()
@@ -416,10 +417,10 @@ Item {
                 asynchronous: true
                 cache: true
                 source: {
-                    if (!mosaicView.service || !mosaicView.service.filteredModel) return ""
-                    var n = mosaicView.service.filteredModel.count
+                    if (!mosaicView.model) return ""
+                    var n = mosaicView.model.count
                     if (n <= 0) return ""
-                    var item = mosaicView.service.filteredModel.get(index % n)
+                    var item = mosaicView.model.get(index % n)
                     return item && item.thumb ? ImageService.fileUrl(item.thumb) : ""
                 }
                 sourceSize.width: ImageService.thumbWidth
@@ -447,11 +448,11 @@ Item {
                     cellData: modelData
                     colors: mosaicView.colors
                     itemData: {
-                        if (!mosaicView.service || !mosaicView.service.filteredModel) return null
-                        var n = mosaicView.service.filteredModel.count
+                        if (!mosaicView.model) return null
+                        var n = mosaicView.model.count
                         if (n === 0) return null
                         var i = ((stripe.imageOffset + modelData.idx) % n + n) % n
-                        return mosaicView.service.filteredModel.get(i)
+                        return mosaicView.model.get(i)
                     }
                     cellKey: stripe.stripeIdx * 100000 + modelData.idx
                     hovered: mosaicView.hoveredIdx === cellKey

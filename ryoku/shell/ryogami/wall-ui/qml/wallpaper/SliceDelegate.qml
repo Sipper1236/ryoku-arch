@@ -360,7 +360,7 @@ Item {
         border.color: delegateItem.videoActive
             ? "transparent"
             : (delegateItem.colors ? Qt.rgba(delegateItem.colors.primary.r, delegateItem.colors.primary.g, delegateItem.colors.primary.b, 0.6) : Qt.rgba(1, 1, 1, 0.4))
-        visible: delegateItem.hasVideo
+        visible: delegateItem.hasVideo && delegateItem.model.kind !== "theme" && delegateItem.model.kind !== "rice"
         z: 10
 
         Behavior on color { ColorAnimation { duration: Style.animNormal } }
@@ -391,6 +391,7 @@ Item {
         color: Qt.rgba(0, 0, 0, 0.75)
         border.width: 1
         border.color: delegateItem.colors ? Qt.rgba(delegateItem.colors.primary.r, delegateItem.colors.primary.g, delegateItem.colors.primary.b, 0.4) : Qt.rgba(1, 1, 1, 0.2)
+        visible: delegateItem.model.kind !== "theme" && delegateItem.model.kind !== "rice"
 
         Text {
             id: typeBadgeText
