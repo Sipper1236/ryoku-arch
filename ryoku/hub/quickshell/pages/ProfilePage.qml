@@ -82,7 +82,7 @@ Item {
         if (k === "net")
             return "\u2193 " + pg.fmtRate(LiveStats.netDown);
         if (k === "frac")
-            return "BETA · 18";
+            return "BETA · 19";
         return "";
     }
     function statSub(k) {

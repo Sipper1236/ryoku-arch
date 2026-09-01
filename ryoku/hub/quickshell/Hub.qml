@@ -991,7 +991,7 @@ Rectangle {
             Marginalia {
                 id: edition
                 anchors { left: parent.left; top: parent.top; topMargin: Tokens.s3 }
-                index: "BETA"; label: "18"
+                index: "BETA"; label: "19"
                 glyph: "column"; glyph2: ""
                 chevrons: false
             }
