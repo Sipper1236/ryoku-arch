@@ -225,7 +225,7 @@ Item {
     }
 
     function startUpdate() {
-        Spawn.run(["kitty", "-e", "sh", "-c", "RYOKU_UPDATE_UI=hub exec ryoku update"]);
+        Spawn.run(["kitty", "-e", "sh", "-c", "exec ryoku update"]);
     }
 
     // idle list: incoming commits when behind, else the recent history the
