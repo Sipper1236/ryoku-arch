@@ -698,7 +698,11 @@ Scope {
     Loader {
       id: browseLoader
       active: wallpaperSelector.browseOpen
-      anchors.centerIn: parent
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.top: parent.top
+      anchors.topMargin: 60 * Config.uiScale
+      anchors.bottom: parent.bottom
+      anchors.bottomMargin: 60 * Config.uiScale
       width: Math.min(cardContainer.width - 20, Screen.width - 140 * Config.uiScale)
       z: 6
       sourceComponent: Component {

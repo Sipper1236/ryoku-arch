@@ -22,15 +22,170 @@ Item {
   opacity: browserVisible ? 1 : 0
   Behavior on opacity { NumberAnimation { duration: Style.animNormal; easing.type: Easing.OutCubic } }
 
-  height: browserVisible ? implicitHeight : 0
-  Behavior on height { NumberAnimation { duration: Style.animEnter; easing.type: Easing.OutCubic } }
-
   readonly property real _gridCellW: Config.steamThumbWidth + 8
   readonly property real _gridCellH: Config.steamThumbHeight + 8
   readonly property real _gridTotalW: _gridCellW * Config.steamColumns
-  implicitHeight: contentCol.implicitHeight + 22 + _gridCellH * Config.steamRows
+
+  function runSearch(q) {
+    if (!swService) return
+    swService.query = q
+    swService.search(1)
+  }
 
   MouseArea { anchors.fill: parent }
+
+  property Component filterBar: Component {
+    Column {
+      spacing: 8
+
+      Row {
+        spacing: -6
+
+        Repeater {
+          model: [
+            { key: "trend",      label: "Trending" },
+            { key: "new",        label: "New" },
+            { key: "toprated",   label: "Top Rated" },
+            { key: "popular",    label: "Popular" },
+            { key: "favorited",  label: "Favorites" }
+          ]
+          FilterButton {
+            colors: browser.colors; label: modelData.label; skew: 8
+            isActive: browser.swService ? browser.swService.sorting === modelData.key : false
+            onClicked: { browser.swService.sorting = modelData.key; browser.swService.search(1) }
+          }
+        }
+
+        Item { width: 8; height: 1 }
+
+        FilterDropdown {
+          visible: browser.swService && browser.swService.sorting === "trend"
+          colors: browser.colors; skew: 8
+          label: "PERIOD"
+          value: browser.swService ? browser.swService.trendDays : 7
+          displayValue: {
+            if (!browser.swService) return "Week"
+            var map = { 1: "Day", 7: "Week", 30: "Month", 90: "3M", 180: "6M", 365: "Year" }
+            return map[browser.swService.trendDays] || "Week"
+          }
+          model: [
+            { key: "1",   label: "Day" },
+            { key: "7",   label: "Week" },
+            { key: "30",  label: "Month" },
+            { key: "90",  label: "3M" },
+            { key: "180", label: "6M" },
+            { key: "365", label: "Year" }
+          ]
+          onSelected: function(key) { browser.swService.trendDays = parseInt(key); browser.swService.search(1) }
+        }
+      }
+
+      Row {
+        spacing: -6
+
+        FilterDropdown {
+          colors: browser.colors; skew: 8
+          label: "TYPE"
+          value: browser.swService ? browser.swService.requiredType : ""
+          displayValue: {
+            if (!browser.swService || browser.swService.requiredType === "") return "All Types"
+            var map = { "Video": "Video", "Web": "Web", "Scene": "Scene", "Application": "App" }
+            return map[browser.swService.requiredType] || browser.swService.requiredType
+          }
+          model: [
+            { key: "",            label: "All Types" },
+            { key: "Video",       label: "Video" },
+            { key: "Web",         label: "Web" },
+            { key: "Scene",       label: "Scene" },
+            { key: "Application", label: "App" }
+          ]
+          onSelected: function(key) { browser.swService.requiredType = key; browser.swService.search(1) }
+        }
+
+        Item { width: 14; height: 1 }
+
+        Text {
+          text: "CONTENT"
+          font.family: Style.fontFamily; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.2
+          color: browser.colors ? Qt.rgba(browser.colors.surfaceText.r, browser.colors.surfaceText.g, browser.colors.surfaceText.b, 0.35) : Qt.rgba(1,1,1,0.25)
+          anchors.verticalCenter: parent.verticalCenter
+        }
+
+        Item { width: 10; height: 1 }
+
+        FilterButton {
+          colors: browser.colors; label: "SFW"; skew: 8
+          isActive: browser.swService ? !browser.swService.nsfwEnabled : true
+          onClicked: { browser.swService.nsfwEnabled = false; browser.swService.search(1) }
+        }
+        FilterButton {
+          colors: browser.colors; label: "NSFW"; skew: 8
+          isActive: browser.swService ? browser.swService.nsfwEnabled : false
+          activeColor: "#e53935"; hasActiveColor: true
+          onClicked: { browser.swService.nsfwEnabled = true; browser.swService.search(1) }
+        }
+
+        Item { width: 14; height: 1 }
+
+        FilterDropdown {
+          colors: browser.colors; skew: 8
+          label: "RESOLUTION"
+          value: browser.swService ? browser.swService.requiredResolution : ""
+          displayValue: {
+            if (!browser.swService || browser.swService.requiredResolution === "") return "Any"
+            var map = { "1920 x 1080": "1080p", "2560 x 1440": "2K", "3840 x 2160": "4K", "2560 x 1080": "UW", "3440 x 1440": "UWQHD", "3840 x 1080": "Dual", "5120 x 1440": "Dual QHD" }
+            return map[browser.swService.requiredResolution] || browser.swService.requiredResolution
+          }
+          model: [
+            { key: "",                label: "Any" },
+            { key: "1920 x 1080",    label: "1080p" },
+            { key: "2560 x 1440",    label: "2K" },
+            { key: "3840 x 2160",    label: "4K" },
+            { key: "2560 x 1080",    label: "UW" },
+            { key: "3440 x 1440",    label: "UWQHD" },
+            { key: "3840 x 1080",    label: "Dual" },
+            { key: "5120 x 1440",    label: "Dual QHD" }
+          ]
+          onSelected: function(key) { browser.swService.requiredResolution = key; browser.swService.search(1) }
+        }
+
+        Item { width: 14; height: 1 }
+
+        FilterDropdown {
+          colors: browser.colors; skew: 8
+          label: "CATEGORY"
+          value: browser.swService ? browser.swService.requiredTag : ""
+          displayValue: {
+            if (!browser.swService || browser.swService.requiredTag === "") return "All"
+            return browser.swService.requiredTag
+          }
+          model: [
+            { key: "",           label: "All" },
+            { key: "Abstract",   label: "Abstract" },
+            { key: "Animal",     label: "Animal" },
+            { key: "Anime",      label: "Anime" },
+            { key: "CGI",        label: "CGI" },
+            { key: "Cyberpunk",  label: "Cyberpunk" },
+            { key: "Fantasy",    label: "Fantasy" },
+            { key: "Game",       label: "Game" },
+            { key: "Girls",      label: "Girls" },
+            { key: "Guys",       label: "Guys" },
+            { key: "Landscape",  label: "Landscape" },
+            { key: "Medieval",   label: "Medieval" },
+            { key: "Music",      label: "Music" },
+            { key: "Nature",     label: "Nature" },
+            { key: "Pixel art",  label: "Pixel Art" },
+            { key: "Relaxing",   label: "Relaxing" },
+            { key: "Retro",      label: "Retro" },
+            { key: "Sci-Fi",     label: "Sci-Fi" },
+            { key: "Technology", label: "Technology" },
+            { key: "Vehicle",    label: "Vehicle" }
+          ]
+          onSelected: function(key) { browser.swService.requiredTag = key; browser.swService.search(1) }
+        }
+      }
+    }
+  }
 
   Column {
     id: contentCol
@@ -41,195 +196,6 @@ Item {
     anchors.topMargin: 12
     spacing: 8
 
-    Row {
-      spacing: -6
-      anchors.horizontalCenter: parent.horizontalCenter
-
-      FilterButton {
-        colors: browser.colors; icon: "󰅁"; skew: 8
-        tooltip: "Back to wallpapers"
-        onClicked: browser.escapePressed()
-      }
-
-      Item { width: 14; height: 1 }
-
-      Rectangle {
-        width: 200 * Config.uiScale; height: 24 * Config.uiScale; radius: 0
-        color: browser.colors ? Qt.rgba(browser.colors.surface.r, browser.colors.surface.g, browser.colors.surface.b, 0.8)
-                               : Qt.rgba(0.15, 0.17, 0.22, 0.8)
-        border.width: searchInput.activeFocus ? 2 : 1
-        border.color: searchInput.activeFocus
-            ? (browser.colors ? browser.colors.primary : Style.fallbackAccent)
-            : (browser.colors ? Qt.rgba(browser.colors.primary.r, browser.colors.primary.g, browser.colors.primary.b, 0.2) : Qt.rgba(1, 1, 1, 0.12))
-        transform: Matrix4x4 { matrix: Qt.matrix4x4(1, -0.15, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1) }
-
-        TextInput {
-          id: searchInput
-          anchors.fill: parent; anchors.margins: 6 * Config.uiScale
-          font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
-          color: browser.colors ? browser.colors.surfaceText : "#e0e0e0"
-          clip: true
-          Keys.onReturnPressed: { browser.swService.query = text; browser.swService.search(1) }
-          Keys.onEscapePressed: browser.escapePressed()
-        }
-        Text {
-          anchors.fill: parent; anchors.margins: 6 * Config.uiScale
-          font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
-          color: browser.colors ? Qt.rgba(browser.colors.surfaceText.r, browser.colors.surfaceText.g, browser.colors.surfaceText.b, 0.35)
-                                : Qt.rgba(1, 1, 1, 0.3)
-          text: "SEARCH STEAM WORKSHOP..."
-          font.letterSpacing: 0.5; font.weight: Font.Medium
-          visible: !searchInput.text && !searchInput.activeFocus
-        }
-      }
-
-      Item { width: 14; height: 1 }
-
-      Repeater {
-        model: [
-          { key: "trend",      label: "Trending" },
-          { key: "new",        label: "New" },
-          { key: "toprated",   label: "Top Rated" },
-          { key: "popular",    label: "Popular" },
-          { key: "favorited",  label: "Favorites" }
-        ]
-        FilterButton {
-          colors: browser.colors; label: modelData.label; skew: 8
-          isActive: browser.swService ? browser.swService.sorting === modelData.key : false
-          onClicked: { browser.swService.sorting = modelData.key; browser.swService.search(1) }
-        }
-      }
-
-      Item { width: 8; height: 1 }
-
-      FilterDropdown {
-        visible: browser.swService && browser.swService.sorting === "trend"
-        colors: browser.colors; skew: 8
-        label: "PERIOD"
-        value: browser.swService ? browser.swService.trendDays : 7
-        displayValue: {
-          if (!browser.swService) return "Week"
-          var map = { 1: "Day", 7: "Week", 30: "Month", 90: "3M", 180: "6M", 365: "Year" }
-          return map[browser.swService.trendDays] || "Week"
-        }
-        model: [
-          { key: "1",   label: "Day" },
-          { key: "7",   label: "Week" },
-          { key: "30",  label: "Month" },
-          { key: "90",  label: "3M" },
-          { key: "180", label: "6M" },
-          { key: "365", label: "Year" }
-        ]
-        onSelected: function(key) { browser.swService.trendDays = parseInt(key); browser.swService.search(1) }
-      }
-    }
-
-    Row {
-      z: 10
-      spacing: -6
-      anchors.horizontalCenter: parent.horizontalCenter
-
-      FilterDropdown {
-        colors: browser.colors; skew: 8
-        label: "TYPE"
-        value: browser.swService ? browser.swService.requiredType : ""
-        displayValue: {
-          if (!browser.swService || browser.swService.requiredType === "") return "All Types"
-          var map = { "Video": "Video", "Web": "Web", "Scene": "Scene", "Application": "App" }
-          return map[browser.swService.requiredType] || browser.swService.requiredType
-        }
-        model: [
-          { key: "",            label: "All Types" },
-          { key: "Video",       label: "Video" },
-          { key: "Web",         label: "Web" },
-          { key: "Scene",       label: "Scene" },
-          { key: "Application", label: "App" }
-        ]
-        onSelected: function(key) { browser.swService.requiredType = key; browser.swService.search(1) }
-      }
-
-      Item { width: 14; height: 1 }
-
-      Text {
-        text: "CONTENT"
-        font.family: Style.fontFamily; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.2
-        color: browser.colors ? Qt.rgba(browser.colors.surfaceText.r, browser.colors.surfaceText.g, browser.colors.surfaceText.b, 0.35) : Qt.rgba(1,1,1,0.25)
-        anchors.verticalCenter: parent.verticalCenter
-      }
-
-      Item { width: 10; height: 1 }
-
-      FilterButton {
-        colors: browser.colors; label: "SFW"; skew: 8
-        isActive: browser.swService ? !browser.swService.nsfwEnabled : true
-        onClicked: { browser.swService.nsfwEnabled = false; browser.swService.search(1) }
-      }
-      FilterButton {
-        colors: browser.colors; label: "NSFW"; skew: 8
-        isActive: browser.swService ? browser.swService.nsfwEnabled : false
-        activeColor: "#e53935"; hasActiveColor: true
-        onClicked: { browser.swService.nsfwEnabled = true; browser.swService.search(1) }
-      }
-
-      Item { width: 14; height: 1 }
-
-      FilterDropdown {
-        colors: browser.colors; skew: 8
-        label: "RESOLUTION"
-        value: browser.swService ? browser.swService.requiredResolution : ""
-        displayValue: {
-          if (!browser.swService || browser.swService.requiredResolution === "") return "Any"
-          var map = { "1920 x 1080": "1080p", "2560 x 1440": "2K", "3840 x 2160": "4K", "2560 x 1080": "UW", "3440 x 1440": "UWQHD", "3840 x 1080": "Dual", "5120 x 1440": "Dual QHD" }
-          return map[browser.swService.requiredResolution] || browser.swService.requiredResolution
-        }
-        model: [
-          { key: "",                label: "Any" },
-          { key: "1920 x 1080",    label: "1080p" },
-          { key: "2560 x 1440",    label: "2K" },
-          { key: "3840 x 2160",    label: "4K" },
-          { key: "2560 x 1080",    label: "UW" },
-          { key: "3440 x 1440",    label: "UWQHD" },
-          { key: "3840 x 1080",    label: "Dual" },
-          { key: "5120 x 1440",    label: "Dual QHD" }
-        ]
-        onSelected: function(key) { browser.swService.requiredResolution = key; browser.swService.search(1) }
-      }
-
-      Item { width: 14; height: 1 }
-
-      FilterDropdown {
-        colors: browser.colors; skew: 8
-        label: "CATEGORY"
-        value: browser.swService ? browser.swService.requiredTag : ""
-        displayValue: {
-          if (!browser.swService || browser.swService.requiredTag === "") return "All"
-          return browser.swService.requiredTag
-        }
-        model: [
-          { key: "",           label: "All" },
-          { key: "Abstract",   label: "Abstract" },
-          { key: "Animal",     label: "Animal" },
-          { key: "Anime",      label: "Anime" },
-          { key: "CGI",        label: "CGI" },
-          { key: "Cyberpunk",  label: "Cyberpunk" },
-          { key: "Fantasy",    label: "Fantasy" },
-          { key: "Game",       label: "Game" },
-          { key: "Girls",      label: "Girls" },
-          { key: "Guys",       label: "Guys" },
-          { key: "Landscape",  label: "Landscape" },
-          { key: "Medieval",   label: "Medieval" },
-          { key: "Music",      label: "Music" },
-          { key: "Nature",     label: "Nature" },
-          { key: "Pixel art",  label: "Pixel Art" },
-          { key: "Relaxing",   label: "Relaxing" },
-          { key: "Retro",      label: "Retro" },
-          { key: "Sci-Fi",     label: "Sci-Fi" },
-          { key: "Technology", label: "Technology" },
-          { key: "Vehicle",    label: "Vehicle" }
-        ]
-        onSelected: function(key) { browser.swService.requiredTag = key; browser.swService.search(1) }
-      }
-    }
 
     Text {
       visible: browser.swService && browser.swService.errorText !== ""
@@ -721,17 +687,14 @@ Item {
 
   Component.onCompleted: {
     if (browserVisible && swService && resultsModel.count === 0) {
-      searchInput.forceActiveFocus()
       swService.search(1)
     }
   }
 
   onBrowserVisibleChanged: {
     if (browserVisible && swService && resultsModel.count === 0) {
-      searchInput.forceActiveFocus()
       swService.search(1)
     } else if (browserVisible) {
-      searchInput.forceActiveFocus()
       if (swService) swService.scanLocalDirs()
     } else {
       if (swService) swService.clearCache()

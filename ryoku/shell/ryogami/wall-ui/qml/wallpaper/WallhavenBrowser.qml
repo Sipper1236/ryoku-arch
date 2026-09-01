@@ -24,244 +24,189 @@ Item {
   opacity: browserVisible ? 1 : 0
   Behavior on opacity { NumberAnimation { duration: Style.animNormal; easing.type: Easing.OutCubic } }
 
-  height: browserVisible ? implicitHeight : 0
-  Behavior on height { NumberAnimation { duration: Style.animEnter; easing.type: Easing.OutCubic } }
-
   readonly property real _gridCellW: Config.wallhavenThumbWidth + 8
   readonly property real _gridCellH: Config.wallhavenThumbHeight + 8
   readonly property real _gridTotalW: _gridCellW * Config.wallhavenColumns
-  implicitHeight: contentCol.implicitHeight + 22 + _gridCellH * Config.wallhavenRows
+
+  function runSearch(q) {
+    if (!whService) return
+    whService.query = q
+    whService.search(1)
+  }
 
   MouseArea { anchors.fill: parent }
 
-  // paper panel behind the filter chrome so it reads over the grid/wallpaper
-  Rectangle {
-    anchors.fill: contentCol
-    anchors.margins: -12
-    z: 9
-    visible: browser.browserVisible
-    radius: Style.radiusMedium
-    color: browser.colors ? Qt.rgba(browser.colors.surface.r, browser.colors.surface.g, browser.colors.surface.b, 0.94)
-                           : Qt.rgba(0.07, 0.08, 0.10, 0.94)
-    border.width: 1
-    border.color: browser.colors ? Qt.rgba(browser.colors.surfaceText.r, browser.colors.surfaceText.g, browser.colors.surfaceText.b, 0.14)
-                                  : Qt.rgba(1, 1, 1, 0.1)
+  property Component filterBar: Component {
+    Column {
+      spacing: 8
+
+      Row {
+        spacing: 2
+
+        Repeater {
+          model: [
+            { label: "General", bit: 0 },
+            { label: "Anime",   bit: 1 },
+            { label: "People",  bit: 2 }
+          ]
+          FilterButton {
+            colors: browser.colors; label: modelData.label; skew: 8
+            isActive: browser.whService ? browser.whService.categories.charAt(modelData.bit) === "1" : false
+            onClicked: {
+              var c = browser.whService.categories.split("")
+              c[modelData.bit] = c[modelData.bit] === "1" ? "0" : "1"
+              if (c.join("") === "000") return
+              browser.whService.categories = c.join("")
+              browser.whService.search(1)
+            }
+          }
+        }
+
+        Item { width: 8; height: 1 }
+
+        Repeater {
+          model: [
+            { key: "toplist",    label: "Top" },
+            { key: "date_added", label: "New" },
+            { key: "views",      label: "Views" },
+            { key: "random",     label: "Random" }
+          ]
+          FilterButton {
+            colors: browser.colors; label: modelData.label; skew: 8
+            isActive: browser.whService ? browser.whService.sorting === modelData.key : false
+            onClicked: { browser.whService.sorting = modelData.key; browser.whService.search(1) }
+          }
+        }
+
+        Item { width: 8; height: 1 }
+
+        FilterDropdown {
+          visible: browser.whService && browser.whService.sorting === "toplist"
+          colors: browser.colors; skew: 8
+          label: "PERIOD"
+          value: browser.whService ? browser.whService.topRange : "1M"
+          displayValue: {
+            if (!browser.whService) return "Month"
+            var map = { "1d": "Day", "1w": "Week", "1M": "Month", "3M": "3M", "6M": "6M", "1y": "Year" }
+            return map[browser.whService.topRange] || "Month"
+          }
+          model: [
+            { key: "1d", label: "Day" },
+            { key: "1w", label: "Week" },
+            { key: "1M", label: "Month" },
+            { key: "3M", label: "3M" },
+            { key: "6M", label: "6M" },
+            { key: "1y", label: "Year" }
+          ]
+          onSelected: function(key) { browser.whService.topRange = key; browser.whService.search(1) }
+        }
+      }
+
+      Row {
+        spacing: 2
+
+        Text {
+          text: "PURITY"
+          font.family: Style.fontFamily; font.pixelSize: 9 * Config.uiScale; font.weight: Font.Bold; font.letterSpacing: 1.2
+          color: browser.colors ? Qt.rgba(browser.colors.surfaceText.r, browser.colors.surfaceText.g, browser.colors.surfaceText.b, 0.35) : Qt.rgba(1,1,1,0.25)
+          anchors.verticalCenter: parent.verticalCenter
+        }
+
+        Item { width: 10; height: 1 }
+
+        Repeater {
+          model: [
+            { label: "SFW",     bit: 0 },
+            { label: "Sketchy", bit: 1 },
+            { label: "NSFW",    bit: 2 }
+          ]
+          FilterButton {
+            colors: browser.colors; label: modelData.label; skew: 8
+            isActive: browser.whService ? browser.whService.purity.charAt(modelData.bit) === "1" : false
+            activeColor: "#e53935"; hasActiveColor: modelData.bit === 2
+            activeOpacity: modelData.bit === 2 && (!browser.whService || !browser.whService.apiKey) && !isActive ? 0.4 : 1.0
+            tooltip: modelData.bit === 2 && (!browser.whService || !browser.whService.apiKey) ? "NSFW requires an API key" : ""
+            onClicked: {
+              var p = browser.whService.purity.split("")
+              p[modelData.bit] = p[modelData.bit] === "1" ? "0" : "1"
+              if (p.join("") === "000") return
+              browser.whService.purity = p.join("")
+              browser.whService.search(1)
+            }
+          }
+        }
+
+        Item { width: 14; height: 1 }
+
+        FilterDropdown {
+          colors: browser.colors; skew: 8
+          label: "MIN RES"
+          value: browser.whService ? browser.whService.atleast : ""
+          displayValue: {
+            if (!browser.whService || browser.whService.atleast === "") return "Any"
+            var map = { "1920x1080": "1080p", "2560x1440": "2K", "3840x2160": "4K", "5120x2880": "5K", "7680x4320": "8K" }
+            return map[browser.whService.atleast] || browser.whService.atleast
+          }
+          model: [
+            { key: "",           label: "Any" },
+            { key: "1920x1080", label: "1080p" },
+            { key: "2560x1440", label: "2K" },
+            { key: "3840x2160", label: "4K" },
+            { key: "5120x2880", label: "5K" },
+            { key: "7680x4320", label: "8K" }
+          ]
+          onSelected: function(key) { browser.whService.atleast = key; browser.whService.search(1) }
+        }
+
+        Item { width: 14; height: 1 }
+
+        FilterDropdown {
+          colors: browser.colors; skew: 8
+          label: "RATIO"
+          value: browser.whService ? browser.whService.ratios : ""
+          displayValue: {
+            if (!browser.whService || browser.whService.ratios === "") return "Any"
+            var map = { "16x9": "16:9", "16x10": "16:10", "21x9": "21:9", "32x9": "32:9", "4x3": "4:3" }
+            return map[browser.whService.ratios] || browser.whService.ratios
+          }
+          model: [
+            { key: "",     label: "Any" },
+            { key: "16x9", label: "16:9" },
+            { key: "16x10", label: "16:10" },
+            { key: "21x9", label: "21:9" },
+            { key: "32x9", label: "32:9" },
+            { key: "4x3",  label: "4:3" }
+          ]
+          onSelected: function(key) { browser.whService.ratios = key; browser.whService.search(1) }
+        }
+
+        Item { width: 14; height: 1 }
+
+        ColorFilterStrip {
+          colors: browser.colors
+          selectedValue: browser.whService ? browser.whService.selectedColor : -1
+          onValueSelected: function(v) {
+            if (!browser.whService) return
+            browser.whService.selectedColor = v
+            browser.whService.search(1)
+          }
+        }
+      }
+    }
   }
 
-  Column {
-    id: contentCol
-    z: 10
-    width: browser._gridTotalW
-    anchors.horizontalCenter: parent.horizontalCenter
+  Text {
+    z: 20
     anchors.top: parent.top
-    anchors.topMargin: 12
-    spacing: 8
-
-    Row {
-      spacing: 2
-      anchors.horizontalCenter: parent.horizontalCenter
-
-      FilterButton {
-        colors: browser.colors; icon: "󰅁"; skew: 8
-        tooltip: "Back to wallpapers"
-        onClicked: browser.escapePressed()
-      }
-
-      Item { width: 14; height: 1 }
-
-      Rectangle {
-        width: 200 * Config.uiScale; height: 24 * Config.uiScale; radius: 0
-        color: browser.colors ? Qt.rgba(browser.colors.surface.r, browser.colors.surface.g, browser.colors.surface.b, 0.8)
-                               : Qt.rgba(0.15, 0.17, 0.22, 0.8)
-        border.width: searchInput.activeFocus ? 2 : 1
-        border.color: searchInput.activeFocus
-            ? (browser.colors ? browser.colors.primary : Style.fallbackAccent)
-            : (browser.colors ? Qt.rgba(browser.colors.primary.r, browser.colors.primary.g, browser.colors.primary.b, 0.2) : Qt.rgba(1, 1, 1, 0.12))
-        transform: Matrix4x4 { matrix: Qt.matrix4x4(1, -0.15, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1) }
-
-        TextInput {
-          id: searchInput
-          anchors.fill: parent; anchors.margins: 6 * Config.uiScale
-          font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
-          color: browser.colors ? browser.colors.surfaceText : "#e0e0e0"
-          clip: true
-          Keys.onReturnPressed: { browser.whService.query = text; browser.whService.search(1) }
-          Keys.onEscapePressed: browser.escapePressed()
-        }
-        Text {
-          anchors.fill: parent; anchors.margins: 6 * Config.uiScale
-          font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
-          color: browser.colors ? Qt.rgba(browser.colors.surfaceText.r, browser.colors.surfaceText.g, browser.colors.surfaceText.b, 0.35)
-                                : Qt.rgba(1, 1, 1, 0.3)
-          text: "SEARCH WALLHAVEN..."
-          font.letterSpacing: 0.5; font.weight: Font.Medium
-          visible: !searchInput.text && !searchInput.activeFocus
-        }
-      }
-
-      Item { width: 14; height: 1 }
-
-      Repeater {
-        model: [
-          { label: "General", bit: 0 },
-          { label: "Anime",   bit: 1 },
-          { label: "People",  bit: 2 }
-        ]
-        FilterButton {
-          colors: browser.colors; label: modelData.label; skew: 8
-          isActive: browser.whService ? browser.whService.categories.charAt(modelData.bit) === "1" : false
-          onClicked: {
-            var c = browser.whService.categories.split("")
-            c[modelData.bit] = c[modelData.bit] === "1" ? "0" : "1"
-            if (c.join("") === "000") return
-            browser.whService.categories = c.join("")
-            browser.whService.search(1)
-          }
-        }
-      }
-
-      Item { width: 8; height: 1 }
-
-      Repeater {
-        model: [
-          { key: "toplist",    label: "Top" },
-          { key: "date_added", label: "New" },
-          { key: "views",      label: "Views" },
-          { key: "random",     label: "Random" }
-        ]
-        FilterButton {
-          colors: browser.colors; label: modelData.label; skew: 8
-          isActive: browser.whService ? browser.whService.sorting === modelData.key : false
-          onClicked: { browser.whService.sorting = modelData.key; browser.whService.search(1) }
-        }
-      }
-
-      Item { width: 8; height: 1 }
-
-      FilterDropdown {
-        visible: browser.whService && browser.whService.sorting === "toplist"
-        colors: browser.colors; skew: 8
-        label: "PERIOD"
-        value: browser.whService ? browser.whService.topRange : "1M"
-        displayValue: {
-          if (!browser.whService) return "Month"
-          var map = { "1d": "Day", "1w": "Week", "1M": "Month", "3M": "3M", "6M": "6M", "1y": "Year" }
-          return map[browser.whService.topRange] || "Month"
-        }
-        model: [
-          { key: "1d", label: "Day" },
-          { key: "1w", label: "Week" },
-          { key: "1M", label: "Month" },
-          { key: "3M", label: "3M" },
-          { key: "6M", label: "6M" },
-          { key: "1y", label: "Year" }
-        ]
-        onSelected: function(key) { browser.whService.topRange = key; browser.whService.search(1) }
-      }
-
-    }
-
-    Row {
-      z: 10
-      spacing: 2
-      anchors.horizontalCenter: parent.horizontalCenter
-
-      Text {
-        text: "PURITY"
-        font.family: Style.fontFamily; font.pixelSize: 9 * Config.uiScale; font.weight: Font.Bold; font.letterSpacing: 1.2
-        color: browser.colors ? Qt.rgba(browser.colors.surfaceText.r, browser.colors.surfaceText.g, browser.colors.surfaceText.b, 0.35) : Qt.rgba(1,1,1,0.25)
-        anchors.verticalCenter: parent.verticalCenter
-      }
-
-      Item { width: 10; height: 1 }
-
-      Repeater {
-        model: [
-          { label: "SFW",     bit: 0 },
-          { label: "Sketchy", bit: 1 },
-          { label: "NSFW",    bit: 2 }
-        ]
-        FilterButton {
-          colors: browser.colors; label: modelData.label; skew: 8
-          isActive: browser.whService ? browser.whService.purity.charAt(modelData.bit) === "1" : false
-          activeColor: "#e53935"; hasActiveColor: modelData.bit === 2
-          activeOpacity: modelData.bit === 2 && (!browser.whService || !browser.whService.apiKey) && !isActive ? 0.4 : 1.0
-          tooltip: modelData.bit === 2 && (!browser.whService || !browser.whService.apiKey) ? "NSFW requires an API key" : ""
-          onClicked: {
-            var p = browser.whService.purity.split("")
-            p[modelData.bit] = p[modelData.bit] === "1" ? "0" : "1"
-            if (p.join("") === "000") return
-            browser.whService.purity = p.join("")
-            browser.whService.search(1)
-          }
-        }
-      }
-
-      Item { width: 14; height: 1 }
-
-      FilterDropdown {
-        colors: browser.colors; skew: 8
-        label: "MIN RES"
-        value: browser.whService ? browser.whService.atleast : ""
-        displayValue: {
-          if (!browser.whService || browser.whService.atleast === "") return "Any"
-          var map = { "1920x1080": "1080p", "2560x1440": "2K", "3840x2160": "4K", "5120x2880": "5K", "7680x4320": "8K" }
-          return map[browser.whService.atleast] || browser.whService.atleast
-        }
-        model: [
-          { key: "",           label: "Any" },
-          { key: "1920x1080", label: "1080p" },
-          { key: "2560x1440", label: "2K" },
-          { key: "3840x2160", label: "4K" },
-          { key: "5120x2880", label: "5K" },
-          { key: "7680x4320", label: "8K" }
-        ]
-        onSelected: function(key) { browser.whService.atleast = key; browser.whService.search(1) }
-      }
-
-      Item { width: 14; height: 1 }
-
-      FilterDropdown {
-        colors: browser.colors; skew: 8
-        label: "RATIO"
-        value: browser.whService ? browser.whService.ratios : ""
-        displayValue: {
-          if (!browser.whService || browser.whService.ratios === "") return "Any"
-          var map = { "16x9": "16:9", "16x10": "16:10", "21x9": "21:9", "32x9": "32:9", "4x3": "4:3" }
-          return map[browser.whService.ratios] || browser.whService.ratios
-        }
-        model: [
-          { key: "",     label: "Any" },
-          { key: "16x9", label: "16:9" },
-          { key: "16x10", label: "16:10" },
-          { key: "21x9", label: "21:9" },
-          { key: "32x9", label: "32:9" },
-          { key: "4x3",  label: "4:3" }
-        ]
-        onSelected: function(key) { browser.whService.ratios = key; browser.whService.search(1) }
-      }
-
-      Item { width: 14; height: 1 }
-
-      ColorFilterStrip {
-        colors: browser.colors
-        selectedValue: browser.whService ? browser.whService.selectedColor : -1
-        onValueSelected: function(v) {
-          if (!browser.whService) return
-          browser.whService.selectedColor = v
-          browser.whService.search(1)
-        }
-      }
-    }
-
-    Text {
-      visible: browser.whService && browser.whService.errorText !== ""
-      text: browser.whService ? browser.whService.errorText : ""
-      font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
-      color: "#ff6b6b"
-      width: parent.width
-      wrapMode: Text.Wrap
-    }
+    anchors.topMargin: 6
+    anchors.horizontalCenter: parent.horizontalCenter
+    visible: browser.whService && browser.whService.errorText !== ""
+    text: browser.whService ? browser.whService.errorText : ""
+    font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
+    color: "#ff6b6b"
+    width: browser._gridTotalW
+    horizontalAlignment: Text.AlignHCenter
+    wrapMode: Text.Wrap
   }
 
   ListModel { id: resultsModel }
@@ -287,7 +232,7 @@ Item {
 
   GridView {
     id: resultsGrid
-    anchors.top: contentCol.bottom; anchors.topMargin: 10
+    anchors.top: parent.top; anchors.topMargin: 10
     anchors.horizontalCenter: parent.horizontalCenter
     anchors.bottom: parent.bottom
     anchors.bottomMargin: 12
@@ -675,12 +620,9 @@ Item {
   }
 
   onBrowserVisibleChanged: {
-    console.log("[WH-UI] browserVisible=" + browserVisible + "  whService=" + !!whService + "  resultsModel.count=" + resultsModel.count)
     if (browserVisible && whService && resultsModel.count === 0) {
-      searchInput.forceActiveFocus()
       whService.search(1)
     } else if (browserVisible) {
-      searchInput.forceActiveFocus()
       if (whService) whService.scanLocalFiles()
     } else {
       if (whService) whService.clearCache()
@@ -691,8 +633,6 @@ Item {
 
   onWhServiceChanged: {
     if (browserVisible && whService && resultsModel.count === 0) {
-      console.log("[WH-UI] whService became available, triggering search")
-      searchInput.forceActiveFocus()
       whService.search(1)
     }
   }

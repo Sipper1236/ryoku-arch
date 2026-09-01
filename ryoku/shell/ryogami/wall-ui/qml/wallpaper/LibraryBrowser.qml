@@ -25,7 +25,8 @@ Item {
 
     signal escapePressed()
 
-    implicitHeight: 640 * Config.uiScale
+    function runSearch(q) { svc.search(("" + q).trim()) }
+    property Component filterBar: null
 
     readonly property color _ink:    colors ? colors.surfaceText : "#e0e2e8"
     readonly property color _inkDim: colors ? colors.surfaceVariantText : "#c2c7cf"
@@ -58,51 +59,6 @@ Item {
     onSearchableChanged: _reload()
     Component.onCompleted: if (browserVisible) _reload()
 
-    // ---- header: search field ----
-    Row {
-        id: header
-        anchors.top: parent.top
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.topMargin: 12
-        spacing: 8
-
-        Rectangle {
-            width: 320 * Config.uiScale
-            height: 26 * Config.uiScale
-            color: browser.colors ? Qt.rgba(browser.colors.surface.r, browser.colors.surface.g, browser.colors.surface.b, 0.8) : Qt.rgba(0.15, 0.17, 0.22, 0.8)
-            border.width: searchInput.activeFocus ? 2 : 1
-            border.color: searchInput.activeFocus ? browser._accent : browser._line
-
-            Text {
-                visible: searchInput.text.length === 0
-                anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter
-                text: "SEARCH " + browser.sourceName.toUpperCase() + "\u2026"
-                font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale; font.letterSpacing: 1
-                color: Qt.rgba(browser._inkDim.r, browser._inkDim.g, browser._inkDim.b, 0.7)
-            }
-            TextInput {
-                id: searchInput
-                anchors.fill: parent
-                anchors.leftMargin: 10; anchors.rightMargin: 10
-                verticalAlignment: TextInput.AlignVCenter
-                font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
-                color: browser._ink
-                clip: true
-                selectByMouse: true
-                onAccepted: svc.search(text.trim())
-            }
-        }
-
-        FilterButton {
-            colors: browser.colors
-            label: svc.loading ? "\u2026" : "SEARCH"
-            register: false
-            skew: 8
-            height: 26 * Config.uiScale
-            onClicked: svc.search(searchInput.text.trim())
-        }
-    }
-
     // ---- status line (loading / empty / error) ----
     Text {
         anchors.centerIn: parent
@@ -115,7 +71,7 @@ Item {
     // ---- results grid ----
     Flickable {
         id: flick
-        anchors.top: header.bottom
+        anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -233,18 +189,4 @@ Item {
         }
     }
 
-    // back to wallpapers
-    FilterButton {
-        anchors.left: parent.left
-        anchors.top: parent.top
-        anchors.leftMargin: 12
-        anchors.topMargin: 12
-        colors: browser.colors
-        icon: "\u{f0141}"
-        skew: 8
-        height: 26 * Config.uiScale
-        tooltip: "Back to wallpapers"
-        onClicked: browser.escapePressed()
-        z: 20
-    }
 }

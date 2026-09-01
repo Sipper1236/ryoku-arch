@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import ".."
 import "../components"
 import "../services"
@@ -80,20 +81,29 @@ Item {
   opacity: browserVisible ? 1 : 0
   Behavior on opacity { NumberAnimation { duration: Style.animNormal; easing.type: Easing.OutCubic } }
 
-  readonly property real _browserHeight: {
-    if (source === "wallhaven") return whLoader.item ? whLoader.item.implicitHeight : 0
-    if (source === "steam") return swLoader.item ? swLoader.item.implicitHeight : 0
-    return libLoader.item ? libLoader.item.implicitHeight : 0
+  readonly property var _activeItem: {
+    if (source === "wallhaven") return whLoader.item
+    if (source === "steam") return swLoader.item
+    return libLoader.item
+  }
+  readonly property bool _searchable: !_isLib || source !== "repos" || activeRepo !== ""
+  readonly property string _searchHint: {
+    if (source === "wallhaven") return "SEARCH WALLHAVEN\u2026"
+    if (source === "steam") return "SEARCH STEAM WORKSHOP\u2026"
+    var d = _libDefs[source]
+    return d ? "SEARCH " + d.label + "\u2026" : "SEARCH\u2026"
+  }
+  readonly property real _barHeight: 84 * Config.uiScale
+  function _runSearch(q) {
+    if (!_searchable) return
+    if (_activeItem && _activeItem.runSearch) _activeItem.runSearch(q)
   }
 
-  implicitHeight: Math.max(240, _browserHeight)
-  height: browserVisible ? implicitHeight : 0
-  Behavior on height { NumberAnimation { duration: Style.animEnter; easing.type: Easing.OutCubic } }
-
-  // ---- content: the active source's browser, full width ----
+  // ---- active source's browser, filling the area below the shared bar ----
   Loader {
     id: whLoader
-    anchors.fill: parent
+    anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+    anchors.top: topBar.bottom; anchors.topMargin: 8
     active: root.source === "wallhaven"
     visible: active
     sourceComponent: Component {
@@ -108,7 +118,8 @@ Item {
 
   Loader {
     id: swLoader
-    anchors.fill: parent
+    anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+    anchors.top: topBar.bottom; anchors.topMargin: 8
     active: root.source === "steam"
     visible: active
     sourceComponent: Component {
@@ -123,7 +134,8 @@ Item {
 
   Loader {
     id: libLoader
-    anchors.fill: parent
+    anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+    anchors.top: topBar.bottom; anchors.topMargin: 8
     active: root._isLib
     visible: active
     sourceComponent: Component {
@@ -143,22 +155,115 @@ Item {
     }
   }
 
-  // ---- SOURCES toggle (top-left) ----
-  FilterButton {
-    id: sourcesBtn
-    anchors.left: parent.left
+  // ---- one fixed, opaque paper bar shared by every source; only the middle
+  // filter region swaps when the source changes, so the bar never moves ----
+  Item {
+    id: topBar
+    z: 30
     anchors.top: parent.top
-    anchors.leftMargin: 12
-    anchors.topMargin: 12
-    colors: root.colors
-    label: "源  " + root._activeLabel
-    register: false
-    skew: 8
-    height: 26 * Config.uiScale
-    isActive: root.drawerOpen
-    tooltip: "Switch source · keys & setup"
-    onClicked: root.drawerOpen = !root.drawerOpen
-    z: 45
+    anchors.left: parent.left
+    anchors.right: parent.right
+    height: root._barHeight
+
+    Rectangle {
+      anchors.fill: parent
+      z: -1
+      radius: Style.radiusRound
+      color: root.colors ? Qt.rgba(root.colors.surface.r, root.colors.surface.g, root.colors.surface.b, 0.9) : Qt.rgba(0.06, 0.07, 0.09, 0.9)
+      border.width: 1
+      border.color: root.colors ? Qt.rgba(root.colors.surfaceText.r, root.colors.surfaceText.g, root.colors.surfaceText.b, 0.22) : Qt.rgba(1, 1, 1, 0.15)
+      layer.enabled: true
+      layer.effect: MultiEffect { shadowEnabled: true; shadowBlur: 0.6; shadowVerticalOffset: 3; shadowColor: Qt.rgba(0, 0, 0, 0.5) }
+    }
+
+    MouseArea { anchors.fill: parent }
+
+    Row {
+      id: barRow
+      anchors.left: parent.left
+      anchors.leftMargin: 16
+      anchors.right: parent.right
+      anchors.rightMargin: 16
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: 10
+
+      FilterButton {
+        anchors.verticalCenter: parent.verticalCenter
+        colors: root.colors
+        icon: "\u{f0141}"
+        register: false
+        skew: 8
+        height: 26 * Config.uiScale
+        tooltip: "Back to wallpapers"
+        onClicked: root.escapePressed()
+      }
+
+      FilterButton {
+        id: sourcesBtn
+        anchors.verticalCenter: parent.verticalCenter
+        colors: root.colors
+        label: "源  " + root._activeLabel
+        register: false
+        skew: 8
+        height: 26 * Config.uiScale
+        isActive: root.drawerOpen
+        tooltip: "Switch source · keys & setup"
+        onClicked: root.drawerOpen = !root.drawerOpen
+      }
+
+      Rectangle {
+        id: searchField
+        anchors.verticalCenter: parent.verticalCenter
+        width: 220 * Config.uiScale
+        height: 24 * Config.uiScale
+        radius: 0
+        opacity: root._searchable ? 1 : 0.45
+        color: root.colors ? Qt.rgba(root.colors.surface.r, root.colors.surface.g, root.colors.surface.b, 0.8) : Qt.rgba(0.15, 0.17, 0.22, 0.8)
+        border.width: searchInput.activeFocus ? 2 : 1
+        border.color: searchInput.activeFocus
+            ? (root.colors ? root.colors.primary : Style.fallbackAccent)
+            : (root.colors ? Qt.rgba(root.colors.primary.r, root.colors.primary.g, root.colors.primary.b, 0.2) : Qt.rgba(1, 1, 1, 0.12))
+        transform: Matrix4x4 { matrix: Qt.matrix4x4(1, -0.15, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1) }
+
+        TextInput {
+          id: searchInput
+          anchors.fill: parent; anchors.margins: 6 * Config.uiScale
+          verticalAlignment: TextInput.AlignVCenter
+          enabled: root._searchable
+          font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
+          color: root.colors ? root.colors.surfaceText : "#e0e0e0"
+          clip: true; selectByMouse: true
+          Keys.onReturnPressed: root._runSearch(text)
+          Keys.onEnterPressed: root._runSearch(text)
+          Keys.onEscapePressed: root.escapePressed()
+        }
+        Text {
+          anchors.fill: parent; anchors.margins: 6 * Config.uiScale
+          verticalAlignment: Text.AlignVCenter
+          font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
+          color: root.colors ? Qt.rgba(root.colors.surfaceText.r, root.colors.surfaceText.g, root.colors.surfaceText.b, 0.35) : Qt.rgba(1, 1, 1, 0.3)
+          text: root._searchHint
+          font.letterSpacing: 0.5; font.weight: Font.Medium
+          visible: !searchInput.text && !searchInput.activeFocus
+        }
+      }
+
+      FilterButton {
+        anchors.verticalCenter: parent.verticalCenter
+        colors: root.colors
+        label: "SEARCH"
+        register: false
+        skew: 8
+        height: 26 * Config.uiScale
+        onClicked: root._runSearch(searchInput.text)
+      }
+
+      Loader {
+        id: filterLoader
+        anchors.verticalCenter: parent.verticalCenter
+        sourceComponent: root._activeItem ? root._activeItem.filterBar : null
+      }
+    }
   }
 
   // ---- scrim ----
