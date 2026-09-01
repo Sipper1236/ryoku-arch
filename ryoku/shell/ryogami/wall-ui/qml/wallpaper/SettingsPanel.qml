@@ -50,7 +50,7 @@ Item {
   }
 
   z: 102
-  width: (settingsPanel.activeTab === "performance" ? 920 : settingsPanel.activeTab === "general" ? 780 : 580) * Config.uiScale
+  width: (settingsPanel.activeTab === "performance" ? 1080 : settingsPanel.activeTab === "general" ? 900 : 760) * Config.uiScale
   Behavior on width { NumberAnimation { duration: Style.animFast; easing.type: Easing.OutCubic } }
   height: tabRow.height + contentLoader.height + 36
 
@@ -158,12 +158,24 @@ Item {
 
   property int _tabSkew: 14
 
+  // backdrop behind the tab row so the tabs read over the dimmed wallpaper
+  Rectangle {
+    anchors.fill: tabRow
+    anchors.topMargin: -6; anchors.bottomMargin: -6
+    anchors.leftMargin: -10; anchors.rightMargin: -10
+    radius: Style.radiusLarge
+    color: settingsPanel.colors ? Qt.rgba(settingsPanel.colors.surface.r, settingsPanel.colors.surface.g, settingsPanel.colors.surface.b, 0.95) : Qt.rgba(0.06, 0.07, 0.09, 0.95)
+    border.width: 1
+    border.color: settingsPanel.colors ? Qt.rgba(settingsPanel.colors.surfaceText.r, settingsPanel.colors.surfaceText.g, settingsPanel.colors.surfaceText.b, 0.18) : Qt.rgba(1, 1, 1, 0.12)
+    z: 10
+  }
+
   Row {
     id: tabRow
     anchors.horizontalCenter: parent.horizontalCenter
     anchors.top: parent.top
     anchors.topMargin: 12
-    spacing: -settingsPanel._tabSkew
+    spacing: Style.spacingSmall
     z: 11
 
     add: Transition {
@@ -180,6 +192,7 @@ Item {
           { key: "selector",  label: "SELECTOR" },
           { key: "paper",     label: "PAPER" },
           { key: "general",   label: "GENERAL" },
+          { key: "playlists", label: "PLAYLISTS" },
           { key: "paths",     label: "PATHS" },
           { key: "performance", label: "PERFORMANCE" },
           { key: "postprocessing", label: "EXTERNAL" },
@@ -216,6 +229,7 @@ Item {
       if (settingsPanel.activeTab === "selector") return selectorContent.implicitHeight
       if (settingsPanel.activeTab === "paper") return paperContent.implicitHeight
       if (settingsPanel.activeTab === "general") return generalContent.implicitHeight
+      if (settingsPanel.activeTab === "playlists") return playlistsContent.implicitHeight
       if (settingsPanel.activeTab === "paths") return pathsContent.implicitHeight
       if (settingsPanel.activeTab === "wallhaven") return wallhavenContent.implicitHeight
       if (settingsPanel.activeTab === "steam") return steamContent.implicitHeight
@@ -282,6 +296,19 @@ Item {
       active: settingsPanel.activeTab === "general"
       visible: active
       source: "settings/GeneralSettings.qml"
+      onLoaded: {
+        item.colors = Qt.binding(function() { return settingsPanel.colors })
+        item.saveConfigKey = function(k, v) { settingsPanel._saveConfigKey(k, v) }
+      }
+    }
+
+    Loader {
+      id: playlistsContent
+      anchors.left: parent.left
+      anchors.right: parent.right
+      active: settingsPanel.activeTab === "playlists"
+      visible: active
+      source: "settings/PlaylistSettings.qml"
       onLoaded: {
         item.colors = Qt.binding(function() { return settingsPanel.colors })
         item.saveConfigKey = function(k, v) { settingsPanel._saveConfigKey(k, v) }

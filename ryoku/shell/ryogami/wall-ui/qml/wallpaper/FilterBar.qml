@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Shapes
+import QtQuick.Effects
 import ".."
 import "../services"
 
@@ -37,6 +38,22 @@ Item {
     width: Math.min(filterRow.width, maxWidth)
     height: filterRow.height + (filterFlick.contentWidth > filterFlick.width ? 10 : 0)
 
+    // A unifying paper pill behind the whole bar so it reads over any wallpaper
+    // (the buttons are transparent until active). Flat print + hairline + a soft
+    // shadow: Ryoku presence without a heavy chrome slab.
+    Rectangle {
+        anchors.fill: filterFlick
+        anchors.topMargin: -7; anchors.bottomMargin: -7
+        anchors.leftMargin: -12; anchors.rightMargin: -12
+        radius: Style.radiusRound
+        color: filterBar.colors ? Qt.rgba(filterBar.colors.surface.r, filterBar.colors.surface.g, filterBar.colors.surface.b, 0.9) : Qt.rgba(0.06, 0.07, 0.09, 0.9)
+        border.width: 1
+        border.color: filterBar.colors ? Qt.rgba(filterBar.colors.surfaceText.r, filterBar.colors.surfaceText.g, filterBar.colors.surfaceText.b, 0.22) : Qt.rgba(1, 1, 1, 0.15)
+        z: -1
+        layer.enabled: true
+        layer.effect: MultiEffect { shadowEnabled: true; shadowBlur: 0.6; shadowVerticalOffset: 3; shadowColor: Qt.rgba(0, 0, 0, 0.5) }
+    }
+
     Flickable {
         id: filterFlick
         width: filterBar.width
@@ -67,7 +84,7 @@ Item {
 
     Row {
         id: filterRow
-        spacing: -_skew
+        spacing: 4 * Config.uiScale
 
         Repeater {
             model: [
@@ -80,6 +97,7 @@ Item {
             FilterButton {
                 colors: filterBar.colors
                 label: modelData.label
+                register: false
                 isActive: filterBar.service ? filterBar.service.selectedTypeFilter === modelData.type : false
                 onClicked: {
                     if (isActive) filterBar.service.selectedTypeFilter = ""

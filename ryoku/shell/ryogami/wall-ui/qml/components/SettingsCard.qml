@@ -1,145 +1,101 @@
 import QtQuick
-import QtQuick.Shapes
-import QtQuick.Effects
 import ".."
 
+// A titled group of settings, drawn Ryoku-style: a flat sheet with a hairline
+// border and no shadow ("the Hub is print"), a //TRACKED_ header with an
+// optional kana seal, closed by a hairline rule, then the rows. Replaces skwd's
+// chamfered, filled, drop-shadowed card with the accent corner-tick.
 Item {
   id: root
   property var colors
   property string title: ""
   property string subtitle: ""
+  property string kana: ""
   default property alias _content: contentCol.data
   property alias titleAction: titleActionSlot.data
   property int innerPad: 16
-  property int chamfer: 18
 
   width: parent ? parent.width : 0
   implicitHeight: cardArea.height + 14
 
-  Item {
+  readonly property color _ink:    colors ? colors.surfaceText : "#e0e2e8"
+  readonly property color _inkDim: colors ? colors.surfaceVariantText : "#c2c7cf"
+  readonly property color _line:   colors ? colors.outline : Qt.rgba(1, 1, 1, 0.22)
+  readonly property color _paper:  colors ? colors.surface : "#101418"
+
+  Rectangle {
     id: cardArea
-    anchors.left: parent.left
-    anchors.right: parent.right
-    anchors.top: parent.top
-    anchors.leftMargin: 4
-    anchors.rightMargin: 4
+    anchors { left: parent.left; right: parent.right; top: parent.top; leftMargin: 4; rightMargin: 4 }
     height: bodyCol.implicitHeight + root.innerPad * 2
-
-    Shape {
-      id: cardShape
-      anchors.fill: parent
-      antialiasing: true
-      preferredRendererType: Shape.CurveRenderer
-
-      ShapePath {
-        fillColor: root.colors
-          ? Qt.rgba(root.colors.surfaceContainer.r, root.colors.surfaceContainer.g, root.colors.surfaceContainer.b, 0.92)
-          : Qt.rgba(0.15, 0.17, 0.22, 0.92)
-        strokeColor: "transparent"
-        strokeWidth: 0
-        startX: root.chamfer
-        startY: 0
-        PathLine { x: cardShape.width;               y: 0 }
-        PathLine { x: cardShape.width;               y: cardShape.height - root.chamfer }
-        PathLine { x: cardShape.width - root.chamfer; y: cardShape.height }
-        PathLine { x: 0;                              y: cardShape.height }
-        PathLine { x: 0;                              y: root.chamfer }
-        PathLine { x: root.chamfer;                   y: 0 }
-      }
-
-      ShapePath {
-        fillColor: "transparent"
-        strokeColor: Qt.rgba(1, 1, 1, 0.08)
-        strokeWidth: 1
-        startX: root.chamfer
-        startY: 0
-        PathLine { x: cardShape.width;               y: 0 }
-      }
-
-      ShapePath {
-        fillColor: "transparent"
-        strokeColor: root.colors
-          ? root.colors.primary
-          : Qt.rgba(0.5, 0.7, 1.0, 1.0)
-        strokeWidth: 3
-        startX: 0
-        startY: root.chamfer
-        PathLine { x: root.chamfer; y: 0 }
-      }
-    }
-
+    radius: Style.radiusMedium
+    border.width: 1
+    border.color: root._line
+    color: Qt.rgba(root._paper.r, root._paper.g, root._paper.b, 0.97)
     Column {
       id: bodyCol
-      anchors.left: parent.left
-      anchors.right: parent.right
-      anchors.top: parent.top
-      anchors.leftMargin: root.innerPad
-      anchors.rightMargin: root.innerPad
-      anchors.topMargin: root.innerPad
-      spacing: 10
+      anchors { left: parent.left; right: parent.right; top: parent.top; leftMargin: root.innerPad; rightMargin: root.innerPad; topMargin: root.innerPad }
+      spacing: 12
 
+      // header: //TITLE_ tracked + kana seal + optional action slot
       Item {
+        id: headerItem
         visible: root.title !== "" || root.subtitle !== "" || titleActionSlot.children.length > 0
         width: parent.width
         implicitHeight: Math.max(headerCol.implicitHeight, titleActionSlot.height)
 
         Column {
           id: headerCol
-          anchors.left: parent.left
-          anchors.right: titleActionSlot.left
-          anchors.verticalCenter: parent.verticalCenter
-          anchors.rightMargin: 12
+          anchors { left: parent.left; right: titleActionSlot.left; verticalCenter: parent.verticalCenter; rightMargin: 12 }
           spacing: 4
-
-          Text {
-            visible: root.title !== ""
-            text: root.title.toUpperCase()
-            elide: Text.ElideRight
-            font.family: Style.fontFamily
-            font.pixelSize: 10 * Config.uiScale
-            font.weight: Font.Bold
-            font.letterSpacing: 0.5
-            color: root.colors ? root.colors.tertiary : Qt.rgba(0.5, 0.8, 1.0, 1.0)
+          Row {
+            spacing: 6
+            Text {
+              text: "//"
+              font.family: Style.fontFamilyMono; font.pixelSize: 11 * Config.uiScale
+              color: Qt.rgba(root._inkDim.r, root._inkDim.g, root._inkDim.b, 0.5)
+              anchors.verticalCenter: parent.verticalCenter
+            }
+            Text {
+              visible: root.title !== ""
+              text: root.title.toUpperCase() + "_"
+              font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
+              font.weight: Font.Medium; font.letterSpacing: 1.4
+              color: root._inkDim
+              anchors.verticalCenter: parent.verticalCenter
+            }
+            Text {
+              visible: root.kana !== ""
+              text: root.kana
+              font.family: Style.fontFamilyJp; font.pixelSize: 12 * Config.uiScale
+              color: Qt.rgba(root._inkDim.r, root._inkDim.g, root._inkDim.b, 0.5)
+              anchors.verticalCenter: parent.verticalCenter
+            }
           }
-
           Text {
             visible: root.subtitle !== ""
             width: parent.width
             text: root.subtitle
             wrapMode: Text.WordWrap
-            font.family: Style.fontFamily
-            font.pixelSize: 11
-            color: root.colors
-              ? Qt.rgba(root.colors.surfaceVariantText.r, root.colors.surfaceVariantText.g, root.colors.surfaceVariantText.b, 0.85)
-              : Qt.rgba(1, 1, 1, 0.4)
+            font.family: Style.fontFamily; font.pixelSize: 11
+            color: Qt.rgba(root._inkDim.r, root._inkDim.g, root._inkDim.b, 0.8)
           }
         }
 
         Item {
           id: titleActionSlot
-          anchors.right: parent.right
-          anchors.verticalCenter: parent.verticalCenter
-          width: childrenRect.width
-          height: childrenRect.height
+          anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+          width: childrenRect.width; height: childrenRect.height
         }
       }
 
-      Column {
-        id: contentCol
-        width: parent.width
+      // the rule that closes the header, Ryoku's print divider
+      Rectangle {
+        visible: headerItem.visible
+        width: parent.width; height: 1
+        color: Qt.rgba(root._line.r, root._line.g, root._line.b, 0.55)
       }
-    }
-  }
 
-  layer.enabled: true
-  layer.smooth: true
-  layer.effect: MultiEffect {
-    shadowEnabled: true
-    shadowBlur: 0.8
-    shadowVerticalOffset: 4
-    shadowHorizontalOffset: 0
-    shadowColor: Qt.rgba(0, 0, 0, 0.35)
-    shadowOpacity: 1.0
-    paddingRect: Qt.rect(-10, -3, 20, 16)
+      Column { id: contentCol; width: parent.width }
+    }
   }
 }

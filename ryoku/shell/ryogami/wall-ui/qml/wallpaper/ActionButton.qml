@@ -62,7 +62,7 @@ Item {
             text: btn.icon
             font.family: Style.fontFamilyNerdIcons; font.pixelSize: 12
             color: btn.danger && btn.isHovered
-                ? "#ff6b6b"
+                ? (btn.colors ? btn.colors.error : "#e2342a")
                 : (btn.colors ? btn.colors.tertiary : "#8bceff")
             Behavior on color { ColorAnimation { duration: Style.animVeryFast } }
             anchors.verticalCenter: parent.verticalCenter
@@ -72,7 +72,7 @@ Item {
             font.family: Style.fontFamily; font.pixelSize: 11
             font.weight: Font.Bold; font.letterSpacing: 0.5
             color: btn.danger && btn.isHovered
-                ? "#ff6b6b"
+                ? (btn.colors ? btn.colors.error : "#e2342a")
                 : (btn.colors ? btn.colors.tertiary : "#8bceff")
             Behavior on color { ColorAnimation { duration: Style.animVeryFast } }
             anchors.verticalCenter: parent.verticalCenter

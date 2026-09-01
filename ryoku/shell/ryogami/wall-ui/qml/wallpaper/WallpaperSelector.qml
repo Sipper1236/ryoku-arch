@@ -381,8 +381,9 @@ Scope {
     id: cardContainer
     width: wallpaperSelector.cardWidth
     height: wallpaperSelector.cardHeight
-    anchors.centerIn: parent
-    anchors.verticalCenterOffset: wallpaperSelector._settingsShift / 2
+    anchors.horizontalCenter: parent.horizontalCenter
+    anchors.bottom: parent.bottom
+    anchors.bottomMargin: 48
     visible: wallpaperSelector.cardVisible
     opacity: 0
     property bool animateIn: wallpaperSelector.cardVisible
@@ -494,12 +495,24 @@ Scope {
     }
   }
 
+    // Modal scrim: dims the images behind the centred settings so it reads as a
+    // modal on top, and click-out closes it.
+    Rectangle {
+      anchors.fill: parent
+      z: 998
+      color: "#000000"
+      opacity: wallpaperSelector.settingsOpen ? 0.5 : 0
+      visible: opacity > 0.01
+      Behavior on opacity { NumberAnimation { duration: Style.animMedium } }
+      MouseArea { anchors.fill: parent; onClicked: wallpaperSelector.settingsOpen = false }
+    }
+
     Loader {
       id: settingsLoader
       active: true
       asynchronous: true
       anchors.horizontalCenter: parent.horizontalCenter
-      y: Math.max(8, cardContainer.y + filterBarBg.y - height - 8)
+      y: Math.max(8, (selectorPanel.height - height) / 2)
       z: 999
       sourceComponent: Component {
         SettingsPanel {

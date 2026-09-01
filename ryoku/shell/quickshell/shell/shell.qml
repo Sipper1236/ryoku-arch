@@ -223,7 +223,6 @@ ShellRoot {
                 active: perScreen.st ? perScreen.st.wallpaperSwitcherOpen : false
                 onRequestClose: if (perScreen.st) perScreen.st.wallpaperSwitcherOpen = false
             }
-
             // Shell-wide per-monitor surfaces: the three OSDs, the notification
             // popup column, the capture/region/camera overlays, and the
             // session-confirm dialog. Each binds this screen's modelData; the

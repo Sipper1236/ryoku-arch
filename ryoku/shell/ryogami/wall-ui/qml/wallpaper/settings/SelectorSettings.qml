@@ -26,7 +26,7 @@ Flow {
             title: "Display mode"
             description: "Slices, Hex grid, Wall grid, or Mosaic."
             Row {
-                spacing: -4
+                spacing: 4
                 Repeater {
                     model: [
                         { key: "slices",  label: "Slices" },
@@ -55,7 +55,7 @@ Flow {
             title: "Size preset"
             description: "Pick a quick slice size."
             Row {
-                spacing: -4
+                spacing: 4
                 Repeater {
                     model: [
                         { label: "XS", expanded: 360,  sliceH: 200, sliceW: 52,  visible: 20, gap: -30, skew: 16 },
@@ -81,7 +81,7 @@ Flow {
             title: "Custom presets"
             description: "Click to apply, right-click an empty slot to save the current geometry."
             Row {
-                spacing: -4
+                spacing: 4
                 Repeater {
                     model: ["C1", "C2", "C3", "C4"]
                     FilterButton {

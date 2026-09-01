@@ -3,10 +3,16 @@ import Quickshell
 import Quickshell.Io
 import "services"
 
+// The wall-ui's colour source, retuned to Ryoku's paper-and-ink resolution
+// (see ryoku/ui/Singletons/Tokens.qml). Reads the SAME palette the Hub and
+// shell use (~/.cache/ryoku/colors.json), so the picker retints with the whole
+// desktop on any wallpaper or theme change. skwd's Material role names are kept
+// so every component keeps reading one source; they now collapse onto Ryoku's
+// monochrome surface + one live sun accent, instead of a full colour palette.
 QtObject {
     id: colors
 
-    property string colorFilePath: Config.cacheDir + "/colors.json"
+    property string colorFilePath: Quickshell.env("HOME") + "/.cache/ryoku/colors.json"
 
     property var colorFileView: FileView {
         path: BootstrapService.ready ? colors.colorFilePath : ""
@@ -15,77 +21,99 @@ QtObject {
         onLoaded: colors._applyColors()
     }
 
+    function _tint(hex, a) { var c = Qt.color(hex); return Qt.rgba(c.r, c.g, c.b, a); }
+
     function _applyColors() {
         var text = colorFileView.text().trim()
         if (!text) return
         try {
             var d = JSON.parse(text)
-            colors.primary = d.primary ?? "#ffb4ab"
-            colors.primaryText = d.primaryText ?? "#690005"
-            colors.primaryContainer = d.primaryContainer ?? "#b12723"
-            colors.primaryContainerText = d.primaryContainerText ?? "#ffffff"
-            colors.primaryForeground = d.onPrimary ?? "#690005"
-            colors.secondary = d.secondary ?? "#ffb4ab"
-            colors.secondaryText = d.secondaryText ?? "#5b1915"
-            colors.secondaryContainer = d.secondaryContainer ?? "#792f29"
-            colors.secondaryContainerText = d.secondaryContainerText ?? "#ffd7d2"
-            colors.tertiary = d.tertiary ?? "#8bceff"
-            colors.tertiaryText = d.tertiaryText ?? "#00344e"
-            colors.tertiaryContainer = d.tertiaryContainer ?? "#006390"
-            colors.tertiaryContainerText = d.tertiaryContainerText ?? "#ffffff"
-            colors.background = d.background ?? "#1d100e"
-            colors.backgroundText = d.backgroundText ?? "#f7ddd9"
-            colors.surface = d.surface ?? "#1d100e"
-            colors.surfaceText = d.surfaceText ?? "#f7ddd9"
-            colors.surfaceVariant = d.surfaceVariant ?? "#5a413e"
-            colors.surfaceVariantText = d.surfaceVariantText ?? "#e2beba"
-            colors.surfaceContainer = d.surfaceContainer ?? "#2c1f1d"
-            colors.error = d.error ?? "#ffb4ab"
-            colors.errorText = d.errorText ?? "#690005"
-            colors.errorContainer = d.errorContainer ?? "#93000a"
-            colors.errorContainerText = d.errorContainerText ?? "#ffdad6"
-            colors.outline = d.outline ?? "#a98986"
-            colors.shadow = d.shadow ?? "#000000"
-            colors.inverseSurface = d.inverseSurface ?? "#f7ddd9"
-            colors.inverseSurfaceText = d.inverseSurfaceText ?? "#3d2c2b"
-            colors.inversePrimary = d.inversePrimary ?? "#b32824"
-            console.log("Colors: Loaded colors successfully")
+            // Ryoku resolution: paper = surface, ink = onSurface, lift =
+            // surfaceContainerLow, bone = inverseSurface, sun = primary.
+            // Everything else collapses onto these, so the picker reads
+            // paper-and-ink with one live accent.
+            var paper  = d.surface ?? "#000000"
+            var lift   = d.surfaceContainerLow ?? d.surfaceContainer ?? "#0a0a0a"
+            var ink    = d.onSurface ?? "#cdc4ba"
+            var inkDim = d.onSurfaceVariant ?? "#b0a9a0"
+            var boneC  = d.inverseSurface ?? ink
+            var onBone = d.inverseOnSurface ?? "#000000"
+            var sun    = d.primary ?? "#e2342a"
+            var onSun  = d.onPrimary ?? paper
+
+            colors.background = paper
+            colors.backgroundText = ink
+            colors.surface = paper
+            colors.surfaceText = ink
+            colors.surfaceVariant = lift
+            colors.surfaceVariantText = inkDim
+            colors.surfaceContainer = lift
+
+            colors.primary = sun
+            colors.primaryText = onSun
+            colors.primaryContainer = boneC            // active pill = bone plate
+            colors.primaryContainerText = onBone
+            colors.primaryForeground = onSun
+
+            colors.secondary = sun
+            colors.secondaryText = onSun
+            colors.secondaryContainer = lift
+            colors.secondaryContainerText = ink
+
+            colors.tertiary = inkDim
+            colors.tertiaryText = paper
+            colors.tertiaryContainer = lift
+            colors.tertiaryContainerText = ink
+
+            colors.error = "#e2342a"
+            colors.errorText = "#ffffff"
+            colors.errorContainer = _tint("#e2342a", 0.22)
+            colors.errorContainerText = "#ffdad6"
+
+            colors.outline = _tint(ink, 0.26)
+            colors.shadow = "#000000"
+            colors.inverseSurface = boneC
+            colors.inverseSurfaceText = onBone
+            colors.inversePrimary = sun
+            console.log("Colors: applied Ryoku paper-and-ink palette")
         } catch (e) {
             console.log("Colors: Error parsing colors.json:", e)
         }
     }
-    property color primary: "#ffb4ab"
-    property color primaryText: "#690005"
-    property color primaryContainer: "#b12723"
-    property color primaryContainerText: "#ffffff"
-    property color primaryForeground: "#690005"
 
-    property color secondary: "#ffb4ab"
-    property color secondaryText: "#5b1915"
-    property color secondaryContainer: "#792f29"
-    property color secondaryContainerText: "#ffd7d2"
+    // paper-and-ink defaults (file absent / mid-write)
+    property color primary: "#e2342a"
+    property color primaryText: "#000000"
+    property color primaryContainer: "#cdc4ba"
+    property color primaryContainerText: "#000000"
+    property color primaryForeground: "#000000"
 
-    property color tertiary: "#8bceff"
-    property color tertiaryText: "#00344e"
-    property color tertiaryContainer: "#006390"
-    property color tertiaryContainerText: "#ffffff"
+    property color secondary: "#e2342a"
+    property color secondaryText: "#000000"
+    property color secondaryContainer: "#0a0a0a"
+    property color secondaryContainerText: "#cdc4ba"
 
-    property color background: "#1d100e"
-    property color backgroundText: "#f7ddd9"
-    property color surface: "#1d100e"
-    property color surfaceText: "#f7ddd9"
-    property color surfaceVariant: "#5a413e"
-    property color surfaceVariantText: "#e2beba"
-    property color surfaceContainer: "#2c1f1d"
+    property color tertiary: "#b0a9a0"
+    property color tertiaryText: "#000000"
+    property color tertiaryContainer: "#0a0a0a"
+    property color tertiaryContainerText: "#cdc4ba"
 
-    property color error: "#ffb4ab"
-    property color errorText: "#690005"
-    property color errorContainer: "#93000a"
+    property color background: "#000000"
+    property color backgroundText: "#cdc4ba"
+    property color surface: "#000000"
+    property color surfaceText: "#cdc4ba"
+    property color surfaceVariant: "#0a0a0a"
+    property color surfaceVariantText: "#b0a9a0"
+    property color surfaceContainer: "#0a0a0a"
+
+    property color error: "#e2342a"
+    property color errorText: "#ffffff"
+    property color errorContainer: "#3a0d0b"
     property color errorContainerText: "#ffdad6"
 
-    property color outline: "#a98986"
+    property color outline: Qt.rgba(0.803, 0.768, 0.729, 0.26)   // ink @ 0.26
     property color shadow: "#000000"
-    property color inverseSurface: "#f7ddd9"
-    property color inverseSurfaceText: "#3d2c2b"
-    property color inversePrimary: "#b32824"
+    property color inverseSurface: "#cdc4ba"
+    property color inverseSurfaceText: "#000000"
+    property color inversePrimary: "#e2342a"
 }

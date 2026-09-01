@@ -204,6 +204,102 @@ func (d *daemon) dispatchRequest(req *request) response {
 	case "wall.random_status":
 		return ok(req.ID, d.random.status())
 
+	case "playlist.list", "pl.list":
+		return ok(req.ID, d.playlists.snapshot())
+
+	case "playlist.create":
+		name := strParam(p, "name", "")
+		if name == "" {
+			return errResp(req.ID, 1, "missing 'name' parameter")
+		}
+		id := d.playlists.create(name)
+		d.broadcast("ryogami.playlist.changed", map[string]interface{}{})
+		return ok(req.ID, map[string]interface{}{"id": id})
+
+	case "playlist.update":
+		if !d.playlists.update(intParam(p, "id", 0), strParam(p, "field", ""), strParam(p, "value", "")) {
+			return errResp(req.ID, 2, "unknown playlist or field")
+		}
+		d.broadcast("ryogami.playlist.changed", map[string]interface{}{})
+		return ok(req.ID, map[string]interface{}{"ok": true})
+
+	case "playlist.delete":
+		d.playlists.delete(intParam(p, "id", 0))
+		d.broadcast("ryogami.playlist.changed", map[string]interface{}{})
+		return ok(req.ID, map[string]interface{}{"ok": true})
+
+	case "playlist.members", "pl.contents":
+		return ok(req.ID, map[string]interface{}{"members": d.playlists.members(intParam(p, "id", 0))})
+
+	case "playlist.memberships":
+		return ok(req.ID, d.playlists.snapshot())
+
+	case "playlist.add":
+		if !d.playlists.addMember(intParam(p, "id", 0), strParam(p, "key", "")) {
+			return errResp(req.ID, 2, "unknown playlist")
+		}
+		d.broadcast("ryogami.playlist.changed", map[string]interface{}{})
+		return ok(req.ID, map[string]interface{}{"ok": true})
+
+	case "playlist.remove":
+		d.playlists.removeMember(intParam(p, "id", 0), strParam(p, "key", ""))
+		d.broadcast("ryogami.playlist.changed", map[string]interface{}{})
+		return ok(req.ID, map[string]interface{}{"ok": true})
+
+	case "playlist.move":
+		d.playlists.moveMember(intParam(p, "id", 0), strParam(p, "key", ""), intParam(p, "delta", 0))
+		d.broadcast("ryogami.playlist.changed", map[string]interface{}{})
+		return ok(req.ID, map[string]interface{}{"ok": true})
+
+	case "playlist.assign":
+		if !d.playlists.assign(strParam(p, "output", ""), intParam(p, "id", 0)) {
+			return errResp(req.ID, 2, "unknown playlist")
+		}
+		d.broadcast("ryogami.playlist.changed", map[string]interface{}{})
+		return ok(req.ID, map[string]interface{}{"ok": true})
+
+	case "playlist.toggle":
+		d.playlists.toggle(strParam(p, "output", ""), intParam(p, "id", 0))
+		d.broadcast("ryogami.playlist.changed", map[string]interface{}{})
+		return ok(req.ID, map[string]interface{}{"ok": true})
+
+	case "playlist.stop":
+		d.playlists.stop(intParam(p, "id", 0))
+		d.broadcast("ryogami.playlist.changed", map[string]interface{}{})
+		return ok(req.ID, map[string]interface{}{"ok": true})
+
+	case "playlist.play_now":
+		d.playlists.playNow(intParam(p, "id", 0))
+		return ok(req.ID, map[string]interface{}{"ok": true})
+
+	case "grade.preview":
+		out, err := d.grader.Preview(strParam(p, "input", ""), gradeParamsFrom(p))
+		if err != nil {
+			return errResp(req.ID, 3, err.Error())
+		}
+		return ok(req.ID, map[string]interface{}{"output": out})
+
+	case "grade.commit":
+		out, err := d.grader.Commit(strParam(p, "input", ""), strParam(p, "output", ""), gradeParamsFrom(p))
+		if err != nil {
+			return errResp(req.ID, 3, err.Error())
+		}
+		go d.rescan(true)
+		return ok(req.ID, map[string]interface{}{"output": out})
+
+	case "upscale.start":
+		if err := d.upscaler.Start(strParam(p, "input", ""), strParam(p, "kind", ""), int(intParam(p, "scale", defaultUpscaleScale))); err != nil {
+			return errResp(req.ID, 3, err.Error())
+		}
+		return ok(req.ID, map[string]interface{}{"started": true})
+
+	case "upscale.status":
+		return ok(req.ID, d.upscaler.Status())
+
+	case "upscale.cancel":
+		d.upscaler.Cancel()
+		return ok(req.ID, map[string]interface{}{"cancelled": true})
+
 	default:
 		return errResp(req.ID, -32601, fmt.Sprintf("unknown method: %s", req.Method))
 	}

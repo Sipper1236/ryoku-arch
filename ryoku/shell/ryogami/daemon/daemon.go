@@ -32,6 +32,9 @@ type daemon struct {
 	random    *randomRotation
 	video     *videoPlayer
 	optimizer *Optimizer
+	grader    *Grader
+	upscaler  *Upscaler
+	playlists *playlistManager
 
 	// paintSeq orders frame publishes: the video player's delayed yield and
 	// death fallback drop their repaint when a newer apply has since painted.
@@ -91,9 +94,21 @@ func runDaemon() error {
 		lastTransition: -1,
 		video:          newVideoPlayer(),
 	}
+	d.playlists = newPlaylistManager(cfg.cacheDir(), d)
 	// A finished pipeline replaced sources on disk, so the catalog rescans;
 	// every pipeline event also reaches subscribed clients untouched.
 	d.optimizer = NewOptimizer(cfg.wallpaperDir(), cfg.videoDir(), func(ev string, data map[string]interface{}) {
+		d.broadcast(ev, data)
+		if strings.HasSuffix(ev, ".finished") {
+			go d.rescan(true)
+		}
+	})
+
+	// grade.* runs synchronously (no job), so it needs no event sink -- the RPC
+	// returns the written path. upscale.* is a cancellable job like optimize.*:
+	// its finished event rescans so an enhanced image/clip refreshes the catalog.
+	d.grader = NewGrader(cfg.cacheDir())
+	d.upscaler = NewUpscaler(upscaleStateDir(), func(ev string, data map[string]interface{}) {
 		d.broadcast(ev, data)
 		if strings.HasSuffix(ev, ".finished") {
 			go d.rescan(true)
@@ -126,6 +141,7 @@ func runDaemon() error {
 			d.restoreOutputs()
 		}
 		d.rescan(false)
+		d.playlists.resumeAll()
 		d.broadcast("ryogami.wall.scan_done", map[string]interface{}{})
 	}()
 	go d.watchConfig()
