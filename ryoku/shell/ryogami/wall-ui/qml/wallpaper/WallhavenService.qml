@@ -84,6 +84,8 @@ QtObject {
     loadMore()
   }
   function prevPage() {
+    if (loading || currentPage <= 1) return
+    search(currentPage - 1)
   }
 
   readonly property var _allowedExts: ({"jpg": true, "jpeg": true, "png": true, "webp": true, "gif": true, "bmp": true})
@@ -226,7 +228,7 @@ QtObject {
               colors: item.colors || []
             }
           })
-          whService.results = whService.results.concat(newItems)
+          whService.results = newItems
           whService.lastPage = (json.meta && json.meta.last_page) ? json.meta.last_page : 1
           whService.currentPage = (json.meta && json.meta.current_page) ? json.meta.current_page : 1
           whService.errorText = ""

@@ -25,7 +25,7 @@ Item {
 
     signal escapePressed()
 
-    function runSearch(q) { svc.search(("" + q).trim()) }
+    function runSearch(q) { svc.search(("" + q).trim(), 1) }
     property Component filterBar: null
 
     readonly property color _ink:    colors ? colors.surfaceText : "#e0e2e8"
@@ -51,7 +51,7 @@ Item {
     // Coalesce the reload triggers (visible / verb / repo / searchable all
     // react to the same source switch) so one search runs after they settle,
     // never with a half-updated repo arg.
-    Timer { id: reloadTimer; interval: 60; onTriggered: { if (browser.searchable) svc.search(""); else svc.results = [] } }
+    Timer { id: reloadTimer; interval: 60; onTriggered: { if (browser.searchable) svc.search("", 1); else svc.results = [] } }
     function _reload() { if (browserVisible) reloadTimer.restart(); else svc.results = [] }
     onBrowserVisibleChanged: if (browserVisible) _reload()
     onSearchVerbChanged: _reload()
@@ -78,7 +78,7 @@ Item {
         anchors.topMargin: 12
         anchors.leftMargin: 16
         anchors.rightMargin: 16
-        anchors.bottomMargin: 12
+        anchors.bottomMargin: pageBar.visible ? 42 * Config.uiScale : 12
         contentHeight: grid.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -186,6 +186,43 @@ Item {
                     }
                 }
             }
+        }
+    }
+
+    // ---- page navigation ----
+    Row {
+        id: pageBar
+        z: 5
+        visible: svc.results.length > 0 || svc.currentPage > 1
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 10
+        spacing: 8
+
+        FilterButton {
+            colors: browser.colors
+            label: "\u2039"
+            register: false; skew: 8
+            height: 24 * Config.uiScale
+            activeOpacity: (svc.currentPage > 1 && !svc.loading) ? 1 : 0.3
+            tooltip: "Previous page"
+            onClicked: { if (svc.currentPage > 1 && !svc.loading) { svc.prevPage(); flick.contentY = 0 } }
+        }
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "PAGE " + svc.currentPage
+            font.family: Style.fontFamily; font.pixelSize: 10 * Config.uiScale
+            font.weight: Font.Medium; font.letterSpacing: 1.2
+            color: browser._inkDim
+        }
+        FilterButton {
+            colors: browser.colors
+            label: "\u203a"
+            register: false; skew: 8
+            height: 24 * Config.uiScale
+            activeOpacity: (svc.hasMore && !svc.loading) ? 1 : 0.3
+            tooltip: "Next page"
+            onClicked: { if (svc.hasMore && !svc.loading) { svc.nextPage(); flick.contentY = 0 } }
         }
     }
 

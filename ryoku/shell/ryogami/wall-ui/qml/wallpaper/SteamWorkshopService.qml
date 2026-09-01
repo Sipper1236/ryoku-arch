@@ -201,7 +201,7 @@ QtObject {
             creator: it.creator || ""
           }
         })
-        swService.results = swService.results.concat(mapped)
+        swService.results = mapped
         swService.lastPage = mapped.length >= swService.numPerPage ? currentPage + 1 : currentPage
         swService.resultsUpdated()
       })
@@ -235,6 +235,8 @@ QtObject {
     loadMore()
   }
   function prevPage() {
+    if (loading || currentPage <= 1) return
+    search(currentPage - 1)
   }
 
   function _buildUrl() {
@@ -331,7 +333,7 @@ QtObject {
           }
         })
 
-        swService.results = swService.results.concat(newItems)
+        swService.results = newItems
         swService.lastPage = Math.max(1, Math.ceil(total / swService.numPerPage))
         swService.errorText = ""
       } catch (e) {

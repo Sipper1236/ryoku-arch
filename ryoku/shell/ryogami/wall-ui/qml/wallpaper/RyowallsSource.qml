@@ -33,6 +33,15 @@ QtObject {
     property bool loading: false
     property string error: ""
 
+    property int currentPage: 1
+    property int lastPage: 1
+    readonly property bool hasMore: currentPage < lastPage
+
+    // client-side pagination cache (extras/repos fetch the whole list once,
+    // then slice per page): key marks which query the cache belongs to.
+    property var _fullList: []
+    property string _fullKey: ""
+
     // id of the row currently downloading, "" when idle
     property string downloadingId: ""
     signal applied(string path)
@@ -40,32 +49,62 @@ QtObject {
 
     property string _buf: ""
 
-    function search(query) {
+    function _clientKey(query) {
+        return searchVerb + "|" + ("" + (query || "")) + "|" + JSON.stringify(extraArgs)
+    }
+
+    // slice the cached full list for extras/repos into the current page's view
+    function _applyClientPage() {
+        var per = 24
+        var total = _fullList.length
+        lastPage = Math.max(1, Math.ceil(total / per))
+        if (currentPage > lastPage) currentPage = lastPage
+        var start = (currentPage - 1) * per
+        results = _fullList.slice(start, start + per)
+        error = total === 0 ? "no results" : ""
+        loading = false
+    }
+
+    function search(query, page) {
         if (!searchVerb || loading) return
+        var pg = page || 1
+        // client-side sources reslice the cached list on page turns, no refetch
+        if ((searchVerb === "extras-search" || searchVerb === "library-list")
+                && pg > 1 && _fullKey === _clientKey(query)) {
+            currentPage = pg
+            _applyClientPage()
+            return
+        }
         _buf = ""
         error = ""
         loading = true
+        currentPage = pg
         results = []
         if (searchVerb === "extras-search") {
             _nativeProvider = "ryostore"
             _pendingQuery = query || ""
+            _fullKey = _clientKey(query)
             _nativeSearchProc.command = ["curl", "-fsSL", "-A", _ua, _ryostoreBase + "/livewalls/registry.json"]
             _nativeSearchProc.running = true
             return
         }
         if (searchVerb === "motionbgs-search") {
             _nativeProvider = "motionbgs"
+            _pendingQuery = query || ""
             var q2 = ("" + (query || "")).toLowerCase().replace(/ /g, "-")
-            var mbPath = q2.length > 0 ? "/tag:" + q2 + "/" : "/"
+            var mbPath = q2.length > 0
+                ? "/tag:" + q2 + "/" + (pg > 1 ? pg + "/" : "")
+                : (pg > 1 ? "/" + pg + "/" : "/")
             _nativeSearchProc.command = ["curl", "-fsSL", "-A", _ua, "-e", _mbBase + "/", _mbBase + mbPath]
             _nativeSearchProc.running = true
             return
         }
         if (searchVerb === "moewalls-search") {
             _nativeProvider = "moewalls"
+            _pendingQuery = query || ""
             var mwUrl = (query && query.length > 0)
-                ? _mwBase + "/?s=" + encodeURIComponent(query)
-                : _mwBase + "/anime/"
+                ? _mwBase + (pg > 1 ? "/page/" + pg + "/" : "/") + "?s=" + encodeURIComponent(query)
+                : _mwBase + "/anime/" + (pg > 1 ? "page/" + pg + "/" : "")
             _nativeSearchProc.command = ["curl", "-fsSL", "-A", _ua, "-e", _mwBase + "/", mwUrl]
             _nativeSearchProc.running = true
             return
@@ -73,6 +112,7 @@ QtObject {
         if (searchVerb === "library-list") {
             _nativeProvider = "repos"
             _pendingQuery = query || ""
+            _fullKey = _clientKey(query)
             var repo = "", rbranch = "", rsub = "", rtype = "all"
             for (var k = 0; k < extraArgs.length; k++) {
                 if (extraArgs[k] === "--repo") repo = "" + (extraArgs[k + 1] || "")
@@ -97,6 +137,15 @@ QtObject {
         }
         loading = false
         error = "unknown source"
+    }
+
+    function nextPage() {
+        if (loading || !hasMore) return
+        search(_pendingQuery, currentPage + 1)
+    }
+    function prevPage() {
+        if (loading || currentPage <= 1) return
+        search(_pendingQuery, currentPage - 1)
     }
 
     // native ryostore: fetch the curated registry.json and reshape it into the
@@ -165,6 +214,7 @@ QtObject {
                                    video: webm, dl: webm,
                                    resolution: mwres ? mwres[1] : "",
                                    name: nm, moewalls_url: (mhref ? mhref[1] : "") })
+                        if (out.length >= 24) break
                     }
                 }
                 else if (src._nativeProvider === "repos") {
@@ -182,7 +232,7 @@ QtObject {
                     if (marker === "REGISTRY") {
                         var abs = function(pp) { return /^https?:\/\//.test(pp) ? pp : (rawb + "/" + pp) }
                         var rws = (JSON.parse(body).wallpapers) || []
-                        for (var ri = 0; ri < rws.length && out.length < 24; ri++) {
+                        for (var ri = 0; ri < rws.length; ri++) {
                             var rw = rws[ri]
                             if (src._repoType === "images") continue
                             var rhit = rq === "" || ("" + (rw.name || "")).toLowerCase().indexOf(rq) >= 0
@@ -222,7 +272,7 @@ QtObject {
                         })
                         rows = rows.filter(function(r) { return src._repoType === "all" || (src._repoType === "live" && r.kind === "video") || (src._repoType === "images" && r.kind === "image") })
                         rows = rows.filter(function(r) { return rq === "" || r.path.toLowerCase().indexOf(rq) >= 0 })
-                        for (var fi = 0; fi < rows.length && out.length < 24; fi++) {
+                        for (var fi = 0; fi < rows.length; fi++) {
                             var rr = rows[fi]
                             var turl = rr.thumb === "" ? "" : (host(rr.thumb) + "/" + enc(rr.thumb))
                             var murl = host(rr.media) + "/" + enc(rr.media)
@@ -232,8 +282,14 @@ QtObject {
                     }
                 }
             } catch (e) { src.error = "search failed"; src.results = []; return }
-            src.error = out.length === 0 ? "no results" : ""
-            src.results = out
+            if (src._nativeProvider === "ryostore" || src._nativeProvider === "repos") {
+                src._fullList = out
+                src._applyClientPage()
+            } else {
+                src.lastPage = out.length > 0 ? src.currentPage + 1 : src.currentPage
+                src.error = out.length === 0 ? "no results" : ""
+                src.results = out
+            }
         }
     }
 
