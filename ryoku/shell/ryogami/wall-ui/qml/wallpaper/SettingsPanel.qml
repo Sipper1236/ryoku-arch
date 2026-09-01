@@ -33,7 +33,7 @@ Item {
   function _validTab(key) {
     if (!showAdvanced)
       return ["selector", "paper", "edit", "theme"].indexOf(key) >= 0
-    var adv = ["general", "playlists", "paths", "performance", "postprocessing", "keybinds"]
+    var adv = ["general", "playlists", "paths", "comfort", "lighting", "performance", "postprocessing", "keybinds"]
     if (Config.matugenEnabled) adv.push("matugen")
     if (Config.isNiri) adv.push("niri")
     if (Config.steamEnabled) adv.push("wallpaper-engine")
@@ -218,6 +218,8 @@ Item {
           { key: "general",     label: "GENERAL" },
           { key: "playlists",   label: "PLAYLISTS" },
           { key: "paths",       label: "PATHS" },
+          { key: "comfort",     label: "COMFORT" },
+          { key: "lighting",    label: "LIGHTING" },
           { key: "performance", label: "PERFORMANCE" },
           { key: "postprocessing", label: "EXTERNAL" },
           { key: "keybinds",    label: "KEYBINDS" }
@@ -273,6 +275,8 @@ Item {
       if (settingsPanel.activeTab === "general") return generalContent.implicitHeight
       if (settingsPanel.activeTab === "playlists") return playlistsContent.implicitHeight
       if (settingsPanel.activeTab === "paths") return pathsContent.implicitHeight
+      if (settingsPanel.activeTab === "comfort") return comfortContent.implicitHeight
+      if (settingsPanel.activeTab === "lighting") return lightingContent.implicitHeight
       if (settingsPanel.activeTab === "wallpaper-engine") return wallpaperEngineContent.implicitHeight
       if (settingsPanel.activeTab === "performance") return performanceContent.implicitHeight
       if (settingsPanel.activeTab === "postprocessing") return Math.min(postprocessingContent.implicitHeight, 360)
@@ -379,6 +383,26 @@ Item {
         item.colors = Qt.binding(function() { return settingsPanel.colors })
         item.saveConfigKey = function(k, v) { settingsPanel._saveConfigKey(k, v) }
       }
+    }
+
+    Loader {
+      id: comfortContent
+      anchors.left: parent.left
+      anchors.right: parent.right
+      active: settingsPanel.activeTab === "comfort"
+      visible: active
+      source: "settings/ComfortSettings.qml"
+      onLoaded: item.colors = Qt.binding(function() { return settingsPanel.colors })
+    }
+
+    Loader {
+      id: lightingContent
+      anchors.left: parent.left
+      anchors.right: parent.right
+      active: settingsPanel.activeTab === "lighting"
+      visible: active
+      source: "settings/LightingSettings.qml"
+      onLoaded: item.colors = Qt.binding(function() { return settingsPanel.colors })
     }
 
     Loader {
