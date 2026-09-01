@@ -16,6 +16,7 @@ Item {
     property var rices: []
     property string _confirmSlug: ""
     property string _confirmName: ""
+    property string _confirmMode: "apply"
     property bool _captureOpen: false
 
     signal escapePressed()
@@ -50,6 +51,7 @@ Item {
 
     function _apply(slug) { Quickshell.execDetached(["ryoku-hub", "rice", "apply", slug]) }
     function _capture(name) { Quickshell.execDetached(["ryoku-hub", "rice", "capture", name, "all"]); _captureReload.restart() }
+    function _delete(slug) { Quickshell.execDetached(["ryoku-hub", "rice", "delete", slug]); _captureReload.restart() }
     Timer { id: _captureReload; interval: 1200; onTriggered: { root.rices = []; root._buf = ""; listProc.running = true } }
 
     MouseArea { anchors.fill: parent }
@@ -207,7 +209,29 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: { root._confirmSlug = "" + modelData.slug; root._confirmName = "" + (modelData.name || modelData.slug) }
+                    onClicked: { root._confirmMode = "apply"; root._confirmSlug = "" + modelData.slug; root._confirmName = "" + (modelData.name || modelData.slug) }
+                }
+
+                Rectangle {
+                    anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 8
+                    width: 20 * Config.uiScale; height: 20 * Config.uiScale
+                    radius: 4
+                    z: 5
+                    visible: _cardMouse.containsMouse || _delMouse.containsMouse
+                    color: _delMouse.containsMouse ? Qt.rgba(root._ink.r, root._ink.g, root._ink.b, 0.16) : "transparent"
+                    Text {
+                        anchors.centerIn: parent
+                        text: "\u{f0a7a}"
+                        font.family: Style.fontFamilyNerdIcons; font.pixelSize: 12 * Config.uiScale
+                        color: root._inkDim
+                    }
+                    MouseArea {
+                        id: _delMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: { root._confirmMode = "delete"; root._confirmSlug = "" + modelData.slug; root._confirmName = "" + (modelData.name || modelData.slug) }
+                    }
                 }
             }
         }
@@ -241,14 +265,16 @@ Item {
                 spacing: 10
 
                 Text {
-                    text: "Apply " + root._confirmName + "?"
+                    text: (root._confirmMode === "delete" ? "Delete " : "Apply ") + root._confirmName + "?"
                     font.family: Style.fontFamily; font.pixelSize: 14 * Config.uiScale; font.weight: Font.Medium
                     color: root._ink
                 }
                 Text {
                     width: parent.width
                     wrapMode: Text.WordWrap
-                    text: "This replaces your wallpaper, colour scheme, decorations and window layout. Your current look is saved so you can revert from the Hub."
+                    text: root._confirmMode === "delete"
+                        ? "Remove this rice from your library. Your current desktop is untouched; this only deletes the saved look."
+                        : "This replaces your wallpaper, colour scheme, decorations and window layout. Your current look is saved so you can revert from the Hub."
                     font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
                     color: root._inkDim
                 }
@@ -265,14 +291,17 @@ Item {
                     }
                     FilterButton {
                         colors: root.colors
-                        label: "APPLY"
+                        label: root._confirmMode === "delete" ? "DELETE" : "APPLY"
                         register: false
                         skew: 8
                         height: 28 * Config.uiScale
                         hasActiveColor: true
-                        activeColor: root._accent
+                        activeColor: root._confirmMode === "delete" ? (root.colors ? root.colors.error : "#e2342a") : root._accent
                         isActive: true
-                        onClicked: { root._apply(root._confirmSlug); root._confirmSlug = ""; root.escapePressed() }
+                        onClicked: {
+                            if (root._confirmMode === "delete") { root._delete(root._confirmSlug); root._confirmSlug = "" }
+                            else { root._apply(root._confirmSlug); root._confirmSlug = ""; root.escapePressed() }
+                        }
                     }
                 }
             }
