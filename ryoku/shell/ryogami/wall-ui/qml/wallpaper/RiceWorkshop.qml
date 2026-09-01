@@ -101,7 +101,7 @@ FocusScope {
   Rectangle {
     anchors.fill: parent
     color: Qt.rgba(0, 0, 0, 0.55)
-    MouseArea { anchors.fill: parent; onClicked: root.closeRequested() }
+    MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: root.closeRequested() }
   }
 
   component Chip: Rectangle {

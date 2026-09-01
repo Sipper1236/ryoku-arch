@@ -779,6 +779,7 @@ Item {
         onPositionChanged: function(mouse) {
             if (delegateItem.flipped) return
             if (!delegateItem._listView) return
+            if (delegateItem._listView.navLocked) return
             if (delegateItem._listView.moving) return
             var globalPos = mapToItem(delegateItem._listView, mouse.x, mouse.y)
             var dx = Math.abs(globalPos.x - delegateItem._listView.lastMouseX)

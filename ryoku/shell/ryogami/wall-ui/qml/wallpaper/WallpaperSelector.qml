@@ -396,6 +396,7 @@ Scope {
   property string _deleteConfirmName: ""
   property bool _workshopOpen: false
   property var _workshopRice: null
+  readonly property bool _navLocked: settingsOpen || _workshopOpen || _capturePromptOpen || _deleteConfirmSlug !== ""
   property bool anyBrowserOpen: browseOpen
   property var _activeModel: themesOpen ? themeModel : (ricesOpen ? riceModel : (service ? service.filteredModel : null))
   property bool isHexMode: Config.displayMode === "hex"
@@ -695,7 +696,7 @@ Scope {
       opacity: wallpaperSelector.settingsOpen ? 0.5 : 0
       visible: opacity > 0.01
       Behavior on opacity { NumberAnimation { duration: Style.animMedium } }
-      MouseArea { anchors.fill: parent; onClicked: wallpaperSelector.settingsOpen = false }
+      MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: wallpaperSelector.settingsOpen = false }
     }
 
     Loader {
@@ -759,7 +760,7 @@ Scope {
       readonly property color _inkDim: wallpaperSelector.colors ? wallpaperSelector.colors.surfaceVariantText : "#c2c7cf"
       readonly property color _accent: wallpaperSelector.colors ? wallpaperSelector.colors.primary : Style.fallbackAccent
 
-      MouseArea { anchors.fill: parent; onClicked: wallpaperSelector._capturePromptOpen = false }
+      MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: wallpaperSelector._capturePromptOpen = false }
 
       Rectangle {
         anchors.centerIn: parent
@@ -835,7 +836,7 @@ Scope {
       readonly property color _ink: wallpaperSelector.colors ? wallpaperSelector.colors.surfaceText : "#e0e2e8"
       readonly property color _inkDim: wallpaperSelector.colors ? wallpaperSelector.colors.surfaceVariantText : "#c2c7cf"
 
-      MouseArea { anchors.fill: parent; onClicked: wallpaperSelector._deleteConfirmSlug = "" }
+      MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: wallpaperSelector._deleteConfirmSlug = "" }
 
       Rectangle {
         anchors.centerIn: parent
@@ -879,6 +880,7 @@ Scope {
     }
     ListView {
       id: sliceListView
+      property bool navLocked: wallpaperSelector._navLocked
 
       anchors.top: cardContainer.top
       anchors.topMargin: wallpaperSelector.topBarHeight + 15
