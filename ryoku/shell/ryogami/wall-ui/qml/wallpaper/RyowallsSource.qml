@@ -25,6 +25,9 @@ QtObject {
     property string _nativeProvider: ""
     property string _pendingQuery: ""
     property string _nativeDlBuf: ""
+    property string _repoRepo: ""
+    property string _repoSub: ""
+    property string _repoType: "all"
 
     property var results: []
     property bool loading: false
@@ -80,6 +83,31 @@ QtObject {
                 ? _mwBase + "/?s=" + encodeURIComponent(query)
                 : _mwBase + "/anime/"
             _nativeSearchProc.command = ["curl", "-fsSL", "-A", _ua, "-e", _mwBase + "/", mwUrl]
+            _nativeSearchProc.running = true
+            return
+        }
+        if (searchVerb === "library-list") {
+            _nativeProvider = "repos"
+            _pendingQuery = query || ""
+            var repo = "", rbranch = "", rsub = "", rtype = "all"
+            for (var k = 0; k < extraArgs.length; k++) {
+                if (extraArgs[k] === "--repo") repo = "" + (extraArgs[k + 1] || "")
+                else if (extraArgs[k] === "--branch") rbranch = "" + (extraArgs[k + 1] || "")
+                else if (extraArgs[k] === "--path") rsub = "" + (extraArgs[k + 1] || "")
+                else if (extraArgs[k] === "--type") rtype = "" + (extraArgs[k + 1] || "all")
+            }
+            if (!repo.length) { loading = false; error = "no repo"; return }
+            _repoRepo = repo; _repoSub = rsub; _repoType = rtype
+            var fetch =
+                "ua=" + JSON.stringify(_ua) + "; repo=" + JSON.stringify(repo) + "; br=" + JSON.stringify(rbranch) + "; "
+                + "tok=\"${GITHUB_TOKEN:-$(gh auth token 2>/dev/null || true)}\"; "
+                + "auth=(); [ -n \"$tok\" ] && auth=(-H \"Authorization: Bearer $tok\"); "
+                + "[ -z \"$br\" ] && br=$(curl -fsSL -A \"$ua\" \"${auth[@]}\" \"https://api.github.com/repos/$repo\" 2>/dev/null | jq -r '.default_branch // \"main\"'); "
+                + "tree=$(curl -fsSL -A \"$ua\" \"${auth[@]}\" \"https://api.github.com/repos/$repo/git/trees/$br?recursive=1\" 2>/dev/null); "
+                + "regp=$(printf '%s' \"$tree\" | jq -r '[.tree[].path | select(endswith(\"livewalls/registry.json\") or . == \"registry.json\")][0] // \"\"' 2>/dev/null); "
+                + "printf 'BRANCH %s\\n' \"$br\"; "
+                + "if [ -n \"$regp\" ]; then printf 'REGISTRY\\n'; curl -fsSL -A \"$ua\" \"https://raw.githubusercontent.com/$repo/$br/$regp\" 2>/dev/null; else printf 'TREE\\n'; printf '%s' \"$tree\"; fi"
+            _nativeSearchProc.command = ["bash", "-lc", fetch]
             _nativeSearchProc.running = true
             return
         }
@@ -159,6 +187,70 @@ QtObject {
                                    name: nm, moewalls_url: (mhref ? mhref[1] : "") })
                     }
                 }
+                else if (src._nativeProvider === "repos") {
+                    var nl = src._buf.indexOf("\n")
+                    var br = src._buf.slice(0, nl).replace(/^BRANCH /, "")
+                    var rest = src._buf.slice(nl + 1)
+                    var nl2 = rest.indexOf("\n")
+                    var marker = rest.slice(0, nl2)
+                    var body = rest.slice(nl2 + 1)
+                    var rawb = "https://raw.githubusercontent.com/" + src._repoRepo + "/" + br
+                    var mediab = "https://media.githubusercontent.com/media/" + src._repoRepo + "/" + br
+                    var rq = ("" + src._pendingQuery).toLowerCase()
+                    var tproxy = function(u) { return u ? ("https://wsrv.nl/?url=" + u.replace(/^https?:\/\//, "") + "&w=480&output=webp&q=80") : "" }
+                    var enc = function(pp) { return pp.split("/").map(encodeURIComponent).join("/") }
+                    if (marker === "REGISTRY") {
+                        var abs = function(pp) { return /^https?:\/\//.test(pp) ? pp : (rawb + "/" + pp) }
+                        var rws = (JSON.parse(body).wallpapers) || []
+                        for (var ri = 0; ri < rws.length && out.length < 24; ri++) {
+                            var rw = rws[ri]
+                            if (src._repoType === "images") continue
+                            var rhit = rq === "" || ("" + (rw.name || "")).toLowerCase().indexOf(rq) >= 0
+                            var rtags = rw.tags || []
+                            for (var rt = 0; !rhit && rt < rtags.length; rt++) if (("" + rtags[rt]).toLowerCase().indexOf(rq) >= 0) rhit = true
+                            if (!rhit) continue
+                            out.push({ id: rw.id, kind: "video", thumb: tproxy(abs(rw.poster)),
+                                       video: abs(rw.video), dl: abs(rw.video), resolution: "", name: rw.name })
+                        }
+                    } else {
+                        var tree = (JSON.parse(body).tree) || []
+                        var lfs = {}
+                        for (var li = 0; li < tree.length; li++) { var te = tree[li]; if (te.type === "blob" && (te.size || 1e9) < 1024) lfs[te.path] = true }
+                        var host = function(pp) { return lfs[pp] ? mediab : rawb }
+                        var dirOf = function(pp) { return pp.replace(/\/[^/]+$/, "") }
+                        var humanize = function(s) { return s.replace(/-[0-9]+$/, "").replace(/[-_]/g, " ") }
+                        var sub = src._repoSub || ""
+                        var scoped = []
+                        for (var si = 0; si < tree.length; si++) { var sp = tree[si].path; if (sp && (sub === "" || sp.indexOf(sub) === 0)) scoped.push(sp) }
+                        var vids = scoped.filter(function(pp) { return /\.(mp4|webm|mkv|mov)$/i.test(pp) })
+                        var imgs = scoped.filter(function(pp) { return /\.(jpe?g|png|webp)$/i.test(pp) })
+                        var viddirs = {}; vids.forEach(function(pp) { viddirs[dirOf(pp)] = true })
+                        var vpd = {}; vids.forEach(function(pp) { var d = dirOf(pp); vpd[d] = (vpd[d] || 0) + 1 })
+                        var rows = []
+                        imgs.forEach(function(pp) {
+                            if (viddirs[dirOf(pp)]) return
+                            if (/thumb|poster|cover/i.test(pp)) return
+                            rows.push({ kind: "image", path: pp, thumb: pp, media: pp,
+                                        name: humanize(pp.replace(/^.*\//, "").replace(/\.[^.]+$/, "")) })
+                        })
+                        vids.forEach(function(pp) {
+                            var d = dirOf(pp)
+                            var di = imgs.filter(function(x) { return x.indexOf(d + "/") === 0 })
+                            var poster = di.filter(function(x) { return /thumb|poster|cover/i.test(x) })[0] || di[0] || ""
+                            var nm2 = (vpd[d] === 1) ? d.replace(/^.*\//, "") : pp.replace(/^.*\//, "").replace(/\.[^.]+$/, "")
+                            rows.push({ kind: "video", path: pp, thumb: poster, media: pp, name: humanize(nm2) })
+                        })
+                        rows = rows.filter(function(r) { return src._repoType === "all" || (src._repoType === "live" && r.kind === "video") || (src._repoType === "images" && r.kind === "image") })
+                        rows = rows.filter(function(r) { return rq === "" || r.path.toLowerCase().indexOf(rq) >= 0 })
+                        for (var fi = 0; fi < rows.length && out.length < 24; fi++) {
+                            var rr = rows[fi]
+                            var turl = rr.thumb === "" ? "" : (host(rr.thumb) + "/" + enc(rr.thumb))
+                            var murl = host(rr.media) + "/" + enc(rr.media)
+                            out.push({ id: rr.path, kind: rr.kind, thumb: tproxy(turl), large: turl,
+                                       video: (rr.kind === "video" ? murl : ""), dl: murl, resolution: "", name: rr.name })
+                        }
+                    }
+                }
             } catch (e) { src.error = "search failed"; src.results = []; return }
             src.error = out.length === 0 ? "no results" : ""
             src.results = out
@@ -234,6 +326,18 @@ QtObject {
                 + "if [ -n \"$tok\" ] && curl -fsSL -A \"$ua\" -e \"$post\" \"https://go.moewalls.com/download.php?video=$tok\" -o \"$mp4\" 2>/dev/null; then printf '%s' \"$mp4\"; exit 0; fi; "
                 + "if curl -fsSL -A \"$ua\" " + JSON.stringify(moeUrl) + " -o \"$wf\" 2>/dev/null; then printf '%s' \"$wf\"; exit 0; fi; exit 1"
             _nativeDlProc.command = ["bash", "-lc", sh]
+            _nativeDlProc.running = true
+            return
+        }
+        if (downloadVerb === "library-download") {
+            var lUrl = "" + (item.dl || item.video || item.large || "")
+            var lHome = Quickshell.env("HOME")
+            var lsh = "url=" + JSON.stringify(lUrl) + "; ua=" + JSON.stringify(_ua) + "; home=" + JSON.stringify(lHome) + "; "
+                + "ext=\"${url##*.}\"; ext=\"${ext%%\\?*}\"; "
+                + "case \"$ext\" in mp4|webm|mkv|mov) dest=\"$home/Pictures/livewalls\";; jpg|jpeg|png|webp) dest=\"$home/Pictures/Wallpapers\";; *) ext=mp4; dest=\"$home/Pictures/livewalls\";; esac; "
+                + "mkdir -p \"$dest\"; out=\"$dest/lib-$(printf '%s' \"$url\" | md5sum | cut -c1-12).$ext\"; "
+                + "curl -fsSL -A \"$ua\" \"$url\" -o \"$out\" && printf '%s' \"$out\""
+            _nativeDlProc.command = ["bash", "-lc", lsh]
             _nativeDlProc.running = true
             return
         }
