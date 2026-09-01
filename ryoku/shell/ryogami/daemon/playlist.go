@@ -307,6 +307,32 @@ func (m *playlistManager) stop(id int64) bool {
 	return true
 }
 
+// stopAll halts every assigned playlist's rotation and drops its bindings, so
+// nothing auto-advances and resumeAll finds nothing to restart. Used by the
+// unified "auto-rotate off" control.
+func (m *playlistManager) stopAll() {
+	m.mu.Lock()
+	seen := map[int64]bool{}
+	ids := []int64{}
+	for _, a := range m.st.Assignments {
+		if !seen[a.ID] {
+			seen[a.ID] = true
+			ids = append(ids, a.ID)
+		}
+	}
+	m.mu.Unlock()
+	for _, id := range ids {
+		m.stop(id)
+	}
+}
+
+// anyAssigned reports whether any playlist is bound to an output (i.e. rotating).
+func (m *playlistManager) anyAssigned() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.st.Assignments) > 0
+}
+
 // playNow applies the current member of id to its outputs right away.
 func (m *playlistManager) playNow(id int64) bool {
 	m.mu.Lock()

@@ -146,12 +146,12 @@ Item {
             id: _randomBtn
             colors: filterBar.colors
             icon: "\u{f049d}"
-            tooltip: DaemonClient.randomRunning
-                ? ("Stop random rotation (every " + DaemonClient.randomInterval + "s)")
-                : ("Random wallpaper. Toggle for continuous random wallpapers. Configure interval in settings.")
-            isActive: DaemonClient.randomRunning
+            tooltip: DaemonClient.rotationActive
+                ? "Stop auto-rotate (random + playlists)"
+                : "Auto-rotate: continuous random wallpapers. Configure interval in settings."
+            isActive: DaemonClient.rotationActive
             onClicked: {
-                if (DaemonClient.randomRunning) { DaemonClient.randomStop(); return }
+                if (DaemonClient.rotationActive) { DaemonClient.rotationStop(); return }
                 var types = []
                 if (Config.randomIncludeStatic) types.push("static")
                 if (Config.randomIncludeVideo) types.push("video")

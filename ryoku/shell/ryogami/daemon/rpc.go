@@ -204,6 +204,20 @@ func (d *daemon) dispatchRequest(req *request) response {
 	case "wall.random_status":
 		return ok(req.ID, d.random.status())
 
+	// Unified auto-rotate: active if the random loop is running OR any playlist
+	// is assigned (playlists rotate independently of random). rotation_stop
+	// halts both, so "auto-rotate off" truly stops every wallpaper change.
+	case "wall.rotation_status":
+		st := d.random.status()
+		running, _ := st["running"].(bool)
+		return ok(req.ID, map[string]interface{}{"active": running || d.playlists.anyAssigned()})
+
+	case "wall.rotation_stop":
+		d.random.stop()
+		d.playlists.stopAll()
+		d.broadcast("ryogami.wall.random_stopped", map[string]interface{}{})
+		return ok(req.ID, map[string]interface{}{"stopped": true})
+
 	case "playlist.list", "pl.list":
 		return ok(req.ID, d.playlists.snapshot())
 

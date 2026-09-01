@@ -36,6 +36,23 @@ QtObject {
     signal randomStarted(int interval)
     signal randomStopped()
 
+    // Unified auto-rotate: true if random OR a playlist is rotating. The command
+    // bar's rotate control reflects and toggles this, so "off" stops everything.
+    property bool rotationActive: false
+    function rotationStatus(callback) {
+        call("wall.rotation_status", {}, function(result, err) {
+            if (!err && result) client.rotationActive = !!result.active
+            if (callback) callback(result, err)
+        })
+    }
+    function rotationStop(callback) {
+        call("wall.rotation_stop", {}, function(result, err) {
+            client.randomRunning = false
+            client.rotationActive = false
+            if (callback) callback(result, err)
+        })
+    }
+
     property int audioCapableCount: 0
     property int audioPlayingCount: 0
     property var audioOutputs: ({})
@@ -331,11 +348,13 @@ QtObject {
             client.wallpaperHide(); break
         case "ryogami.wall.random_started":
             client.randomRunning = true
+            client.rotationActive = true
             client.randomInterval = data.interval || 0
             client.randomStarted(client.randomInterval); break
         case "ryogami.wall.random_stopped":
             client.randomRunning = false
             client.randomInterval = 0
+            client.rotationStatus()
             client.randomStopped(); break
         }
     }
@@ -355,6 +374,7 @@ QtObject {
                 client.subscribe(["ryogami."])
                 client.ready = true
                 client.randomStatus()
+                client.rotationStatus()
                 client.refreshAudioState()
             } else {
                 console.log("DaemonClient: disconnected")
