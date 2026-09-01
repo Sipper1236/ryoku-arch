@@ -16,6 +16,7 @@ Item {
     property var rices: []
     property string _confirmSlug: ""
     property string _confirmName: ""
+    property bool _captureOpen: false
 
     signal escapePressed()
 
@@ -48,6 +49,8 @@ Item {
     }
 
     function _apply(slug) { Quickshell.execDetached(["ryoku-hub", "rice", "apply", slug]) }
+    function _capture(name) { Quickshell.execDetached(["ryoku-hub", "rice", "capture", name, "all"]); _captureReload.restart() }
+    Timer { id: _captureReload; interval: 1200; onTriggered: { root.rices = []; root._buf = ""; listProc.running = true } }
 
     MouseArea { anchors.fill: parent }
 
@@ -83,6 +86,17 @@ Item {
             font.family: Style.fontFamily
             font.pixelSize: 11 * Config.uiScale
             color: Qt.rgba(root._inkDim.r, root._inkDim.g, root._inkDim.b, 0.6)
+            anchors.verticalCenter: parent.verticalCenter
+        }
+
+        FilterButton {
+            colors: root.colors
+            label: "SAVE LOOK"
+            register: false
+            skew: 8
+            height: 26 * Config.uiScale
+            tooltip: "Capture the current desktop as a new rice"
+            onClicked: root._captureOpen = true
             anchors.verticalCenter: parent.verticalCenter
         }
     }
@@ -259,6 +273,78 @@ Item {
                         activeColor: root._accent
                         isActive: true
                         onClicked: { root._apply(root._confirmSlug); root._confirmSlug = ""; root.escapePressed() }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- capture (save current look) ----
+    Rectangle {
+        anchors.fill: parent
+        visible: root._captureOpen || opacity > 0.01
+        opacity: root._captureOpen ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: Style.animNormal } }
+        color: Qt.rgba(0, 0, 0, 0.5)
+        z: 50
+        MouseArea { anchors.fill: parent; onClicked: root._captureOpen = false }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 80, 420 * Config.uiScale)
+            height: capCol.implicitHeight + 32
+            radius: Style.radiusLarge
+            color: root.colors ? root.colors.surface : "#131313"
+            border.width: 1
+            border.color: Qt.rgba(root._ink.r, root._ink.g, root._ink.b, 0.18)
+            MouseArea { anchors.fill: parent }
+
+            Column {
+                id: capCol
+                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                anchors.margins: 16
+                spacing: 10
+
+                Text {
+                    text: "Save current look"
+                    font.family: Style.fontFamily; font.pixelSize: 14 * Config.uiScale; font.weight: Font.Medium
+                    color: root._ink
+                }
+                Text {
+                    width: parent.width; wrapMode: Text.WordWrap
+                    text: "Capture your wallpaper, palette, decorations and layout as a new rice you can re-apply later."
+                    font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
+                    color: root._inkDim
+                }
+                Rectangle {
+                    width: parent.width; height: 30 * Config.uiScale
+                    color: root.colors ? Qt.rgba(root.colors.surfaceContainer.r, root.colors.surfaceContainer.g, root.colors.surfaceContainer.b, 0.8) : Qt.rgba(0.15, 0.17, 0.22, 0.8)
+                    border.width: capInput.activeFocus ? 2 : 1
+                    border.color: capInput.activeFocus ? root._accent : Qt.rgba(root._ink.r, root._ink.g, root._ink.b, 0.2)
+                    Text {
+                        visible: capInput.text.length === 0
+                        anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter
+                        text: "Rice name"
+                        font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
+                        color: Qt.rgba(root._inkDim.r, root._inkDim.g, root._inkDim.b, 0.7)
+                    }
+                    TextInput {
+                        id: capInput
+                        anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10
+                        verticalAlignment: TextInput.AlignVCenter
+                        font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
+                        color: root._ink; clip: true; selectByMouse: true
+                        onAccepted: if (text.trim().length > 0) { root._capture(text.trim()); text = ""; root._captureOpen = false }
+                    }
+                }
+                Row {
+                    anchors.right: parent.right
+                    spacing: 8
+                    FilterButton { colors: root.colors; label: "CANCEL"; register: false; skew: 8; height: 28 * Config.uiScale; onClicked: { capInput.text = ""; root._captureOpen = false } }
+                    FilterButton {
+                        colors: root.colors; label: "SAVE"; register: false; skew: 8; height: 28 * Config.uiScale
+                        hasActiveColor: true; activeColor: root._accent; isActive: true
+                        onClicked: if (capInput.text.trim().length > 0) { root._capture(capInput.text.trim()); capInput.text = ""; root._captureOpen = false }
                     }
                 }
             }
