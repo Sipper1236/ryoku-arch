@@ -138,6 +138,21 @@ Scope {
     _riceProc.running = true
   }
 
+  function _reloadRices() {
+    riceModel.clear()
+    _riceBuf = ""
+    _riceProc.running = true
+  }
+  function _captureRice(name) {
+    Quickshell.execDetached(["ryoku-hub", "rice", "capture", name, "all"])
+    _riceReload.restart()
+  }
+  function _deleteRice(slug) {
+    Quickshell.execDetached(["ryoku-hub", "rice", "delete", slug])
+    _riceReload.restart()
+  }
+  Timer { id: _riceReload; interval: 1200; onTriggered: wallpaperSelector._reloadRices() }
+
   property string _themeBuf: ""
   Process {
     id: _themeProc
@@ -334,6 +349,9 @@ Scope {
   property string browseSource: "wallhaven"
   property bool themesOpen: false
   property bool ricesOpen: false
+  property bool _capturePromptOpen: false
+  property string _deleteConfirmSlug: ""
+  property string _deleteConfirmName: ""
   property bool anyBrowserOpen: browseOpen
   property var _activeModel: themesOpen ? themeModel : (ricesOpen ? riceModel : (service ? service.filteredModel : null))
   property bool isHexMode: Config.displayMode === "hex"
@@ -550,6 +568,7 @@ Scope {
       onBrowseToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.themesOpen = false; wallpaperSelector.ricesOpen = false; wallpaperSelector.browseOpen = !wallpaperSelector.browseOpen }
       onThemesToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.browseOpen = false; wallpaperSelector.ricesOpen = false; wallpaperSelector.themesOpen = !wallpaperSelector.themesOpen }
       onRicesToggled: { wallpaperSelector.settingsOpen = false; wallpaperSelector.effectsOpen = false; wallpaperSelector.browseOpen = false; wallpaperSelector.themesOpen = false; wallpaperSelector.ricesOpen = !wallpaperSelector.ricesOpen }
+      onSaveLookRequested: wallpaperSelector._capturePromptOpen = true
       onModeToggled: function(mode) {
         Config.saveKey("matugen.mode", mode)
         DaemonClient.retheme(Config.matugenScheme, mode, Config.matugenColorIndex)
@@ -696,34 +715,135 @@ Scope {
       }
     }
 
-    Loader {
-      id: themesLoader
-      active: false
-      anchors.centerIn: parent
-      width: Math.min(cardContainer.width - 20, Screen.width - 140 * Config.uiScale)
-      z: 6
-      sourceComponent: Component {
-        ThemesSurface {
-          width: parent ? parent.width : 0
-          colors: wallpaperSelector.colors
-          browserVisible: true
-          onEscapePressed: { wallpaperSelector.themesOpen = false; wallpaperSelector._focusActiveList() }
+    Rectangle {
+      id: capturePrompt
+      anchors.fill: parent
+      z: 1000
+      visible: wallpaperSelector._capturePromptOpen || opacity > 0.01
+      opacity: wallpaperSelector._capturePromptOpen ? 1 : 0
+      Behavior on opacity { NumberAnimation { duration: Style.animNormal } }
+      color: Qt.rgba(0, 0, 0, 0.5)
+      onVisibleChanged: if (visible) _capInput.forceActiveFocus()
+
+      readonly property color _ink: wallpaperSelector.colors ? wallpaperSelector.colors.surfaceText : "#e0e2e8"
+      readonly property color _inkDim: wallpaperSelector.colors ? wallpaperSelector.colors.surfaceVariantText : "#c2c7cf"
+      readonly property color _accent: wallpaperSelector.colors ? wallpaperSelector.colors.primary : Style.fallbackAccent
+
+      MouseArea { anchors.fill: parent; onClicked: wallpaperSelector._capturePromptOpen = false }
+
+      Rectangle {
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 80, 420 * Config.uiScale)
+        height: capCol.implicitHeight + 32
+        radius: Style.radiusLarge
+        color: wallpaperSelector.colors ? wallpaperSelector.colors.surface : "#131313"
+        border.width: 1
+        border.color: Qt.rgba(capturePrompt._ink.r, capturePrompt._ink.g, capturePrompt._ink.b, 0.18)
+        MouseArea { anchors.fill: parent }
+
+        Column {
+          id: capCol
+          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+          anchors.margins: 16
+          spacing: 10
+
+          Text {
+            text: "Save current look"
+            font.family: Style.fontFamily; font.pixelSize: 14 * Config.uiScale; font.weight: Font.Medium
+            color: capturePrompt._ink
+          }
+          Text {
+            width: parent.width; wrapMode: Text.WordWrap
+            text: "Capture your wallpaper, palette, decorations and layout as a new rice you can re-apply later."
+            font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
+            color: capturePrompt._inkDim
+          }
+          Rectangle {
+            width: parent.width; height: 30 * Config.uiScale
+            color: wallpaperSelector.colors ? Qt.rgba(wallpaperSelector.colors.surfaceContainer.r, wallpaperSelector.colors.surfaceContainer.g, wallpaperSelector.colors.surfaceContainer.b, 0.8) : Qt.rgba(0.15, 0.17, 0.22, 0.8)
+            border.width: capInput.activeFocus ? 2 : 1
+            border.color: capInput.activeFocus ? capturePrompt._accent : Qt.rgba(capturePrompt._ink.r, capturePrompt._ink.g, capturePrompt._ink.b, 0.2)
+            Text {
+              visible: capInput.text.length === 0
+              anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter
+              text: "Rice name"
+              font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
+              color: Qt.rgba(capturePrompt._inkDim.r, capturePrompt._inkDim.g, capturePrompt._inkDim.b, 0.7)
+            }
+            TextInput {
+              id: capInput
+              anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10
+              verticalAlignment: TextInput.AlignVCenter
+              font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
+              color: capturePrompt._ink; clip: true; selectByMouse: true
+              onAccepted: if (text.trim().length > 0) { wallpaperSelector._captureRice(text.trim()); text = ""; wallpaperSelector._capturePromptOpen = false }
+            }
+          }
+          Row {
+            anchors.right: parent.right
+            spacing: 8
+            FilterButton { colors: wallpaperSelector.colors; label: "CANCEL"; register: false; skew: 8; height: 28 * Config.uiScale; onClicked: { capInput.text = ""; wallpaperSelector._capturePromptOpen = false } }
+            FilterButton {
+              colors: wallpaperSelector.colors; label: "SAVE"; register: false; skew: 8; height: 28 * Config.uiScale
+              hasActiveColor: true; activeColor: capturePrompt._accent; isActive: true
+              onClicked: if (capInput.text.trim().length > 0) { wallpaperSelector._captureRice(capInput.text.trim()); capInput.text = ""; wallpaperSelector._capturePromptOpen = false }
+            }
+          }
         }
       }
     }
 
-    Loader {
-      id: ricesLoader
-      active: false
-      anchors.centerIn: parent
-      width: Math.min(cardContainer.width - 20, Screen.width - 140 * Config.uiScale)
-      z: 6
-      sourceComponent: Component {
-        RicesSurface {
-          width: parent ? parent.width : 0
-          colors: wallpaperSelector.colors
-          browserVisible: true
-          onEscapePressed: { wallpaperSelector.ricesOpen = false; wallpaperSelector._focusActiveList() }
+    Rectangle {
+      id: deleteConfirm
+      anchors.fill: parent
+      z: 1000
+      visible: wallpaperSelector._deleteConfirmSlug !== "" || opacity > 0.01
+      opacity: wallpaperSelector._deleteConfirmSlug !== "" ? 1 : 0
+      Behavior on opacity { NumberAnimation { duration: Style.animNormal } }
+      color: Qt.rgba(0, 0, 0, 0.5)
+
+      readonly property color _ink: wallpaperSelector.colors ? wallpaperSelector.colors.surfaceText : "#e0e2e8"
+      readonly property color _inkDim: wallpaperSelector.colors ? wallpaperSelector.colors.surfaceVariantText : "#c2c7cf"
+
+      MouseArea { anchors.fill: parent; onClicked: wallpaperSelector._deleteConfirmSlug = "" }
+
+      Rectangle {
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 80, 420 * Config.uiScale)
+        height: delCol.implicitHeight + 32
+        radius: Style.radiusLarge
+        color: wallpaperSelector.colors ? wallpaperSelector.colors.surface : "#131313"
+        border.width: 1
+        border.color: Qt.rgba(deleteConfirm._ink.r, deleteConfirm._ink.g, deleteConfirm._ink.b, 0.18)
+        MouseArea { anchors.fill: parent }
+
+        Column {
+          id: delCol
+          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+          anchors.margins: 16
+          spacing: 10
+
+          Text {
+            text: "Delete " + wallpaperSelector._deleteConfirmName + "?"
+            font.family: Style.fontFamily; font.pixelSize: 14 * Config.uiScale; font.weight: Font.Medium
+            color: deleteConfirm._ink
+          }
+          Text {
+            width: parent.width; wrapMode: Text.WordWrap
+            text: "Remove this rice from your library. Your current desktop is untouched; this only deletes the saved look."
+            font.family: Style.fontFamily; font.pixelSize: 11 * Config.uiScale
+            color: deleteConfirm._inkDim
+          }
+          Row {
+            anchors.right: parent.right
+            spacing: 8
+            FilterButton { colors: wallpaperSelector.colors; label: "CANCEL"; register: false; skew: 8; height: 28 * Config.uiScale; onClicked: wallpaperSelector._deleteConfirmSlug = "" }
+            FilterButton {
+              colors: wallpaperSelector.colors; label: "DELETE"; register: false; skew: 8; height: 28 * Config.uiScale
+              hasActiveColor: true; activeColor: wallpaperSelector.colors ? wallpaperSelector.colors.error : "#e2342a"; isActive: true
+              onClicked: { wallpaperSelector._deleteRice(wallpaperSelector._deleteConfirmSlug); wallpaperSelector._deleteConfirmSlug = "" }
+            }
+          }
         }
       }
     }
@@ -903,6 +1023,10 @@ Scope {
         service: wallpaperSelector.selectorService
         suppressWidthAnim: wallpaperSelector.suppressWidthAnim
         applyRequest: function(item, forcePicker) { wallpaperSelector._applyItem(item, forcePicker) }
+        deleteRequest: function(item) {
+          wallpaperSelector._deleteConfirmSlug = "" + item.slug
+          wallpaperSelector._deleteConfirmName = "" + (item.name || item.slug)
+        }
       }
     }
     Image {

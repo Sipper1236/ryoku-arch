@@ -18,6 +18,7 @@ Item {
     property int skewOffset: 28
     property var service
     property var applyRequest: null
+    property var deleteRequest: null
 
     property int selectedIdx: -1
     property bool isCurrent: ListView.isCurrentItem
@@ -732,6 +733,10 @@ Item {
         onClicked: function(mouse) {
             if (mouse.button === Qt.RightButton) {
                 if (delegateItem._listView) delegateItem._listView.currentIndex = index
+                if (delegateItem.model && delegateItem.model.kind === "rice" && delegateItem.deleteRequest) {
+                    delegateItem.deleteRequest(delegateItem.model)
+                    return
+                }
                 delegateItem.flipped = !delegateItem.flipped
             } else if (!delegateItem.flipped) {
                 if (delegateItem.isCurrent) {

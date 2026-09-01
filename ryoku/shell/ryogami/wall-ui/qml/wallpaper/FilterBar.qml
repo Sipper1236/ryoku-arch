@@ -33,6 +33,7 @@ Item {
     signal browseToggled()
     signal themesToggled()
     signal ricesToggled()
+    signal saveLookRequested()
     signal modeToggled(string mode)
     signal followToggled()
 
@@ -610,6 +611,14 @@ Item {
             tooltip: "Rices"
             isActive: filterBar.ricesOpen
             onClicked: filterBar.ricesToggled()
+        }
+
+        FilterButton {
+            visible: filterBar.ricesOpen
+            colors: filterBar.colors
+            icon: "\u{f0193}"
+            tooltip: "Save current look as a rice"
+            onClicked: filterBar.saveLookRequested()
         }
 
         FilterButton {
