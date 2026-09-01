@@ -137,6 +137,7 @@ func reconcilers() []reconciler {
 		{"retired shell menus", reconcileRetiredMenus},
 		{"retired wallpaper keys", reconcileRetiredWallpaperKeys},
 		{"ryogami wallpaper daemon", reconcileRyogamiWallpaper},
+		{"ryowalls app leftovers", reconcileRyowallsRemoval},
 		{"quick-settings capture tab", reconcileCaptureModule},
 		{"quick-settings depth tab", reconcileDepthModule},
 		{"retired system sidebar", reconcileLegacySystemSidebar},
