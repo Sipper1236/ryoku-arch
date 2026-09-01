@@ -52,9 +52,16 @@ Column {
                 for (var i = 0; i < devs.length; i++) {
                     var d = devs[i]
                     var modes = []
+                    var modeDirs = {}
                     var ms = d.modes || []
-                    for (var j = 0; j < ms.length; j++) modes.push(ms[j].name)
-                    caps[d.key] = { modes: modes }
+                    for (var j = 0; j < ms.length; j++) {
+                        modes.push(ms[j].name)
+                        modeDirs[ms[j].name] = ms[j].directions || []
+                    }
+                    var effects = []
+                    var fx = d.effects || []
+                    for (var k = 0; k < fx.length; k++) effects.push({ id: fx[k].id, label: fx[k].label })
+                    caps[d.key] = { modes: modes, modeDirs: modeDirs, effects: effects }
                 }
                 root._caps = caps
             } catch (e) {}
@@ -98,20 +105,63 @@ Column {
                 onToggle: function(v) { root._set(modelData.key, { managed: v }) }
             }
 
-            RowDropdown {
-                colors: root.colors
-                title: "Mode"
-                description: "The device's own lighting mode."
-                value: modelData.mode || ""
-                model: {
-                    var out = []
-                    var ms = (root._caps[modelData.key] && root._caps[modelData.key].modes) || []
-                    for (var i = 0; i < ms.length; i++) out.push({ mode: ms[i], label: ms[i] })
-                    return out
+            Row {
+                id: devGrid
+                width: parent.width
+                spacing: 12 * Config.uiScale
+                z: 5
+                readonly property var _dcaps: root._caps[modelData.key] || ({})
+                readonly property bool _hasEffect: ((devGrid._dcaps.effects) || []).length > 0
+                readonly property var _dirs: (devGrid._dcaps.modeDirs && devGrid._dcaps.modeDirs[modelData.mode]) || []
+                readonly property bool _hasDir: devGrid._dirs.length > 0
+                readonly property int _n: 1 + (devGrid._hasEffect ? 1 : 0) + (devGrid._hasDir ? 1 : 0)
+                readonly property real cellW: (width - spacing * (devGrid._n - 1)) / devGrid._n
+                readonly property bool _live: root._enabled && !!modelData.managed
+                opacity: devGrid._live ? 1.0 : 0.5
+
+                SettingsDropdown {
+                    width: devGrid.cellW
+                    colors: root.colors
+                    label: "Mode"
+                    value: modelData.mode || ""
+                    model: {
+                        var out = []
+                        var ms = (devGrid._dcaps.modes) || []
+                        for (var i = 0; i < ms.length; i++) out.push({ mode: ms[i], label: ms[i] })
+                        return out
+                    }
+                    onSelect: function(v) { if (devGrid._live) root._set(modelData.key, { mode: v }) }
                 }
-                enabled: root._enabled && !!modelData.managed
-                opacity: enabled ? 1.0 : 0.5
-                onSelect: function(v) { root._set(modelData.key, { mode: v }) }
+
+                SettingsDropdown {
+                    width: devGrid.cellW
+                    visible: devGrid._hasEffect
+                    colors: root.colors
+                    label: "Effect"
+                    value: modelData.effect || ""
+                    model: {
+                        var out = [{ mode: "", label: "None" }]
+                        var fx = (devGrid._dcaps.effects) || []
+                        for (var i = 0; i < fx.length; i++) out.push({ mode: fx[i].id, label: fx[i].label })
+                        return out
+                    }
+                    onSelect: function(v) { if (devGrid._live) root._set(modelData.key, { effect: v }) }
+                }
+
+                SettingsDropdown {
+                    width: devGrid.cellW
+                    visible: devGrid._hasDir
+                    colors: root.colors
+                    label: "Direction"
+                    value: modelData.direction || ""
+                    model: {
+                        var out = []
+                        var ds = devGrid._dirs
+                        for (var i = 0; i < ds.length; i++) out.push({ mode: ds[i], label: ds[i] })
+                        return out
+                    }
+                    onSelect: function(v) { if (devGrid._live) root._set(modelData.key, { direction: v }) }
+                }
             }
 
             RowDropdown {

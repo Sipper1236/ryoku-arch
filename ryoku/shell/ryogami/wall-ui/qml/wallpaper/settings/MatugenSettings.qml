@@ -1,4 +1,6 @@
 import QtQuick
+import Quickshell
+import Quickshell.Io
 import "../.."
 import "../../components"
 
@@ -7,6 +9,21 @@ Column {
     property var colors
     property var saveConfigKey
     property var cloneIntegrations
+    property var _templates: ({})
+    readonly property var _apps: Object.keys(root._templates).sort()
+
+    FileView {
+        id: matugenFile
+        path: Quickshell.env("HOME") + "/.config/ryoku/matugen.json"
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: {
+            try {
+                var d = JSON.parse(matugenFile.text())
+                root._templates = (d.templates && typeof d.templates === "object") ? d.templates : ({})
+            } catch (e) {}
+        }
+    }
 
     width: parent ? parent.width : 0
     spacing: 8
@@ -81,6 +98,39 @@ Column {
                 if (!root.cloneIntegrations || !root.saveConfigKey) return
                 var a = root.cloneIntegrations(); a.push({ name: "", template: "", output: "" })
                 root.saveConfigKey("integrations", a)
+            }
+        }
+    }
+
+    SettingsCard {
+        colors: root.colors
+        title: "App templates"
+        subtitle: "Recolour each app's config from the generated palette."
+
+        Grid {
+            id: tplGrid
+            width: parent.width
+            columns: 3
+            columnSpacing: 12 * Config.uiScale
+            rowSpacing: 8 * Config.uiScale
+            topPadding: 4 * Config.uiScale
+            readonly property real cellW: (width - columnSpacing * (columns - 1)) / columns
+
+            Repeater {
+                model: root._apps
+
+                SettingsToggle {
+                    width: tplGrid.cellW
+                    colors: root.colors
+                    label: modelData
+                    checked: root._templates[modelData] !== false
+                    onToggle: function(v) {
+                        var patch = {}
+                        patch[modelData] = v
+                        Quickshell.execDetached(["ryoku-hub", "hypr", "matugen", "set",
+                            JSON.stringify({ templates: patch })])
+                    }
+                }
             }
         }
     }
