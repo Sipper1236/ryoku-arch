@@ -12,6 +12,7 @@ Item {
     property var service
     property bool settingsOpen: false
     property bool effectsOpen: false
+    property bool editOpen: false
     property bool wallhavenBrowserOpen: false
     property bool steamWorkshopBrowserOpen: false
     property bool cacheLoading: false
@@ -28,6 +29,7 @@ Item {
 
     signal settingsToggled()
     signal effectsToggled()
+    signal editToggled()
     signal wallhavenToggled()
     signal steamWorkshopToggled()
     signal modeToggled(string mode)
@@ -607,6 +609,14 @@ Item {
             tooltip: "Effects"
             isActive: filterBar.effectsOpen
             onClicked: filterBar.effectsToggled()
+        }
+
+        FilterButton {
+            colors: filterBar.colors
+            icon: "\u{f0068}"
+            tooltip: "Edit (grade + upscale)"
+            isActive: filterBar.editOpen
+            onClicked: filterBar.editToggled()
         }
 
         Item {
