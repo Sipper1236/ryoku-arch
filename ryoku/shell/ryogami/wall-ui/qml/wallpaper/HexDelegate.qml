@@ -120,6 +120,23 @@ Item {
                 Behavior on opacity { NumberAnimation { duration: Style.animNormal; easing.type: Easing.OutCubic } }
             }
 
+            Column {
+                id: _hexSwatches
+                anchors.centerIn: parent
+                width: hexItem.width * 1.3
+                height: hexItem.height * 1.3
+                visible: hexItem.itemData && hexItem.itemData.kind === "theme" && thumbImage.status !== Image.Ready
+                property var _sw: (hexItem.itemData && hexItem.itemData.sw) ? ("" + hexItem.itemData.sw).split(",") : []
+                Repeater {
+                    model: _hexSwatches._sw
+                    Rectangle {
+                        width: _hexSwatches.width
+                        height: _hexSwatches.height / Math.max(1, _hexSwatches._sw.length)
+                        color: modelData
+                    }
+                }
+            }
+
             layer.enabled: true
             layer.smooth: true
             layer.effect: MultiEffect {

@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
 import QtQuick.Shapes
@@ -27,6 +28,14 @@ Scope {
   }
 
   function _applyItem(item, forcePicker) {
+    if (item && item.kind === "theme") {
+      Quickshell.execDetached(["ryoku-shell", "theme", item.id])
+      return
+    }
+    if (item && item.kind === "rice") {
+      Quickshell.execDetached(["ryoku-hub", "rice", "apply", item.slug])
+      return
+    }
     if (forcePicker || Config.wallpaperPerMonitor) {
       _monitorPicker.open(item)
       return
@@ -97,11 +106,97 @@ Scope {
     }
   }
 
+  ListModel { id: themeModel }
+  ListModel { id: riceModel }
+
+  function _themeSlug(id) {
+    return ("" + id).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+  }
+
+  function _loadThemes() {
+    if (_themeProc.running || themeModel.count > 0) return
+    _themeBuf = ""
+    _themeProc.running = true
+  }
+  function _loadRices() {
+    if (_riceProc.running || riceModel.count > 0) return
+    _riceBuf = ""
+    _riceProc.running = true
+  }
+
+  property string _themeBuf: ""
+  Process {
+    id: _themeProc
+    command: ["ryoku-shell", "theme", "catalog"]
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: data => wallpaperSelector._themeBuf += data
+    }
+    onExited: {
+      themeModel.clear()
+      var list = []
+      try { list = JSON.parse(wallpaperSelector._themeBuf) || [] } catch (e) { list = [] }
+      var home = Quickshell.env("HOME")
+      for (var i = 0; i < list.length; i++) {
+        var t = list[i]
+        if (t.dynamic === true) continue
+        var preview = home + "/.local/share/ryoku/themes/" + wallpaperSelector._themeSlug(t.id) + "/preview.jpg"
+        themeModel.append({
+          id: "" + t.id,
+          name: "" + (t.label || t.id),
+          sw: (t.sw || []).join(","),
+          dark: t.dark === true,
+          kind: "theme",
+          type: "static",
+          weId: "",
+          favourite: false,
+          videoFile: "",
+          path: preview,
+          thumb: preview
+        })
+      }
+      if (wallpaperSelector.themesOpen) _bindActiveViewModel()
+    }
+  }
+
+  property string _riceBuf: ""
+  Process {
+    id: _riceProc
+    command: ["ryoku-hub", "rice", "list"]
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: data => wallpaperSelector._riceBuf += data
+    }
+    onExited: {
+      riceModel.clear()
+      var list = []
+      try { list = JSON.parse(wallpaperSelector._riceBuf) || [] } catch (e) { list = [] }
+      for (var i = 0; i < list.length; i++) {
+        var r = list[i]
+        var p = ("" + (r.preview || "")).replace(/^file:\/\//, "")
+        riceModel.append({
+          slug: "" + r.slug,
+          name: "" + (r.name || r.slug || ""),
+          kind: "rice",
+          type: "static",
+          weId: "",
+          favourite: false,
+          videoFile: "",
+          path: p,
+          thumb: p
+        })
+      }
+      if (wallpaperSelector.ricesOpen) _bindActiveViewModel()
+    }
+  }
+
   onShowingChanged: {
     if (showing) {
       _filterBarManuallyShown = Config.filterBarAlwaysVisible
       _restorePending = true
       _bindActiveViewModel()
+      _loadThemes()
+      _loadRices()
       service.startCacheCheck()
       cardShowTimer.restart()
     } else {
@@ -220,12 +315,13 @@ Scope {
   property int topBarHeight: 50 * Config.uiScale
   property bool _filterBarManuallyShown: Config.filterBarAlwaysVisible
   property bool _filterBarHoverRevealed: false
-  readonly property bool _filterBarShown: _filterBarManuallyShown || _filterBarHoverRevealed
+  readonly property bool _filterBarShown: _filterBarManuallyShown || _filterBarHoverRevealed || themesOpen || ricesOpen
   property bool browseOpen: false
   property string browseSource: "wallhaven"
   property bool themesOpen: false
   property bool ricesOpen: false
-  property bool anyBrowserOpen: browseOpen || themesOpen || ricesOpen
+  property bool anyBrowserOpen: browseOpen
+  property var _activeModel: themesOpen ? themeModel : (ricesOpen ? riceModel : (service ? service.filteredModel : null))
   property bool isHexMode: Config.displayMode === "hex"
   property bool isGridMode: Config.displayMode === "wall"
   property bool isMosaicMode: Config.displayMode === "mosaic"
@@ -235,28 +331,29 @@ Scope {
   onIsGridModeChanged: if (showing) _bindActiveViewModel()
   onIsMosaicModeChanged: if (showing) _bindActiveViewModel()
 
+  onThemesOpenChanged: { if (themesOpen) _loadThemes(); if (showing) _bindActiveViewModel() }
+  onRicesOpenChanged: { if (ricesOpen) _loadRices(); if (showing) _bindActiveViewModel() }
+
   function _bindActiveViewModel() {
     var _isSlice = !isHexMode && !isGridMode && !isMosaicMode
-    console.log("[BIND] _isSlice=", _isSlice, "isHexMode=", isHexMode, "isGridMode=", isGridMode, "isMosaicMode=", isMosaicMode, "cardVisible=", cardVisible, "showing=", showing)
     if (_isSlice) {
-      sliceListView.model = Qt.binding(function() { return service.filteredModel })
+      sliceListView.model = Qt.binding(function() { return wallpaperSelector._activeModel })
       sliceListView.cacheBuffer = wallpaperSelector.expandedWidth
-      _positionTimer.posIdx = Math.min(Math.max(0, sliceListView.currentIndex), Math.max(0, (service.filteredModel ? service.filteredModel.count : 1) - 1))
-      console.log("[BIND] slice: count=", (service.filteredModel ? service.filteredModel.count : "null"), "currentIndex=", sliceListView.currentIndex, "posIdx=", _positionTimer.posIdx, "visible=", sliceListView.visible, "width=", sliceListView.width, "height=", sliceListView.height)
+      _positionTimer.posIdx = Math.min(Math.max(0, sliceListView.currentIndex), Math.max(0, (_activeModel ? _activeModel.count : 1) - 1))
       _positionTimer.restart()
     } else {
       sliceListView.model = null
       sliceListView.cacheBuffer = 0
     }
     if (isGridMode) {
-      thumbGridView.model = Qt.binding(function() { return service.filteredModel })
+      thumbGridView.model = Qt.binding(function() { return wallpaperSelector._activeModel })
       thumbGridView.cacheBuffer = 300
     } else {
       thumbGridView.model = null
       thumbGridView.cacheBuffer = 0
     }
     if (isHexMode) {
-      hexListView.model = Qt.binding(function() { return Math.ceil((service.filteredModel ? service.filteredModel.count : 0) / Math.max(1, hexListView._rows)) })
+      hexListView.model = Qt.binding(function() { return Math.ceil((wallpaperSelector._activeModel ? wallpaperSelector._activeModel.count : 0) / Math.max(1, hexListView._rows)) })
     } else {
       hexListView.model = null
     }
@@ -277,7 +374,7 @@ Scope {
   property int _gridTotalH: _gridCellH * Config.gridRows
   Behavior on _gridTotalH { NumberAnimation { duration: Style.animExpand; easing.type: Easing.OutCubic } }
 
-  property int cardHeight: anyBrowserOpen ? 0 : (isHexMode ? hexGridHeight : (isGridMode ? _gridTotalH + topBarHeight + 35 : (isMosaicMode ? Config.mosaicHeight + topBarHeight + 60 : sliceHeight + topBarHeight + 60)))
+  property int cardHeight: browseOpen ? 0 : (isHexMode ? hexGridHeight : (isGridMode ? _gridTotalH + topBarHeight + 35 : (isMosaicMode ? Config.mosaicHeight + topBarHeight + 60 : sliceHeight + topBarHeight + 60)))
   property int hexCardWidth: selectorPanel.width
   property int _sliceListW: Config.wallpaperExpandedWidth + (Config.wallpaperVisibleCount - 1) * (Config.wallpaperSliceWidth + Config.wallpaperSliceSpacing)
   property int cardWidth: isHexMode ? hexCardWidth : (isGridMode ? _gridTotalW + 20 : (isMosaicMode ? Config.mosaicWidth + 20 : Math.max(_sliceListW + 40, 600)))
@@ -442,9 +539,9 @@ Scope {
         Config.saveKey("matugen.mode", mode)
         DaemonClient.retheme(Config.matugenScheme, mode, Config.matugenColorIndex)
       }
-      visible: !wallpaperSelector.anyBrowserOpen
+      visible: !wallpaperSelector.browseOpen
       enabled: wallpaperSelector._filterBarShown
-      opacity: (wallpaperSelector.anyBrowserOpen || !wallpaperSelector._filterBarShown) ? 0 : 1
+      opacity: (wallpaperSelector.browseOpen || !wallpaperSelector._filterBarShown) ? 0 : 1
       Behavior on opacity { NumberAnimation { duration: Style.animNormal } }
 
       HoverHandler {
@@ -585,7 +682,7 @@ Scope {
 
     Loader {
       id: themesLoader
-      active: wallpaperSelector.themesOpen
+      active: false
       anchors.centerIn: parent
       width: Math.min(cardContainer.width - 20, Screen.width - 140 * Config.uiScale)
       z: 6
@@ -601,7 +698,7 @@ Scope {
 
     Loader {
       id: ricesLoader
-      active: wallpaperSelector.ricesOpen
+      active: false
       anchors.centerIn: parent
       width: Math.min(cardContainer.width - 20, Screen.width - 140 * Config.uiScale)
       z: 6
@@ -628,7 +725,7 @@ Scope {
       Behavior on width { NumberAnimation { duration: Style.animExpand; easing.type: Easing.OutCubic } }
 
       orientation: ListView.Horizontal
-      model: service.filteredModel
+      model: wallpaperSelector._activeModel
       clip: false
       spacing: wallpaperSelector.sliceSpacing
 
@@ -705,7 +802,7 @@ Scope {
           if (wheel.angleDelta.y > 0 || wheel.angleDelta.x > 0) {
             sliceListView.currentIndex = Math.max(0, sliceListView.currentIndex - step)
           } else if (wheel.angleDelta.y < 0 || wheel.angleDelta.x < 0) {
-            sliceListView.currentIndex = Math.min(service.filteredModel.count - 1, sliceListView.currentIndex + step)
+            sliceListView.currentIndex = Math.min((wallpaperSelector._activeModel ? wallpaperSelector._activeModel.count : 0) - 1, sliceListView.currentIndex + step)
           }
         }
         onPressed: function(mouse) { mouse.accepted = false }
@@ -725,8 +822,8 @@ Scope {
 
       Keys.onEscapePressed: wallpaperSelector.showing = false
       Keys.onReturnPressed: {
-        if (currentIndex >= 0 && currentIndex < service.filteredModel.count) {
-          const item = service.filteredModel.get(currentIndex)
+        if (currentIndex >= 0 && wallpaperSelector._activeModel && currentIndex < wallpaperSelector._activeModel.count) {
+          const item = wallpaperSelector._activeModel.get(currentIndex)
           wallpaperSelector._applyItem(item)
         }
       }
@@ -774,7 +871,7 @@ Scope {
 
         if (event.key === Qt.Key_Right && !(event.modifiers & Qt.ShiftModifier)) {
           keyboardNavActive = true
-          if (currentIndex < service.filteredModel.count - 1) {
+          if (currentIndex < (wallpaperSelector._activeModel ? wallpaperSelector._activeModel.count : 0) - 1) {
             currentIndex++
           }
           event.accepted = true
@@ -861,7 +958,7 @@ Scope {
         }
       }
 
-      model: Math.ceil((service.filteredModel ? service.filteredModel.count : 0) / Math.max(1, _rows))
+      model: Math.ceil((wallpaperSelector._activeModel ? wallpaperSelector._activeModel.count : 0) / Math.max(1, _rows))
 
       property bool _restored: false
       onCountChanged: {
@@ -915,8 +1012,8 @@ Scope {
       Keys.onEscapePressed: wallpaperSelector.showing = false
       Keys.onReturnPressed: {
         var flatIdx = _selectedCol * _rows + _selectedRow
-        if (flatIdx >= 0 && flatIdx < service.filteredModel.count) {
-          var item = service.filteredModel.get(flatIdx)
+        if (flatIdx >= 0 && wallpaperSelector._activeModel && flatIdx < wallpaperSelector._activeModel.count) {
+          var item = wallpaperSelector._activeModel.get(flatIdx)
           wallpaperSelector._applyItem(item)
         }
       }
@@ -962,7 +1059,7 @@ Scope {
           return
         }
         if (event.key === Qt.Key_Down && !(event.modifiers & Qt.ShiftModifier)) {
-          var maxRow = Math.min(_rows, service.filteredModel.count - _selectedCol * _rows) - 1
+          var maxRow = Math.min(_rows, (wallpaperSelector._activeModel ? wallpaperSelector._activeModel.count : 0) - _selectedCol * _rows) - 1
           if (_selectedRow < maxRow) _selectedRow++
           event.accepted = true
           return
@@ -995,7 +1092,7 @@ Scope {
         }
 
         Repeater {
-          model: Math.max(0, Math.min(hexListView._rows, service.filteredModel.count - hexCol.colIdx * hexListView._rows))
+          model: Math.max(0, Math.min(hexListView._rows, (wallpaperSelector._activeModel ? wallpaperSelector._activeModel.count : 0) - hexCol.colIdx * hexListView._rows))
 
           HexDelegate {
             property int rowIdx: index
@@ -1004,7 +1101,7 @@ Scope {
             hexRadius: hexListView._r
             colors: wallpaperSelector.colors
             service: wallpaperSelector.selectorService
-            itemData: service.filteredModel.get(flatIdx)
+            itemData: wallpaperSelector._activeModel ? wallpaperSelector._activeModel.get(flatIdx) : null
             isSelected: hexCol.colIdx === hexListView._selectedCol && rowIdx === hexListView._selectedRow
             viewMoving: hexListView.contentMoving
             applyRequest: function(item, forcePicker) { wallpaperSelector._applyItem(item, forcePicker) }
@@ -1049,7 +1146,7 @@ Scope {
       cellHeight: wallpaperSelector._gridCellH
       Behavior on cellHeight { NumberAnimation { duration: Style.animExpand; easing.type: Easing.OutCubic } }
 
-      model: service.filteredModel
+      model: wallpaperSelector._activeModel
       cacheBuffer: 300
       boundsBehavior: Flickable.StopAtBounds
       interactive: false
@@ -1108,8 +1205,8 @@ Scope {
         else wallpaperSelector.showing = false
       }
       Keys.onReturnPressed: {
-        if (hoveredIdx >= 0 && hoveredIdx < service.filteredModel.count) {
-          var item = service.filteredModel.get(hoveredIdx)
+        if (hoveredIdx >= 0 && wallpaperSelector._activeModel && hoveredIdx < wallpaperSelector._activeModel.count) {
+          var item = wallpaperSelector._activeModel.get(hoveredIdx)
           wallpaperSelector._applyItem(item)
         }
       }
@@ -1293,6 +1390,21 @@ Scope {
             sourceSize.height: Config.gridThumbHeight
             opacity: status === Image.Ready ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: Style.animNormal; easing.type: Easing.OutCubic } }
+          }
+
+          Column {
+            id: _gridSwatches
+            anchors.fill: parent
+            visible: gridThumbDelegate.model.kind === "theme" && gridThumbImg.status !== Image.Ready
+            property var _sw: gridThumbDelegate.model.sw ? ("" + gridThumbDelegate.model.sw).split(",") : []
+            Repeater {
+              model: _gridSwatches._sw
+              Rectangle {
+                width: _gridSwatches.width
+                height: _gridSwatches.height / Math.max(1, _gridSwatches._sw.length)
+                color: modelData
+              }
+            }
           }
 
           Loader {

@@ -258,10 +258,25 @@ Item {
 
         }
 
+        Column {
+            id: _themeSwatches
+            anchors.fill: parent
+            visible: delegateItem.model.kind === "theme" && thumbImage.status !== Image.Ready
+            property var _sw: delegateItem.model.sw ? ("" + delegateItem.model.sw).split(",") : []
+            Repeater {
+                model: _themeSwatches._sw
+                Rectangle {
+                    width: delegateItem.width
+                    height: delegateItem.height / Math.max(1, _themeSwatches._sw.length)
+                    color: modelData
+                }
+            }
+        }
+
         Rectangle {
             anchors.fill: parent
             visible: opacity > 0
-            opacity: thumbImage.status === Image.Ready ? 0 : 1
+            opacity: (thumbImage.status === Image.Ready || delegateItem.model.kind === "theme") ? 0 : 1
             Behavior on opacity { NumberAnimation { duration: Style.animNormal; easing.type: Easing.OutCubic } }
             color: delegateItem.colors ? Qt.rgba(delegateItem.colors.surfaceVariant.r, delegateItem.colors.surfaceVariant.g, delegateItem.colors.surfaceVariant.b, 0.8) : Qt.rgba(0.18, 0.20, 0.25, 0.8)
         }
