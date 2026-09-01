@@ -87,7 +87,9 @@ rtkit
 mesa
 vulkan-icd-loader
 
-# Desktop: plain Hyprland, Xwayland, portals, polkit agent, Qt/GTK runtime
+# Desktop: plain Hyprland, Xwayland, portals, polkit agent, Qt/GTK runtime.
+# SDDM may still be built with Qt5; the greeter's native Wayland QPA plugin is
+# version-specific, so qt6-wayland alone cannot start it.
 hyprland
 xorg-xwayland
 hyprpolkitagent
@@ -95,6 +97,7 @@ xdg-desktop-portal-hyprland
 xdg-desktop-portal-gtk
 xdg-user-dirs
 qt6-wayland
+qt5-wayland
 qt6ct
 adwaita-icon-theme
 # gnome-themes-extra ships the standalone Adwaita-dark GTK theme the Hyprland

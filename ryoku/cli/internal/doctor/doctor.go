@@ -2248,7 +2248,7 @@ func sddmWaylandBody() string {
 	if sys.Exists(greeterCompositorBin) {
 		compositor = greeterCompositorBin
 	}
-	return "[General]\nDisplayServer=wayland\n\n[Wayland]\nCompositorCommand=" + compositor + "\n"
+	return "[General]\nDisplayServer=wayland\nGreeterEnvironment=QT_QPA_PLATFORM=wayland\n\n[Wayland]\nCompositorCommand=" + compositor + "\n"
 }
 
 // reconcileGreeterDisplayServer moves the SDDM greeter to Wayland. SDDM's

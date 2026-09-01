@@ -18,6 +18,16 @@
   hue/saturation colour sort (magick-derived) stays
   (`ryogami/wall-ui/`, `ryogami/daemon/`, `services/DaemonClient.qml`).
 
+### Fixed
+- **Launcher actions now invoke live shell routes and shipped helpers.** The
+  consolidated shell removed the old `toolkit`, `sysinfo`, and `clipboard`
+  daemon verbs, but the action catalog still launched them and silently
+  discarded their failures. Control Deck and System Info now open Quick
+  Settings, Clipboard History opens its supported deep route, and
+  `ryoku-cmd-*` helpers resolve through the package-managed `PATH` rather than
+  a stale `~/.config/hypr/scripts` copy (`modules/launcher/shared/providers/
+  actions/`).
+
 ### Added
 - **The wallpaper's subject can be cut out and drawn in front of the desktop
   widgets, composed from the Super+Esc Desktop route.** A DEPTH card turns the

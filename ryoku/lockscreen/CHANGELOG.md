@@ -22,8 +22,10 @@
   was looking at, and even the default clockwork clock woke the CPU ~60x/s,
   blocking deep idle on a laptop. `sddm/setup` now writes
   `/etc/sddm.conf.d/10-ryoku-wayland.conf` (`DisplayServer=wayland`,
-  `CompositorCommand=weston --shell=kiosk`), so the greeter runs on Wayland like
-  the session and SDDM tears it down cleanly at login. Validated headlessly:
+  `GreeterEnvironment=QT_QPA_PLATFORM=wayland`,
+  `CompositorCommand=weston --shell=kiosk`), so the Qt greeter connects to
+  Weston instead of selecting xcb with no X server. The session tears it down
+  cleanly at login. Validated headlessly:
   weston hosts the greeter as a separate client, the exact separate-process
   model SDDM uses. `ryoku doctor` backports it to existing boxes; `base.packages`
   and `ryoku-desktop` ship weston. Honors `RYOKU_DRYRUN`.

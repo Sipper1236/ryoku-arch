@@ -4,11 +4,19 @@
 
 - **`ryoku update` no longer deadlocks on the Oh My Zsh swap.** CachyOS-era
   installs carry `cachyos-zsh-config`, which depends on `oh-my-zsh-git`;
-  ryoku-oh-my-zsh conflicted with that package without providing it, so pacman
-  offered the removal and then refused it ("removing oh-my-zsh-git breaks
-  dependency"), failing every full upgrade. The package now provides,
-  conflicts with and replaces `oh-my-zsh-git`, so -Syu swaps the AUR tree in
-  one transaction (`release/packages/ryoku-oh-my-zsh/PKGBUILD`).
+  ryoku-oh-my-zsh previously conflicted with that package without providing
+  it, so pacman offered the removal and then refused it ("removing
+  oh-my-zsh-git breaks dependency"), failing every full upgrade. The package
+  now version-provides, conflicts with and replaces both `oh-my-zsh` and
+  `oh-my-zsh-git`, so `-Syu` swaps the AUR tree in one transaction. This same
+  package contract serves existing systems, the script installer and the ISO
+  package closure (`release/packages/ryoku-oh-my-zsh/PKGBUILD`).
+
+- **CachyOS's Qt5 SDDM greeter now has its native Wayland platform plugin.**
+  `qt6-wayland` cannot supply a QPA plugin to a Qt5 process; base installs and
+  the `ryoku-desktop` dependency closure now include `qt5-wayland`, so the
+  Wayland greeter starts on fresh ISO installs, script conversions, and
+  existing systems after an update.
 
 - **ryoku-gpu grows `check-pin` and marks forced pins.** `check-pin` audits the
   written gpu.lua against today's policy in one verdict line (`ok` | `forced` |

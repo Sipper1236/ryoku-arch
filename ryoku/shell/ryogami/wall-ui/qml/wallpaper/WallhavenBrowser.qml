@@ -34,6 +34,20 @@ Item {
 
   MouseArea { anchors.fill: parent }
 
+  // paper panel behind the filter chrome so it reads over the grid/wallpaper
+  Rectangle {
+    anchors.fill: contentCol
+    anchors.margins: -12
+    z: 9
+    visible: browser.browserVisible
+    radius: Style.radiusMedium
+    color: browser.colors ? Qt.rgba(browser.colors.surface.r, browser.colors.surface.g, browser.colors.surface.b, 0.94)
+                           : Qt.rgba(0.07, 0.08, 0.10, 0.94)
+    border.width: 1
+    border.color: browser.colors ? Qt.rgba(browser.colors.surfaceText.r, browser.colors.surfaceText.g, browser.colors.surfaceText.b, 0.14)
+                                  : Qt.rgba(1, 1, 1, 0.1)
+  }
+
   Column {
     id: contentCol
     z: 10
@@ -44,7 +58,7 @@ Item {
     spacing: 8
 
     Row {
-      spacing: -6
+      spacing: 2
       anchors.horizontalCenter: parent.horizontalCenter
 
       FilterButton {
@@ -149,7 +163,7 @@ Item {
 
     Row {
       z: 10
-      spacing: -6
+      spacing: 2
       anchors.horizontalCenter: parent.horizontalCenter
 
       Text {

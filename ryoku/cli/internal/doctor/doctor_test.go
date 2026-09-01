@@ -788,6 +788,21 @@ func TestGreeterThemeHealthy(t *testing.T) {
 	}
 }
 
+func TestSDDMWaylandBodyForcesQtWayland(t *testing.T) {
+	body := sddmWaylandBody()
+	for _, line := range []string{
+		"[General]",
+		"DisplayServer=wayland",
+		"GreeterEnvironment=QT_QPA_PLATFORM=wayland",
+		"[Wayland]",
+		"CompositorCommand=",
+	} {
+		if !strings.Contains(body, line) {
+			t.Errorf("sddmWaylandBody() missing %q:\n%s", line, body)
+		}
+	}
+}
+
 // the limine layout reconciler's decision logic lives in planLimineLayout, a
 // pure function of an observed limineLayoutState: no real /boot, no
 // efibootmgr. the config surgery (mergeLimineConf) is exercised on literal

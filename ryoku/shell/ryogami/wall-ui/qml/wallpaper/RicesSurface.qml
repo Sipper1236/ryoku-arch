@@ -27,15 +27,18 @@ Item {
     opacity: browserVisible ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: Style.animNormal; easing.type: Easing.OutCubic } }
 
-    implicitHeight: Math.max(300, grid.y + grid.implicitHeight + 24)
+    readonly property real _maxH: (Screen.height > 0 ? Screen.height : 1000) - 150 * Config.uiScale
+    implicitHeight: Math.min(Math.max(300, header.height + 28 + grid.implicitHeight + 24), _maxH)
     height: browserVisible ? implicitHeight : 0
     Behavior on height { NumberAnimation { duration: Style.animEnter; easing.type: Easing.OutCubic } }
 
     readonly property color _ink:    colors ? colors.surfaceText : "#e0e2e8"
     readonly property color _inkDim: colors ? colors.surfaceVariantText : "#c2c7cf"
     readonly property color _accent: colors ? colors.primary : Style.fallbackAccent
+    focus: browserVisible
+    Keys.onEscapePressed: (event) => { root.escapePressed(); event.accepted = true }
 
-    onBrowserVisibleChanged: if (browserVisible && rices.length === 0) _load()
+    onBrowserVisibleChanged: { if (browserVisible) forceActiveFocus(); if (browserVisible && rices.length === 0) _load() }
     Component.onCompleted: if (browserVisible) _load()
     function _load() { if (listProc.running || rices.length > 0) return; _buf = ""; listProc.running = true }
 
@@ -112,13 +115,21 @@ Item {
     }
 
     // ---- rice card grid ----
-    Flow {
-        id: grid
+    Flickable {
+        id: gridFlick
         anchors.top: header.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.left: parent.left; anchors.right: parent.right
+        anchors.bottom: parent.bottom
         anchors.topMargin: 14
-        width: Math.min(parent.width - 48, 3 * (300 + 12) * Config.uiScale)
-        spacing: 12
+        contentHeight: grid.implicitHeight
+        boundsBehavior: Flickable.StopAtBounds
+        clip: true
+
+        Flow {
+            id: grid
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Math.min(gridFlick.width - 48, 3 * (300 + 12) * Config.uiScale)
+            spacing: 12
 
         Repeater {
             model: root.rices
@@ -235,6 +246,7 @@ Item {
                 }
             }
         }
+    }
     }
 
     // ---- apply confirm ----

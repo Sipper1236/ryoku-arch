@@ -17,7 +17,7 @@ license=('MIT')
 # cachyos-zsh-config, which depends on 'oh-my-zsh-git', so a conflict without
 # the provide deadlocks the whole upgrade (pacman offers the removal, then
 # refuses it because the removal breaks that dependency).
-provides=('oh-my-zsh' 'oh-my-zsh-git')
+provides=("oh-my-zsh=$pkgver" "oh-my-zsh-git=$pkgver")
 conflicts=('oh-my-zsh' 'oh-my-zsh-git')
 replaces=('oh-my-zsh' 'oh-my-zsh-git')
 makedepends=('git')

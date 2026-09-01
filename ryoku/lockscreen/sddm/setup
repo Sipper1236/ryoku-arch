@@ -181,6 +181,7 @@ priv mkdir -p /etc/sddm.conf.d
 write_root "$WAYLAND_CONF" <<EOF
 [General]
 DisplayServer=wayland
+GreeterEnvironment=QT_QPA_PLATFORM=wayland
 
 [Wayland]
 CompositorCommand=$COMPOSITOR

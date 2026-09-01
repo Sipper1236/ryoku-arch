@@ -15,6 +15,21 @@
   (`internal/doctor/reconcile_gpu_pin.go`, `reconcile_ppd_amdgpu.go`).
 
 ### Fixed
+- **Doctor repairs stock plocate configs instead of breaking their update
+  service.** `updatedb.conf` normally spells its variable as
+  `PRUNEPATHS = "…"`, while Doctor only recognized a compact spelling and
+  appended a second definition. Plocate rejects duplicate variables, leaving
+  `plocate-updatedb.service` failed and `locate` stale. Doctor now updates the
+  package-owned assignment in place and collapses the duplicate definitions
+  older Ryoku versions left behind without losing configured paths
+  (`internal/doctor/reconcile_snapshots.go`).
+- **The SDDM Wayland greeter now selects Qt's Wayland platform explicitly.**
+  The generated configuration started Weston but omitted
+  `QT_QPA_PLATFORM=wayland`; Qt5 SDDM greeters then selected `xcb`, found no X
+  server, and aborted to a black screen. Doctor now writes the environment with
+  the display-server configuration, and the delivered package set includes the
+  ABI-matched `qt5-wayland` QPA plugin for CachyOS's Qt5 greeter
+  (`internal/doctor/doctor.go`, `release/packages/ryoku-desktop/PKGBUILD`).
 - **Doctor unpins window borders stuck on a stale colour.** While colours
   follow the wallpaper (or a named scheme) the Hub's generated
   hypr/settings.lua deliberately omits `col.active_border` so the palette

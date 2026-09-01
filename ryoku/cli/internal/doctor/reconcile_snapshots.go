@@ -3,6 +3,7 @@ package doctor
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"ryoku-cli/internal/sys"
@@ -256,27 +257,62 @@ func reconcileUpdatedbPrune(checkOnly bool) recResult {
 	return fixedRes("added /.snapshots to updatedb PRUNEPATHS so plocate skips snapshots")
 }
 
-// addUpdatedbPrunePath ensures path is in PRUNEPATHS, extending an existing
-// line or appending one; changed=false when already listed.
+// updatedbPrunePathsLine accepts both the package's `PRUNEPATHS = "..."` and
+// Ryoku's earlier compact spelling. Keeping the original prefix and suffix
+// preserves package comments and avoids rewriting unrelated configuration.
+var updatedbPrunePathsLine = regexp.MustCompile(`^(\s*PRUNEPATHS\s*=\s*)"([^"]*)"(\s*(?:#.*)?)$`)
+
+// addUpdatedbPrunePath ensures path is in the sole PRUNEPATHS assignment. A
+// previous Ryoku version appended a compact second assignment to stock configs;
+// merge every assignment so an update repairs that invalid configuration.
 func addUpdatedbPrunePath(conf, path string) (string, bool) {
 	lines := strings.Split(conf, "\n")
+	first := -1
+	var prefix, suffix string
+	paths := make([]string, 0)
+	seen := make(map[string]bool)
+	duplicates := make(map[int]bool)
+
 	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "PRUNEPATHS=") {
+		match := updatedbPrunePathsLine.FindStringSubmatch(line)
+		if match == nil {
 			continue
 		}
-		val := strings.Trim(strings.TrimPrefix(trimmed, "PRUNEPATHS="), `"`)
-		for _, f := range strings.Fields(val) {
-			if f == path {
-				return conf, false
+		if first < 0 {
+			first, prefix, suffix = i, match[1], match[3]
+		} else {
+			duplicates[i] = true
+		}
+		for _, existing := range strings.Fields(match[2]) {
+			if !seen[existing] {
+				seen[existing] = true
+				paths = append(paths, existing)
 			}
 		}
-		lines[i] = `PRUNEPATHS="` + strings.Join(append(strings.Fields(val), path), " ") + `"`
-		return strings.Join(lines, "\n"), true
 	}
-	out := conf
-	if out != "" && !strings.HasSuffix(out, "\n") {
-		out += "\n"
+
+	if first < 0 {
+		out := conf
+		if out != "" && !strings.HasSuffix(out, "\n") {
+			out += "\n"
+		}
+		return out + `PRUNEPATHS="` + path + `"` + "\n", true
 	}
-	return out + `PRUNEPATHS="` + path + `"` + "\n", true
+	if !seen[path] {
+		paths = append(paths, path)
+	}
+	next := prefix + `"` + strings.Join(paths, " ") + `"` + suffix
+	out := make([]string, 0, len(lines)-len(duplicates))
+	for i, line := range lines {
+		if duplicates[i] {
+			continue
+		}
+		if i == first {
+			out = append(out, next)
+			continue
+		}
+		out = append(out, line)
+	}
+	merged := strings.Join(out, "\n")
+	return merged, merged != conf
 }
