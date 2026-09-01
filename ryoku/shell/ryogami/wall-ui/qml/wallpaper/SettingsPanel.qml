@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Shapes
+import QtQuick.Window
 import Quickshell.Io
 import ".."
 import "../services"
@@ -71,7 +72,7 @@ Item {
   }
 
   z: 102
-  width: ((settingsPanel.activeTab === "performance" ? 1080 : (settingsPanel.activeTab === "general" || settingsPanel.activeTab === "edit") ? 900 : 760) * Config.uiScale) + _keybindsColW + _s(24)
+  width: Math.min(((settingsPanel.activeTab === "performance" ? 1080 : (settingsPanel.activeTab === "general" || settingsPanel.activeTab === "edit") ? 900 : 760) * Config.uiScale) + _keybindsColW + _s(24), Screen.width - _s(48))
   Behavior on width { NumberAnimation { duration: Style.animFast; easing.type: Easing.OutCubic } }
   height: tabRow.height + contentLoader.height + 36
 

@@ -101,7 +101,7 @@ SettingsRow {
     width: popup._grouped ? (popup._leftW + trigger.width + 13 * Config.uiScale) : trigger.width
     height: Math.min(popup._grouped ? popup._groupedContentH : (optionsCol.implicitHeight + 8 * Config.uiScale), popup._maxH)
     readonly property int _ch: 7
-    readonly property real _maxH: Math.max(160 * Config.uiScale, (row.Window.contentItem ? row.Window.contentItem.height : 600) * 0.7)
+    readonly property real _maxH: Math.max(160 * Config.uiScale, Screen.height - 120 * Config.uiScale)
     readonly property real _leftW: 118 * Config.uiScale
 
     readonly property bool _grouped: row.model && row.model.length > 0
@@ -151,7 +151,10 @@ SettingsRow {
       if (x + popup.width > parent.width - 8) x = parent.width - popup.width - 8
       if (x < 8) x = 8
       popup.x = x
-      popup.y = popup._flipUp ? popup._aboveY : popup._belowY
+      var y = popup._flipUp ? popup._aboveY : popup._belowY
+      if (y + popup.height > parent.height - 8) y = parent.height - popup.height - 8
+      if (y < 8) y = 8
+      popup.y = y
     }
 
     Timer {

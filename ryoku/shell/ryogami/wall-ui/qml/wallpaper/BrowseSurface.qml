@@ -280,7 +280,7 @@ Item {
   // ---- sources & setup drawer ----
   Rectangle {
     id: drawer
-    width: 520 * Config.uiScale
+    width: Math.min(520 * Config.uiScale, root.width - 40 * Config.uiScale)
     anchors.top: parent.top
     anchors.bottom: parent.bottom
     x: root.drawerOpen ? 0 : -width
