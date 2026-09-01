@@ -16,6 +16,14 @@ QtObject {
     property bool needsPost: false       // moewalls download wants the post url
     property var extraArgs: []            // e.g. ["--repo", "owner/repo"] for library-list
 
+    // native (no-binary) source paths, phased in per provider; the ryowalls
+    // binary stays the fallback until every provider is ported (then it sunsets).
+    readonly property string _ua: "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
+    readonly property string _ryostoreBase: "https://raw.githubusercontent.com/neur0map/ryostore/main"
+    property string _nativeProvider: ""
+    property string _pendingQuery: ""
+    property string _nativeDlPath: ""
+
     property var results: []
     property bool loading: false
     property string error: ""
@@ -49,12 +57,59 @@ QtObject {
         error = ""
         loading = true
         results = []
+        if (searchVerb === "extras-search") {
+            _nativeProvider = "ryostore"
+            _pendingQuery = query || ""
+            _nativeSearchProc.command = ["curl", "-fsSL", "-A", _ua, _ryostoreBase + "/livewalls/registry.json"]
+            _nativeSearchProc.running = true
+            return
+        }
         var args = [searchVerb]
         for (var e = 0; e < extraArgs.length; e++) args.push(extraArgs[e])
         if (query && query.length > 0) { args.push("--query"); args.push(query) }
         args.push("--json")
         _searchProc.command = ["ryowalls"].concat(args)
         _searchProc.running = true
+    }
+
+    // native ryostore: fetch the curated registry.json and reshape it into the
+    // same rows the binary emitted, so the Browse surface is unchanged.
+    property var _nativeSearchProc: Process {
+        stdout: SplitParser { splitMarker: ""; onRead: function(data) { src._buf += data } }
+        onExited: function(code) {
+            src.loading = false
+            if (code !== 0) { src.error = "search failed"; src.results = []; return }
+            var out = []
+            try {
+                if (src._nativeProvider === "ryostore") {
+                    var reg = JSON.parse(src._buf)
+                    var q = ("" + src._pendingQuery).toLowerCase()
+                    var ws = reg.wallpapers || []
+                    for (var i = 0; i < ws.length; i++) {
+                        var w = ws[i]
+                        var hit = q === "" || ("" + (w.name || "")).toLowerCase().indexOf(q) >= 0
+                        var tags = w.tags || []
+                        for (var t = 0; !hit && t < tags.length; t++)
+                            if (("" + tags[t]).toLowerCase().indexOf(q) >= 0) hit = true
+                        if (!hit) continue
+                        out.push({ id: w.id, thumb: src._ryostoreBase + "/" + w.poster,
+                                   video: w.video, dl: w.video, resolution: "",
+                                   name: w.name, author: (w.author || "") })
+                    }
+                }
+            } catch (e) { src.error = "search failed"; src.results = []; return }
+            src.error = out.length === 0 ? "no results" : ""
+            src.results = out
+        }
+    }
+
+    property var _nativeDlProc: Process {
+        onExited: function(code) {
+            var dest = src._nativeDlPath
+            src.downloadingId = ""
+            if (code === 0 && dest.length > 0) src.applied(dest)
+            else src.failed("download failed")
+        }
     }
 
     property string _dlBuf: ""
@@ -77,6 +132,18 @@ QtObject {
         if (!downloadVerb || !item || downloadingId.length > 0) return
         _dlBuf = ""
         downloadingId = "" + item.id
+        if (downloadVerb === "extras-download") {
+            var url = "" + (item.dl || item.video || "")
+            var ext = url.split(".").pop()
+            if (!ext || ext.length > 5) ext = "mp4"
+            var dir = Quickshell.env("HOME") + "/Pictures/livewalls"
+            _nativeDlPath = dir + "/ryoku-" + item.id + "." + ext
+            _nativeDlProc.command = ["bash", "-lc",
+                "mkdir -p " + JSON.stringify(dir) + " && curl -fsSL -A " + JSON.stringify(_ua)
+                + " " + JSON.stringify(url) + " -o " + JSON.stringify(_nativeDlPath)]
+            _nativeDlProc.running = true
+            return
+        }
         var args = [downloadVerb, ("" + item.id), ("" + (item.dl || item.video || ""))]
         if (needsPost && item.moewalls_url) args.push("" + item.moewalls_url)
         _dlProc.command = ["ryowalls"].concat(args)
