@@ -25,6 +25,13 @@
   (`internal/doctor/reconcile_gpu_pin.go`, `reconcile_ppd_amdgpu.go`).
 
 ### Fixed
+- **Browser theme host installs where Zen actually reads it.** The host
+  reconciler keyed Zen off `~/.zen`, but Zen keeps its profiles under XDG
+  `~/.config/zen`, so the native-messaging manifest was never installed and the
+  palette host was unreachable. It now detects Zen at `~/.config/zen` and writes
+  the manifest into both `~/.config/zen/native-messaging-hosts` and the classic
+  `~/.mozilla/native-messaging-hosts` the fork may read
+  (`internal/doctor/reconcile_browser.go`).
 - **Doctor repairs stock plocate configs instead of breaking their update
   service.** `updatedb.conf` normally spells its variable as
   `PRUNEPATHS = "…"`, while Doctor only recognized a compact spelling and
