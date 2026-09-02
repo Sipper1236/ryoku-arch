@@ -14,6 +14,12 @@
   this root installer). Honors `RYOKU_DRYRUN`; `ryoku keyring` changes it later.
 
 ### Fixed
+- **The greeter and the in-session lock always have a cursor theme.**
+  `sddm/setup` and the doctor pin `XCURSOR_THEME=Bibata-Modern-Ice` and
+  `XCURSOR_SIZE=24` in SDDM's `GreeterEnvironment`, `sddm/ryoku-greeter` exports
+  the same for weston's own pointer, and `lock.sh` defaults them when the shell
+  daemon that spawns it carries none, so the pointer is drawn from the shipped
+  set instead of whatever the "default" theme chain resolves to (or nothing).
 - **The SDDM greeter no longer lingers after login, draining power.** SDDM ran
   the greeter on X11 while the Hyprland session is Wayland; at login SDDM's
   `sddm-helper` died mid-teardown without reaping `sddm-greeter-qt6`, so the

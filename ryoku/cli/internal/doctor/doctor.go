@@ -156,6 +156,7 @@ func reconcilers() []reconciler {
 		{"SDDM greeter theme", reconcileGreeterTheme},
 		{"SDDM greeter display server", reconcileGreeterDisplayServer},
 		{"fastfetch readout emblem", reconcileFastfetchEmblem},
+		{"rice fastfetch emblem", reconcileRiceEmblem},
 		{"brand mark image", reconcileBrandLogo},
 		{"decor art", reconcileRyodecors},
 		{"Hyprland config integrity", reconcileHyprlandConfig},
@@ -2246,12 +2247,20 @@ const sddmWaylandConf = "/etc/sddm.conf.d/10-ryoku-wayland.conf"
 // weston present -- the greeter could not start.
 const greeterCompositorBin = "/usr/share/ryoku/lockscreen/ryoku-greeter"
 
+// greeterEnvironment is SDDM's comma-separated GreeterEnvironment. The greeter
+// is a Qt client of the weston kiosk with no session behind it, so it inherits
+// no XCURSOR_*: Qt then asks libwayland-cursor for the "default" theme, and on a
+// box where that chain resolves to nothing the greeter sets a null cursor and
+// the login screen has no visible pointer. Pin the shipped Bibata set
+// (ryoku-cursors, a hard depend) at the size env.lua uses.
+const greeterEnvironment = "QT_QPA_PLATFORM=wayland,XCURSOR_THEME=Bibata-Modern-Ice,XCURSOR_SIZE=24"
+
 func sddmWaylandBody() string {
 	compositor := "weston --shell=kiosk"
 	if sys.Exists(greeterCompositorBin) {
 		compositor = greeterCompositorBin
 	}
-	return "[General]\nDisplayServer=wayland\nGreeterEnvironment=QT_QPA_PLATFORM=wayland\n\n[Wayland]\nCompositorCommand=" + compositor + "\n"
+	return "[General]\nDisplayServer=wayland\nGreeterEnvironment=" + greeterEnvironment + "\n\n[Wayland]\nCompositorCommand=" + compositor + "\n"
 }
 
 // reconcileGreeterDisplayServer moves the SDDM greeter to Wayland. SDDM's
@@ -2272,8 +2281,20 @@ func reconcileGreeterDisplayServer(checkOnly bool) recResult {
 			withFix("ryoku update")
 	}
 	want := sddmWaylandBody()
-	if readFileSafe(sddmWaylandConf) == want {
+	have := readFileSafe(sddmWaylandConf)
+	if have == want {
 		return okRes("SDDM greeter runs on Wayland (weston kiosk)")
+	}
+	if have != "" {
+		if checkOnly {
+			return wouldRes("SDDM greeter config is out of date (the pinned cursor theme, the compositor wrapper)").
+				withFix("ryoku doctor")
+		}
+		if err := writeRootFile(sddmWaylandConf, want, "0644"); err != nil {
+			return failRes("could not write %s: %v", sddmWaylandConf, err).
+				withFix("check sudo access, then re-run ryoku doctor")
+		}
+		return fixedRes("refreshed the SDDM greeter config; the login screen pointer uses the shipped cursor theme")
 	}
 	if checkOnly {
 		return wouldRes("SDDM greeter still runs on X11; it is orphaned when a Wayland session starts and keeps drawing power").
@@ -2366,6 +2387,61 @@ func reconcileFastfetchEmblem(checkOnly bool) recResult {
 		return failRes("could not restore fastfetch emblem: %v", err).withFix("ryoku materialize")
 	}
 	return fixedRes("restored the fastfetch emblem; the readout no longer falls back to the Arch logo")
+}
+
+// ---- reconciler: rice fastfetch emblem ---------------------------------------
+
+// riceEmblemAsset reports the active rice's fastfetch emblem (rice.json
+// assets.fastfetch), or false when no rice is active or it carries none.
+func riceEmblemAsset() (string, bool) {
+	rices := filepath.Join(sys.ConfigHome(), "ryoku", "rices")
+	slug := strings.TrimSpace(readFileSafe(filepath.Join(rices, ".active")))
+	if slug == "" {
+		return "", false
+	}
+	var r struct {
+		Assets struct {
+			Fastfetch string `json:"fastfetch"`
+		} `json:"assets"`
+	}
+	if json.Unmarshal([]byte(readFileSafe(filepath.Join(rices, slug, "rice.json"))), &r) != nil || r.Assets.Fastfetch == "" {
+		return "", false
+	}
+	return filepath.Join(rices, slug, r.Assets.Fastfetch), true
+}
+
+// reconcileRiceEmblem puts an applied rice's fastfetch emblem back after an
+// update. `rice apply` used to copy the emblem over the SHIPPED
+// fastfetch-emblem.png, which `ryoku materialize` re-lays on every update, so
+// the rice's logo reset to the brand mark each time. apply now lands it on the
+// user-owned ryoku-logo path; this converges boxes riced before that, exactly
+// once: it acts only while the readout still draws the shipped emblem and the
+// active rice carries one, and never touches a logo the user imported.
+func reconcileRiceEmblem(checkOnly bool) recResult {
+	asset, ok := riceEmblemAsset()
+	if !ok {
+		return okRes("no rice emblem to keep")
+	}
+	if !sys.Exists(asset) {
+		return okRes("active rice's emblem file is gone; nothing to restore")
+	}
+	src, ok := fastfetchLogoSource(readFileSafe(filepath.Join(sys.ConfigHome(), "fastfetch", "config.jsonc")))
+	if ok && filepath.Base(src) != fastfetchEmblem {
+		return okRes("rice emblem in place")
+	}
+	if !sys.Has("ryoku-hub") {
+		return warnRes("the rice's fastfetch emblem was reset by an update; ryoku-hub is not installed to restore it").
+			withFix("ryoku update")
+	}
+	if checkOnly {
+		return wouldRes("the rice's fastfetch emblem was reset to the brand mark by an update").
+			withFix("ryoku doctor (runs `ryoku-hub rice emblem`)")
+	}
+	if err := sys.Run("ryoku-hub", "rice", "emblem"); err != nil {
+		return failRes("could not restore the rice's fastfetch emblem: %v", err).
+			withFix("re-apply the rice from Ryoku Settings")
+	}
+	return fixedRes("restored the rice's fastfetch emblem on a path updates never overwrite")
 }
 
 // ---- reconciler: brand mark image --------------------------------------------

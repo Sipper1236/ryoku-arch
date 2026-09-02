@@ -39,6 +39,22 @@
   (`internal/doctor/reconcile_gpu_pin.go`, `reconcile_ppd_amdgpu.go`).
 
 ### Fixed
+- **Lock fixes reach existing boxes.** The in-session lock bundle lives under
+  `~/.local/share`, outside materialize, and was laid once at install: every
+  lockscreen fix since shipped only to fresh installs. `reconcileLockscreen`
+  now compares the installed runner and the shipped default skin with the
+  package's bundle and re-runs the installer on drift, and refreshes the SDDM
+  greeter skin when it is the shipped default (never a skin the user picked)
+  (`internal/doctor/reconcile_lockscreen.go`).
+- **The login screen's pointer has a cursor theme.** The SDDM greeter runs on a
+  weston kiosk with no session env, so it had no XCURSOR theme and depended on
+  the "default" chain resolving to something; `reconcileGreeterDisplayServer`
+  pins the shipped Bibata set in `GreeterEnvironment` and refreshes an
+  out-of-date conf (`internal/doctor/doctor.go`).
+- **A rice's fastfetch emblem comes back after the update that reset it.** A
+  new `rice fastfetch emblem` reconciler runs `ryoku-hub rice emblem` while the
+  readout still draws the shipped brand mark and the active rice carries an
+  emblem; a logo the user imported is never touched (`internal/doctor/doctor.go`).
 - **Browser theme host installs where Zen actually reads it.** The host
   reconciler keyed Zen off `~/.zen`, but Zen keeps its profiles under XDG
   `~/.config/zen`, so the native-messaging manifest was never installed and the

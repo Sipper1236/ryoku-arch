@@ -16,6 +16,14 @@
 # rather than a blank login screen.
 set -u
 
+# weston draws the pointer itself (DRM backend) from the XCursor theme named in
+# its environment, and SDDM starts the compositor with none: pin the shipped
+# Bibata set (ryoku-cursors) so the login screen has a visible pointer whatever
+# the "default" theme chain resolves to. Matches GreeterEnvironment in
+# /etc/sddm.conf.d/10-ryoku-wayland.conf for the greeter client.
+export XCURSOR_THEME="${XCURSOR_THEME:-Bibata-Modern-Ice}"
+export XCURSOR_SIZE="${XCURSOR_SIZE:-24}"
+
 # exec plain weston (preferred mode); the login screen must always start.
 weston_plain() { exec weston --shell=kiosk "$@"; }
 

@@ -793,7 +793,7 @@ func TestSDDMWaylandBodyForcesQtWayland(t *testing.T) {
 	for _, line := range []string{
 		"[General]",
 		"DisplayServer=wayland",
-		"GreeterEnvironment=QT_QPA_PLATFORM=wayland",
+		"GreeterEnvironment=QT_QPA_PLATFORM=wayland,XCURSOR_THEME=Bibata-Modern-Ice,XCURSOR_SIZE=24",
 		"[Wayland]",
 		"CompositorCommand=",
 	} {
