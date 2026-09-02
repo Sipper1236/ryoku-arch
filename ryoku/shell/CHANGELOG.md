@@ -35,6 +35,12 @@
   (`ryogami/wall-ui/`, `ryogami/daemon/`, `services/DaemonClient.qml`).
 
 ### Fixed
+- **The visualiser's edit bar fits scaled displays.** Its controls sit in one
+  row of about 1900 logical px and were only centred, so on a display scaled
+  past 1x (1600 logical px at 1.6x on a 2560 panel) the row ran off both edges
+  and the right-hand controls were unreachable. The bar and the look tray now
+  scale down to the surface width, anchored to the edge they hang from
+  (`modules/visualizer/EditBar.qml`).
 - **The visualiser stays inside the screen.** Its box is a fraction of the
   screen, but the placer let a drag or wheel resize leave up to a quarter of it
   past an edge, where the spectrum is simply cut off, and that box was saved
