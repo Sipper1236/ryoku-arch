@@ -13,6 +13,16 @@
   (`ryowalls/bin/ryowalls`).
 
 ### Added
+- `ryostore/backend`: **`ryostore install plugins <id> --from <dir>` installs a
+  plugin from a local directory through the same supply-chain transaction as a
+  registry install.** It builds a ProductManifest by walking the directory
+  (hashing every regular file, skipping symlinks and `.git`), takes the version
+  from the plugin's `manifest.json`, and feeds the existing `installProduct`
+  transaction with the file bytes read from the directory instead of the cache,
+  so the receipt, the content-hashed view, and the journal are written exactly as
+  for a store install. This is what lets `ryoku plugin add` produce a plugin the
+  shell's `discover.sh` actually loads (`ryostore/backend/provider_plugins_local.go`,
+  `product_transaction.go`, `main.go`).
 - `fish/`, `bash/`, `zsh/`, `terminal-shell/`: **Fish, Bash, and Zsh now
   carry the same Ryoku terminal tools.** All three initialize Starship, zoxide,
   mise and fzf, share the same eza aliases and environment, load user overrides
