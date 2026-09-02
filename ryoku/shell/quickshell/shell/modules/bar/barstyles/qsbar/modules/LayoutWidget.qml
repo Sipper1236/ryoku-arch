@@ -88,12 +88,19 @@ Item {
 
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
 
         onEntered: tip.show()
         onExited: tip.hide()
 
-        onClicked: {
+        // Left click opens the keyboard settings page; right click cycles to the
+        // next configured xkb layout, which fires activelayout so the pill updates.
+        onClicked: function (mouse) {
             tip.hide()
+            if (mouse.button === Qt.RightButton)
+                Quickshell.execDetached(["hyprctl", "switchxkblayout", "all", "next"])
+            else
+                Quickshell.execDetached(["ryoku-shell", "hub", "open", "input"])
         }
     }
 }
