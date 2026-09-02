@@ -3,6 +3,7 @@ package doctor
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"ryoku-cli/internal/sys"
@@ -79,20 +80,28 @@ func reconcileRashinDaemon(checkOnly bool) recResult {
 	user := doctorUser()
 	state := rashinUnitState{enabled: true, linger: rashinLingerOn(user), failed: rashinUnitFailed()}
 	enableLinger, clearFailed := rashinDaemonActions(state)
-	if !enableLinger && !clearFailed {
-		return okRes("rashin daemon enabled with boot-start")
+	wireSkill := rashinSkillLinksMissing()
+	if !enableLinger && !clearFailed && !wireSkill {
+		return okRes("rashin daemon enabled with boot-start; the ryoku skill is wired")
 	}
 	if checkOnly {
-		if clearFailed {
+		switch {
+		case clearFailed:
 			return wouldRes("the rashin daemon is enabled but wedged off (failed); the dashboard is down").
 				withFix("ryoku doctor reloads the hardened unit and restarts it")
+		case enableLinger:
+			return wouldRes("rashin is enabled but only starts at login; a headless boot leaves the dashboard down").
+				withFix("ryoku doctor enables lingering so it starts at boot")
+		default:
+			return wouldRes("rashin is enabled but the ryoku agent skill is not wired into every agent").
+				withFix("ryoku doctor runs `ryoku-rashin wire`")
 		}
-		return wouldRes("rashin is enabled but only starts at login; a headless boot leaves the dashboard down").
-			withFix("ryoku doctor enables lingering so it starts at boot")
 	}
-	// daemon-reload so the just-delivered hardened unit is the one systemd runs.
-	_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
 	var did []string
+	if enableLinger || clearFailed {
+		// daemon-reload so the just-delivered hardened unit is the one systemd runs.
+		_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
+	}
 	if enableLinger {
 		if user == "" {
 			return failRes("cannot enable rashin boot-start: no login user in the environment").
@@ -108,6 +117,54 @@ func reconcileRashinDaemon(checkOnly bool) recResult {
 		_ = exec.Command("systemctl", "--user", "reset-failed", rashinUserUnit).Run()
 		did = append(did, "cleared the wedged failed state")
 	}
-	_ = exec.Command("systemctl", "--user", "start", rashinUserUnit).Run()
-	return fixedRes("converged the rashin daemon: " + strings.Join(did, " and ") + ", reloaded the hardened unit")
+	if enableLinger || clearFailed {
+		_ = exec.Command("systemctl", "--user", "start", rashinUserUnit).Run()
+		did = append(did, "reloaded the hardened unit")
+	}
+	if wireSkill {
+		// wire is idempotent and cheap: it drops the ryoku skill symlink into
+		// every agent's skills dir and refreshes the vault pointers.
+		_ = exec.Command("ryoku-rashin", "wire").Run()
+		did = append(did, "wired the ryoku agent skill")
+	}
+	return fixedRes("converged the rashin daemon: " + strings.Join(did, " and "))
+}
+
+// rashinSkillSource resolves the shipped `ryoku` skill dir the same way
+// ryoku-rashin wire does: an override, the packaged tree, then a dev checkout.
+// Returns "" when the skill is not installed, so a box without it stays quiet.
+func rashinSkillSource() string {
+	var roots []string
+	if v := strings.TrimSpace(os.Getenv("RYOKU_RASHIN_SKILLS")); v != "" {
+		roots = append(roots, v)
+	}
+	roots = append(roots, "/usr/share/ryoku/skills")
+	if repo := sys.ResolveRepo(); repo != "" {
+		roots = append(roots, filepath.Join(repo, "ryoku", "rashin", "skills"))
+	}
+	for _, r := range roots {
+		if sys.Exists(filepath.Join(r, "ryoku", "SKILL.md")) {
+			return filepath.Join(r, "ryoku")
+		}
+	}
+	return ""
+}
+
+// rashinSkillLinksMissing reports whether the skill is installed but an
+// always-created link (~/.agents, ~/.hermes) is absent or points elsewhere.
+// Cheap: a couple of Lstat calls.
+func rashinSkillLinksMissing() bool {
+	src := rashinSkillSource()
+	if src == "" {
+		return false // skill not installed; nothing to wire
+	}
+	for _, link := range []string{
+		filepath.Join(sys.Home(), ".agents", "skills", "ryoku"),
+		filepath.Join(sys.Home(), ".hermes", "skills", "ryoku"),
+	} {
+		if !symlinkPointsAt(link, src) {
+			return true
+		}
+	}
+	return false
 }

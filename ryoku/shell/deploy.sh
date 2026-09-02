@@ -289,6 +289,17 @@ printf '%s\n' "$repo_root" > "$state_dir/repo"
 git -C "$repo_root" rev-parse HEAD > "$state_dir/deployed" 2>/dev/null || rm -f "$state_dir/deployed"
 say "recorded update-channel checkout -> $state_dir/repo"
 
+# The `ryoku` agent skill resolves through the repo pointer just recorded:
+# `ryoku-rashin wire` looks at RYOKU_RASHIN_SKILLS, then /usr/share/ryoku/skills
+# (absent on a checkout), then <repo>/ryoku/rashin/skills via ~/.local/state/
+# ryoku/repo, so it finds THIS checkout's skill dir with no separate symlink.
+# Refresh the links now, but only when a Rashin vault already exists (the user
+# opted in); never wire agents for a box that left Rashin off.
+if [[ -d "$datadir/ryoku/rashin" && -x "$bindir/ryoku-rashin" ]]; then
+  "$bindir/ryoku-rashin" wire >/dev/null 2>&1 || true
+  say "refreshed rashin agent wiring (ryoku skill + vault pointers)"
+fi
+
 # Build the Ryoku.Blobs QML plugin (the frame's blob renderer) and install the
 # module onto the user's QML import path. ryoku-shell points QML2_IMPORT_PATH
 # there for the quickshell processes it supervises. Needs cmake + ninja +

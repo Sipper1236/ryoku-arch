@@ -15,6 +15,15 @@ const (
 	vaultFenceEnd   = "<!-- rashin:generated:end -->"
 )
 
+// The desktop map's "Bar and dock" section is fenced with its own markers
+// inside the generated body, so the bar guide can be located and regenerated on
+// its own. They never collide with the outer markers: the " bar" suffix sits
+// before the closing "-->", so the outer begin/end are not substrings of these.
+const (
+	vaultBarFenceBegin = "<!-- rashin:generated:begin bar -->"
+	vaultBarFenceEnd   = "<!-- rashin:generated:end bar -->"
+)
+
 // generatedFiles are the vault docs Reindex owns end to end. Everything else in
 // the vault belongs to the user or an agent.
 var generatedFiles = map[string]bool{
