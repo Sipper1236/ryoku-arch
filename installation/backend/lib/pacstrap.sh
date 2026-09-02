@@ -78,12 +78,15 @@ ryoku_pacstrap() {
     (( ${#cachy[@]} )) && pkgs+=("${cachy[@]}")
   fi
 
-  # Broadcom wifi (BCM43xx) needs the out-of-tree broadcom-wl driver; the
-  # in-kernel b43/brcmsmac often can't associate. add it only when a Broadcom
-  # network controller (PCI vendor 14e4) is present. guard lspci's absence.
+  # Broadcom wifi (BCM43xx) needs the out-of-tree wl driver; the in-kernel
+  # b43/brcmsmac often can't associate. Arch dropped the prebuilt broadcom-wl,
+  # so use broadcom-wl-dkms: the dkms hook builds wl.ko against the target's
+  # linux-headers during this pacstrap (base ships dkms, base-devel and the
+  # headers, so it works offline too). Add it only when a Broadcom network
+  # controller (PCI vendor 14e4) is present. guard lspci's absence.
   if command -v lspci >/dev/null 2>&1 && [[ -n "$(lspci -d 14e4: 2>/dev/null)" ]]; then
-    log "detected a Broadcom device (14e4:*); adding broadcom-wl to the pacstrap set"
-    pkgs+=(broadcom-wl)
+    log "detected a Broadcom device (14e4:*); adding broadcom-wl-dkms to the pacstrap set"
+    pkgs+=(broadcom-wl-dkms)
   fi
 
   # hook kept for a set the offline path may want folded into this transaction;

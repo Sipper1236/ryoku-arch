@@ -273,24 +273,6 @@ else
   sudo --preserve-env=SOURCE_DATE_EPOCH mkarchiso -v -w "$WORK_DIR" -o "$OUT_DIR" "$PROFILE_STAGE"
 fi
 
-# Broadcom ABI guard. broadcom-wl ships a precompiled wl.ko matched to one exact
-# linux ABI. A [core]/[extra] mirror-sync window can pair a `linux` from one
-# snapshot with a `broadcom-wl` built against another, so the module lands under
-# a kernel dir the live image never boots: modprobe finds nothing at `uname -r`
-# and Broadcom BCM43xx laptops lose live Wi-Fi with no error. The live set ships
-# exactly one kernel, so require exactly one kernel module dir and prove wl.ko
-# sits in it. Guarded on the mkarchiso work airootfs existing.
-for wl_modroot in "$WORK_DIR"/*/airootfs/usr/lib/modules; do
-  [[ -d $wl_modroot ]] || continue
-  mapfile -t _kdirs < <(find "$wl_modroot" -mindepth 1 -maxdepth 1 -type d | sort)
-  _wl_kdirs=()
-  for _kd in "${_kdirs[@]}"; do
-    compgen -G "$_kd/extramodules/wl.ko*" >/dev/null 2>&1 && _wl_kdirs+=("$_kd")
-  done
-  if (( ${#_kdirs[@]} != 1 || ${#_wl_kdirs[@]} != 1 )); then
-    die "Broadcom wl.ko kernel mismatch: ${#_kdirs[@]} kernel module dir(s), ${#_wl_kdirs[@]} carrying extramodules/wl.ko* under $wl_modroot. A [core]/[extra] mirror-sync window baked broadcom-wl against a kernel this ISO does not ship, so Broadcom Wi-Fi would fail silently. Rebuild once 'pacman -Syu' has settled (or pin versions with RYOKU_ISO_REPRO=1)."
-  fi
-done
 log "ISO written to $OUT_DIR"
 
 # checksums next to the ISO for verification. deterministic for a fixed commit,

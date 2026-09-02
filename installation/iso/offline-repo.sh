@@ -70,7 +70,7 @@ mapfile -t PKGS < <(
     intel-media-driver vpl-gpu-rt vulkan-intel lib32-vulkan-intel sof-firmware \
     nvidia-utils lib32-nvidia-utils libva-nvidia-driver \
     vulkan-icd-loader lib32-vulkan-icd-loader \
-    broadcom-wl
+    broadcom-wl-dkms
   # The desktop set plus the hardware-only ASUS Aura provider: the target
   # installer selects asusctl only on a matching laptop.
   printf '%s\n' ryoku-keyring ryoku-desktop asusctl
