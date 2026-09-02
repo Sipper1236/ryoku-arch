@@ -898,12 +898,20 @@ func (d *daemon) dispatch(line string) string {
 			routeCmd = line
 		}
 	case "bar":
+		// The data-layout verbs (list/catalog/move/show/hide/set/position/form/
+		// defaults/settings) take a verb first; the reveal grammar takes an edge
+		// first, so the first word disambiguates the two without collision.
+		if len(args) >= 1 && barCLIVerbs[args[0]] {
+			return d.barCLI(args)
+		}
 		// bar <edge|all> <toggle|reveal|hide> drives the bar reveal state.
 		edge, action, ok := parseBarEdge(args)
 		if !ok {
-			return "err bar: expected <top|bottom|left|right|all> <toggle|reveal|hide>"
+			return "err bar: expected <top|bottom|left|right|all> <toggle|reveal|hide>, or a widget verb (list|catalog|move|show|hide|set|position|form|defaults|settings)"
 		}
 		return d.barToggle(edge, action)
+	case "dock":
+		return d.dockCLI(args)
 	}
 	if config, target, fn, ok := route(routeCmd); ok {
 		if componentDisabled(config) {
