@@ -495,6 +495,18 @@ func (p pluginInfo) version() string {
 	return s
 }
 
+func (p pluginInfo) author() string {
+	s, _ := p.Manifest["author"].(string)
+	return s
+}
+
+// official is the manifest's own claim; Ryoku's plugins ship it true, so any
+// other bar plugin is a community widget (the panel's Community route).
+func (p pluginInfo) official() bool {
+	b, _ := p.Manifest["official"].(bool)
+	return b
+}
+
 func (p pluginInfo) hosts() []string { return toStringSlice(p.Manifest["hosts"]) }
 
 // defaultSection is the plugin's requested landing lane (manifest
@@ -756,14 +768,15 @@ func (d *daemon) barCatalog(asJSON bool) string {
 	for _, w := range cat {
 		entries = append(entries, map[string]any{
 			"id": w.ID, "label": w.Label, "gloss": w.Gloss, "category": w.Category,
-			"desc": w.Desc, "kind": "builtin", "pluginDir": "",
+			"desc": w.Desc, "kind": "builtin", "official": true, "pluginDir": "",
 			"settings": catalogSettingsView(w.Settings),
 		})
 	}
 	for _, p := range plugins {
 		entries = append(entries, map[string]any{
 			"id": p.ID, "label": p.name(), "gloss": "", "category": "Plugin",
-			"desc": p.desc(), "kind": "plugin", "pluginDir": p.Dir,
+			"desc": p.desc(), "kind": "plugin", "official": p.official(),
+			"author": p.author(), "version": p.version(), "pluginDir": p.Dir,
 			"hosts": p.hosts(), "settings": p.settingsList(),
 		})
 	}

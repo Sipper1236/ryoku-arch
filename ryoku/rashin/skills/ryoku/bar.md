@@ -136,6 +136,9 @@ ryoku-shell dock autohide on
 ## Opening the settings panel
 
 `ryoku-shell bar settings [route]` raises **QS Bar Settings** on the active
-monitor (routes: `bar`, `layout`, `widgets`, `dock`). It is the same panel the
-bar's launcher mark opens; Escape closes it. Layout is drag-and-drop, and a drag
-there and a `bar move` from a terminal reach the same `qsbar.layout`.
+monitor (routes: `bars`, `layout`, `widgets`, `dock`, `community`). It is the
+same panel the bar's launcher mark opens; Escape closes it. Layout lists the
+three lanes side by side; a move there and a `bar move` from a terminal reach
+the same `qsbar.layout`. Community lists every installed bar plugin that is not
+Ryoku's own (a manifest without `"official": true`), with its author and a
+REMOVE action; a plugin you write for the user lands there.

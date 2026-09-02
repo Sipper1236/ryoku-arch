@@ -253,11 +253,16 @@ Item {
         }
     }
 
+    // what is still below the plate's edge; the stage reads it for the fade.
+    readonly property real scrollRemaining: Math.max(0, flick.contentHeight - flick.height - flick.contentY)
+
     Flickable {
         id: flick
         anchors.fill: parent
         contentWidth: width
-        contentHeight: col.implicitHeight
+        // a page that overflows gets a tail, so its last row can scroll clear
+        // of the bottom fade instead of living inside it.
+        contentHeight: col.implicitHeight + (col.implicitHeight > height && page.tk ? page.tk.tailPad : 0)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
 
@@ -284,7 +289,7 @@ Item {
                         anchors.right: parent.right
                         controlWidth: 54
                         label: I18n.tr("Dock")
-                        desc: I18n.tr("An app dock on its own surface, for every bar style.")
+                        desc: I18n.tr("Its own surface, any bar style")
                         source: "shell.json"
                         Sw {
                             anchors.right: parent.right
@@ -316,7 +321,7 @@ Item {
                         divider: true
                         block: true
                         label: I18n.tr("Style")
-                        desc: I18n.tr("How the dock is drawn.")
+                        desc: I18n.tr("How it is drawn")
                         source: "shell.json"
                         enabled: Services.Dock.cfg("enabled", false)
                         Chips {
@@ -345,7 +350,7 @@ Item {
                         anchors.right: parent.right
                         controlWidth: 54
                         label: I18n.tr("Auto-hide")
-                        desc: I18n.tr("Keep it as a peek strip until hovered.")
+                        desc: I18n.tr("A peek strip until hovered")
                         source: "shell.json"
                         enabled: Services.Dock.cfg("enabled", false)
                         Sw {
@@ -361,7 +366,7 @@ Item {
                         divider: true
                         controlWidth: 54
                         label: I18n.tr("Magnify")
-                        desc: I18n.tr("Grow the icon under the pointer.")
+                        desc: I18n.tr("Grow the icon under the pointer")
                         source: "shell.json"
                         enabled: Services.Dock.cfg("enabled", false)
                         Sw {

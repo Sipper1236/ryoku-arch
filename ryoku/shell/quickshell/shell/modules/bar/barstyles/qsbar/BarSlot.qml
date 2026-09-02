@@ -180,10 +180,10 @@ PanelWindow {
             anchors.fill: parent
             visible: barSlot.root.barShellStyle !== "notch" && !barSlot.islandsShell
             radius: continuousBarSurface.radius
-            blur: 9
+            blur: barSlot.root.barShellShadowBlur
             spread: 0
-            offset: Qt.vector2d(0, barSlot.root.barPosition === "bottom" ? -2 : 2)
-            color: barSlot.root.v2BarShadow
+            offset: Qt.vector2d(0, (barSlot.root.barPosition === "bottom" ? -1 : 1) * barSlot.root.barShellShadowOffset)
+            color: barSlot.root.barShellShadow
             z: -1
         }
 
@@ -2078,10 +2078,10 @@ PanelWindow {
                 RectangularShadow {
                     anchors.fill: parent
                     radius: parent.radius
-                    blur: 9
+                    blur: barSlot.root.barShellShadowBlur
                     spread: 0
-                    offset: Qt.vector2d(0, barSlot.root.barPosition === "bottom" ? -2 : 2)
-                    color: barSlot.root.v2BarShadow
+                    offset: Qt.vector2d(0, (barSlot.root.barPosition === "bottom" ? -1 : 1) * barSlot.root.barShellShadowOffset)
+                    color: barSlot.root.barShellShadow
                     z: -1
                 }
             }

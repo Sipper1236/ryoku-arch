@@ -106,7 +106,11 @@ PanelWindow {
             { id: "dock.autohide", name: "Dock auto-hide", route: "dock", category: "Dock",
               searchTags: ["hide", "peek", "reveal"], description: "Keep the dock as a peek strip until hovered." },
             { id: "dock.pinned", name: "Pinned apps", route: "dock", category: "Dock",
-              searchTags: ["pin", "pinned", "app", "add", "remove"], description: "The apps the dock always shows." }
+              searchTags: ["pin", "pinned", "app", "add", "remove"], description: "The apps the dock always shows." },
+            { id: "community.installed", name: "Community widgets", route: "community", category: "Community",
+              searchTags: ["plugin", "plugins", "installed", "third", "party", "remove", "uninstall"], description: "Bar widgets installed from outside Ryoku." },
+            { id: "community.add", name: "Add from git or Ryostore", route: "community", category: "Community",
+              searchTags: ["git", "url", "ryostore", "store", "install", "add"], description: "Install a community bar widget." }
         ]);
     }
 
@@ -248,15 +252,20 @@ PanelWindow {
 
         // A page longer than the plate is cut by the plate's clip, and a row sliced
         // in half reads as a broken layout rather than "there is more below". This
-        // dissolves the cut into the paper. `clip` is rectangular and ignores the
-        // plate's radius, so the fade carries the corner itself or it squares it.
+        // dissolves the cut into the paper, and only while there IS more below:
+        // a page that fits, or one scrolled to its end, shows every row at full
+        // ink. `clip` is rectangular and ignores the plate's radius, so the fade
+        // carries the corner itself or it squares it.
         Rectangle {
             anchors { left: rail.right; right: parent.right; bottom: parent.bottom }
-            height: tk.pad * 2
+            height: tk.pad + tk.tailPad
             bottomRightRadius: tk.corner
+            visible: opacity > 0.001
+            opacity: stage.overflowBelow ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: tk.fade } }
             gradient: Gradient {
                 GradientStop { position: 0.0; color: "transparent" }
-                GradientStop { position: 0.55; color: Qt.rgba(Tokens.paper.r, Tokens.paper.g, Tokens.paper.b, 0.85) }
+                GradientStop { position: 0.6; color: Qt.rgba(Tokens.paper.r, Tokens.paper.g, Tokens.paper.b, 0.8) }
                 GradientStop { position: 1.0; color: Tokens.paper }
             }
         }

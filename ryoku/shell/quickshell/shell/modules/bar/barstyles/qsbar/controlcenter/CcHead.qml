@@ -5,11 +5,11 @@ import Ryoku.Ui.Singletons
 
 // The body's head: the panel's fixed eyebrow (QS BAR // SETTINGS) in tracked
 // mono, then the route's name in the display face with its kanji seal, and the
-// route's one-line summary. A running-head marginalia strip dresses the right
-// margin, and the close mark rides the top-right corner. It carries no live
-// state readout: every route already opens with a live figure of its own (the
-// bar silhouette, the lanes, the widget at bar density, the dock), so the head
-// only has to name where you are.
+// route's one-line summary. A running-head marginalia strip dresses the top-right
+// corner beside the close mark, so the summary line owns the full width and is
+// never cut by chrome. It carries no live state readout: every route already
+// opens with a live figure of its own (the bar silhouette, the lanes, the
+// widget at bar density, the dock), so the head only has to name where you are.
 Item {
     id: head
 
@@ -37,16 +37,19 @@ Item {
         font.weight: Font.DemiBold
     }
 
-    Row {
+    // The name row is sized by the display face; the seal hangs on its baseline
+    // (not the other way round, which lifted the name up into the eyebrow).
+    Item {
         id: name
         anchors.left: parent.left
+        anchors.right: parent.right
         anchors.top: eyebrow.bottom
         anchors.topMargin: 2
-        spacing: head.tk ? head.tk.gap : 12
+        height: nameText.implicitHeight
 
         UiText {
             id: nameText
-            anchors.baseline: glossText.baseline
+            anchors.left: parent.left
             text: I18n.tr(head.title)
             color: Tokens.ink
             font.family: Tokens.display
@@ -54,6 +57,9 @@ Item {
         }
         UiText {
             id: glossText
+            anchors.left: nameText.right
+            anchors.leftMargin: head.tk ? head.tk.gap : 12
+            anchors.baseline: nameText.baseline
             text: head.gloss
             color: Tokens.inkFaint
             font.family: Tokens.jp
@@ -63,10 +69,9 @@ Item {
 
     UiText {
         anchors.left: parent.left
+        anchors.right: parent.right
         anchors.top: name.bottom
         anchors.topMargin: 2
-        anchors.right: marg.left
-        anchors.rightMargin: head.tk ? head.tk.gap : 12
         text: I18n.tr(head.desc)
         color: Tokens.inkFaint
         font.family: Tokens.ui
@@ -74,12 +79,12 @@ Item {
         elide: Text.ElideRight
     }
 
-    // ── the running head: a printed marginalia strip in the right margin ──
+    // ── the running head: a printed marginalia strip beside the close mark ──
     Marginalia {
         id: marg
-        anchors.right: parent.right
-        anchors.bottom: rule.top
-        anchors.bottomMargin: head.tk ? head.tk.gap / 2 : 6
+        anchors.right: shut.left
+        anchors.rightMargin: head.tk ? head.tk.gap : 12
+        anchors.verticalCenter: shut.verticalCenter
         kana: head.gloss
         index: String(head.index + 1).padStart(2, "0")
         label: String(head.title).toUpperCase()

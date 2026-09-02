@@ -434,7 +434,7 @@ Item {
                 id: e.id, gid: e.gid || "",
                 label: e.label || e.id, gloss: e.gloss || "",
                 category: e.category || "", desc: e.desc || "",
-                kind: "builtin",
+                kind: "builtin", official: true, author: "", version: "",
                 shown: e.visKey ? _modForVisKey(e.visKey) : true,
                 section: si.section, index: si.index,
                 settings: e.settings || [], pluginDir: ""
@@ -446,11 +446,14 @@ Item {
             var man = p.manifest || ({})
             var pl = p.placement || ({})
             var psi = _sectionIndexOf(L, p.id)
+            // `official` is the manifest's own claim; Ryoku's plugins ship it
+            // true, so anything else is a community widget and the panel parts it.
             out.push({
                 id: p.id, gid: "",
                 label: man.name || p.id, gloss: "",
                 category: "", desc: man.description || "",
-                kind: "plugin",
+                kind: "plugin", official: man.official === true,
+                author: man.author || "", version: man.version || "",
                 shown: pl.enabled === true && pl.host === "topbarGlyph",
                 section: psi.section, index: psi.index,
                 settings: (man.metadata && man.metadata.settings) || [],
@@ -852,6 +855,12 @@ Item {
         paper.g * (1 - v2BarBorderMix) + ink.g * v2BarBorderMix,
         paper.b * (1 - v2BarBorderMix) + ink.b * v2BarBorderMix, 1.0)
     readonly property color v2BarShadow: Qt.rgba(0, 0, 0, 0.46)
+    // Depth (barShadowEnabled) lifts the bar shell itself, not only its popouts:
+    // the resting shadow is a soft seat, the lifted one a real drop. BarSlot's two
+    // shell shadows read these, so the toggle is visible on the bar it names.
+    readonly property color barShellShadow: barShadowEnabled ? Qt.rgba(0, 0, 0, 0.66) : v2BarShadow
+    readonly property int   barShellShadowBlur: barShadowEnabled ? 20 : 9
+    readonly property int   barShellShadowOffset: barShadowEnabled ? 5 : 2
     // Popovers, tooltips and their interactive tiles share the calmer V2 shape;
     // bar-widget pills remain independently configurable below.
     readonly property int panelRadius: 6

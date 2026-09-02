@@ -7,12 +7,14 @@ import Ryoku.Ui
 import Ryoku.Ui.Singletons
 
 // Layout route (配置): the centrepiece. The bar is data, so here it is drawn as
-// its own geometry -- three lanes (LEFT, CENTER, RIGHT), each a thin plate of
-// chips in bar order, a hidden widget kept as a struck chip until removed. Pick a
-// chip to move it, hide it, or open its settings; + ADD WIDGET brings a hidden
-// built-in or an installed plugin onto the bar; UNLOCK THE BAR hands you the
-// in-place drag; RESET LAYOUT restores the shipped order. Every write goes
-// through the root's barLayout* API, and barLayoutChanged rebinds the lanes.
+// its own geometry -- three lanes side by side (LEFT, CENTER, RIGHT), each a
+// list of its widgets in bar order, top to bottom, every one with its own on/off
+// switch so nothing hides behind a scroll. Pick a row and the strip beneath
+// moves it: up or down its lane, across to the next lane, or into its settings.
+// + ADD WIDGET brings a hidden built-in or an installed plugin onto the bar;
+// UNLOCK THE BAR hands you the in-place drag; RESET LAYOUT restores the shipped
+// order. Every write goes through the root's barLayout* API, and
+// barLayoutChanged rebinds the lanes.
 Item {
     id: page
     property var root: null
@@ -118,8 +120,20 @@ Item {
         return out
     }
 
-    // ── keyboard: arrows move the selection, Shift+arrows move the chip, Delete
-    // hides it, Escape bubbles to the plate (which closes the panel). ──
+    // step the selected row across lanes, keeping its place near the end.
+    readonly property var laneOrder: ["left", "center", "right"]
+    function shiftLane(dir) {
+        var e = page.selEntry
+        if (!e) return
+        var i = page.laneOrder.indexOf(e.section)
+        var to = (i < 0 ? (dir > 0 ? 0 : 2) : i + dir)
+        if (to < 0 || to > 2) return
+        page.move(page.selId, page.laneOrder[to], page.laneIds(page.laneOrder[to]).length)
+    }
+
+    // ── keyboard: up/down step the selection, Shift+up/down move the row within
+    // its lane, left/right move it across lanes, Delete hides it, Escape bubbles
+    // to the plate (which closes the panel). ──
     focus: true
     Component.onCompleted: page.forceActiveFocus()
     Keys.onPressed: function (e) {
@@ -127,86 +141,105 @@ Item {
             if (e.key === Qt.Key_Escape) { page.pickerOpen = false; e.accepted = true }
             return
         }
-        if (e.key === Qt.Key_Left) {
+        if (e.key === Qt.Key_Up) {
             if (e.modifiers & Qt.ShiftModifier) page.nudge(-1); else page.step(-1)
             e.accepted = true
-        } else if (e.key === Qt.Key_Right) {
+        } else if (e.key === Qt.Key_Down) {
             if (e.modifiers & Qt.ShiftModifier) page.nudge(1); else page.step(1)
             e.accepted = true
+        } else if (e.key === Qt.Key_Left) {
+            page.shiftLane(-1); e.accepted = true
+        } else if (e.key === Qt.Key_Right) {
+            page.shiftLane(1); e.accepted = true
         } else if (e.key === Qt.Key_Delete || e.key === Qt.Key_Backspace) {
             if (page.selId !== "") { page.show(page.selId, false); e.accepted = true }
         }
     }
 
-    // one widget as a lane chip: its glyph (or initial), its label, struck and
-    // dimmed while hidden, a bone plate while selected.
-    component Chip: Rectangle {
-        id: chip
+    // one widget as a lane row: its glyph (or initial), its label, and its own
+    // switch. Dimmed while hidden, a bone plate while selected.
+    component WRow: Rectangle {
+        id: wrow
         property string wid: ""
         property string section: ""
-        readonly property bool shown: page.shownOf(chip.wid)
-        readonly property bool sel: page.selId === chip.wid
-        readonly property string glyph: Widgets.glyphFor(chip.wid)
+        readonly property bool shown: page.shownOf(wrow.wid)
+        readonly property bool sel: page.selId === wrow.wid
+        readonly property string glyph: Widgets.glyphFor(wrow.wid)
+        readonly property bool canHide: Widgets.hideable(wrow.wid)
 
-        height: page.tk ? page.tk.chipH : 28
-        implicitWidth: crow.implicitWidth + (page.tk ? page.tk.gap * 1.5 : 18)
-        width: implicitWidth
+        width: parent ? parent.width : 0
+        height: page.tk ? page.tk.rowH - 6 : 34
         radius: Tokens.radius
-        color: chip.sel ? Tokens.bone
-            : (cma.containsMouse ? Tokens.tint10 : Tokens.tint5)
-        border.width: Tokens.border
-        border.color: chip.sel ? Tokens.bone : (cma.containsMouse ? Tokens.lineStrong : Tokens.line)
-        opacity: chip.shown ? 1 : 0.5
+        color: wrow.sel ? Tokens.bone : (rma.containsMouse ? Tokens.tint5 : "transparent")
         Behavior on color { ColorAnimation { duration: Tokens.snap } }
-        Behavior on opacity { NumberAnimation { duration: Tokens.snap } }
 
-        Row {
-            id: crow
-            anchors.centerIn: parent
-            spacing: page.tk ? page.tk.gap / 2 : 6
-
-            IconText {
-                visible: chip.glyph !== ""
-                anchors.verticalCenter: parent.verticalCenter
-                text: chip.glyph
-                color: chip.sel ? Tokens.inkOnBone : Tokens.inkDim
-                font.pixelSize: Tokens.fBody
-            }
-            UiText {
-                visible: chip.glyph === ""
-                anchors.verticalCenter: parent.verticalCenter
-                text: Widgets.initialFor(page.labelOf(chip.wid))
-                color: chip.sel ? Tokens.inkOnBone : Tokens.inkDim
-                font.family: Tokens.mono
-                font.pixelSize: Tokens.fSmall
-                font.weight: Font.DemiBold
-            }
-            UiText {
-                anchors.verticalCenter: parent.verticalCenter
-                text: I18n.tr(page.labelOf(chip.wid))
-                color: chip.sel ? Tokens.inkOnBone : (chip.shown ? Tokens.inkDim : Tokens.inkFaint)
-                font.family: Tokens.ui
-                font.pixelSize: Tokens.fSmall
-                font.strikeout: !chip.shown
-            }
+        IconText {
+            id: rglyph
+            visible: wrow.glyph !== ""
+            anchors.left: parent.left
+            anchors.leftMargin: page.tk ? page.tk.gap / 2 : 6
+            anchors.verticalCenter: parent.verticalCenter
+            text: wrow.glyph
+            color: wrow.sel ? Tokens.inkOnBone : (wrow.shown ? Tokens.inkDim : Tokens.inkFaint)
+            font.pixelSize: Tokens.fBody
+        }
+        UiText {
+            id: rinit
+            visible: wrow.glyph === ""
+            anchors.left: parent.left
+            anchors.leftMargin: page.tk ? page.tk.gap / 2 : 6
+            anchors.verticalCenter: parent.verticalCenter
+            width: Tokens.fBody
+            horizontalAlignment: Text.AlignHCenter
+            text: Widgets.initialFor(page.labelOf(wrow.wid))
+            color: wrow.sel ? Tokens.inkOnBone : (wrow.shown ? Tokens.inkDim : Tokens.inkFaint)
+            font.family: Tokens.mono
+            font.pixelSize: Tokens.fSmall
+            font.weight: Font.DemiBold
+        }
+        UiText {
+            anchors.left: wrow.glyph !== "" ? rglyph.right : rinit.right
+            anchors.leftMargin: page.tk ? page.tk.gap / 2 : 6
+            anchors.right: rsw.left
+            anchors.rightMargin: page.tk ? page.tk.gap / 2 : 6
+            anchors.verticalCenter: parent.verticalCenter
+            text: I18n.tr(page.labelOf(wrow.wid))
+            color: wrow.sel ? Tokens.inkOnBone : (wrow.shown ? Tokens.ink : Tokens.inkFaint)
+            font.family: Tokens.ui
+            font.pixelSize: Tokens.fSmall
+            elide: Text.ElideRight
+        }
+        Sw {
+            id: rsw
+            anchors.right: parent.right
+            anchors.rightMargin: page.tk ? page.tk.gap / 2 : 6
+            anchors.verticalCenter: parent.verticalCenter
+            scale: 0.8
+            transformOrigin: Item.Right
+            enabled: wrow.canHide
+            opacity: wrow.canHide ? 1 : 0.35
+            on: wrow.shown
+            onToggled: (v) => page.show(wrow.wid, v)
         }
         MouseArea {
-            id: cma
-            anchors.fill: parent
+            id: rma
+            anchors.left: parent.left
+            anchors.right: rsw.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: { page.selId = chip.sel ? "" : chip.wid; page.forceActiveFocus() }
+            onClicked: { page.selId = wrow.sel ? "" : wrow.wid; page.forceActiveFocus() }
         }
     }
 
-    // one lane: its LEFT/CENTER/RIGHT eyebrow and a thin plate whose chips
-    // scroll horizontally when the lane is full.
+    // one lane: its LEFT/CENTER/RIGHT eyebrow and a plate listing its widgets in
+    // bar order, top to bottom.
     component Lane: Column {
         id: lane
         property string section: "left"
         property var ids: []
         property string caption: ""
-        width: page.colW
         spacing: page.tk ? page.tk.gap / 2 : 6
 
         Row {
@@ -220,7 +253,7 @@ Item {
                 font.weight: Font.DemiBold
             }
             UiText {
-                text: lane.ids.length + (lane.ids.length === 1 ? I18n.tr(" widget") : I18n.tr(" widgets"))
+                text: "" + lane.ids.length
                 color: Tokens.inkFaint
                 font.family: Tokens.mono
                 font.pixelSize: Tokens.fTiny
@@ -229,39 +262,29 @@ Item {
         }
 
         Rectangle {
-            width: page.colW
-            height: (page.tk ? page.tk.chipH : 28) + (page.tk ? page.tk.gap : 12)
+            width: lane.width
+            height: Math.max(page.tk ? page.tk.rowH : 40, laneCol.implicitHeight + (page.tk ? page.tk.gap : 12))
             radius: Tokens.radius
             color: Tokens.paperLift
             border.width: Tokens.border
             border.color: Tokens.line
 
-            Flickable {
-                anchors.fill: parent
-                anchors.leftMargin: page.tk ? page.tk.gap / 2 : 6
-                anchors.rightMargin: page.tk ? page.tk.gap / 2 : 6
-                clip: true
-                contentWidth: chipRow.width
-                contentHeight: height
-                flickableDirection: Flickable.HorizontalFlick
-                boundsBehavior: Flickable.StopAtBounds
-
-                Row {
-                    id: chipRow
-                    height: parent.height
-                    spacing: page.tk ? page.tk.gap / 2 : 6
-                    Repeater {
-                        model: lane.ids
-                        delegate: Chip {
-                            required property string modelData
-                            anchors.verticalCenter: parent.verticalCenter
-                            wid: modelData
-                            section: lane.section
-                        }
+            Column {
+                id: laneCol
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: page.tk ? page.tk.gap / 2 : 6
+                spacing: 2
+                Repeater {
+                    model: lane.ids
+                    delegate: WRow {
+                        required property string modelData
+                        wid: modelData
+                        section: lane.section
                     }
                 }
             }
-
             UiText {
                 anchors.centerIn: parent
                 visible: lane.ids.length === 0
@@ -273,11 +296,14 @@ Item {
         }
     }
 
+    // what is still below the plate's edge; the stage reads it for the fade.
+    readonly property real scrollRemaining: Math.max(0, flick.contentHeight - flick.height - flick.contentY)
+
     Flickable {
         id: flick
         anchors.fill: parent
         contentWidth: width
-        contentHeight: col.implicitHeight
+        contentHeight: col.implicitHeight + (col.implicitHeight > height && page.tk ? page.tk.tailPad : 0)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
 
@@ -308,9 +334,7 @@ Item {
                             if (page.root && page.root.barUnlocked && page.cc) page.cc.close()
                         }
                     }
-                    Item { width: 1; height: 1 }
                     Btn {
-                        anchors.verticalCenter: parent.verticalCenter
                         text: page.armedReset ? I18n.tr("CONFIRM RESET") : I18n.tr("RESET LAYOUT")
                         onAct: {
                             if (!page.armedReset) { page.armedReset = true; resetDisarm.restart(); return }
@@ -323,81 +347,79 @@ Item {
                 }
             }
 
-            // ── the three lanes ──
+            // ── the three lanes, side by side as they are on the bar ──
             Entrance {
                 width: page.colW
                 index: 1
-                Column {
+                Row {
+                    id: lanes
                     width: page.colW
-                    spacing: page.tk ? page.tk.sectionGap : 24
-                    Lane { section: "left";   ids: page.leftIds;   caption: I18n.tr("LEFT") }
-                    Lane { section: "center"; ids: page.centerIds; caption: I18n.tr("CENTER") }
-                    Lane { section: "right";  ids: page.rightIds;  caption: I18n.tr("RIGHT") }
+                    spacing: page.tk ? page.tk.gap : 12
+                    readonly property real laneW: Math.floor((width - spacing * 2) / 3)
+                    Lane { width: lanes.laneW; section: "left";   ids: page.leftIds;   caption: I18n.tr("LEFT") }
+                    Lane { width: lanes.laneW; section: "center"; ids: page.centerIds; caption: I18n.tr("CENTER") }
+                    Lane { width: lanes.laneW; section: "right";  ids: page.rightIds;  caption: I18n.tr("RIGHT") }
                 }
             }
 
-            // ── the selected chip's control strip ──
+            // ── the selected row's control strip; always present, so the page
+            // never jumps when a row is picked ──
             Entrance {
                 width: page.colW
                 index: 2
-                visible: page.selId !== ""
                 Rectangle {
                     width: page.colW
-                    visible: page.selId !== ""
-                    height: stripCol.implicitHeight + (page.tk ? page.tk.gap * 2 : 24)
+                    height: stripRow.implicitHeight + (page.tk ? page.tk.gap * 2 : 24)
                     radius: Tokens.radius
                     color: "transparent"
                     border.width: Tokens.border
                     border.color: Tokens.line
 
-                    Column {
-                        id: stripCol
+                    Row {
+                        id: stripRow
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        anchors.leftMargin: page.tk ? page.tk.pad : 24
-                        anchors.rightMargin: page.tk ? page.tk.pad : 24
+                        anchors.leftMargin: page.tk ? page.tk.gap : 12
+                        anchors.rightMargin: page.tk ? page.tk.gap : 12
                         spacing: page.tk ? page.tk.gap : 12
 
-                        Row {
-                            spacing: page.tk ? page.tk.gap / 2 : 6
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - actions.width - parent.spacing
+                            spacing: 1
                             UiText {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: page.selEntry ? I18n.tr(page.selEntry.label) : ""
-                                color: Tokens.ink
+                                width: parent.width
+                                text: page.selEntry ? I18n.tr(page.selEntry.label) : I18n.tr("Pick a widget")
+                                color: page.selEntry ? Tokens.ink : Tokens.inkFaint
                                 font.family: Tokens.ui
                                 font.pixelSize: Tokens.fRow
                                 font.weight: Font.DemiBold
+                                elide: Text.ElideRight
                             }
                             UiText {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: page.selEntry ? (page.selEntry.gloss || "") : ""
+                                width: parent.width
+                                text: page.selEntry
+                                    ? ((page.selEntry.kind === "plugin" ? I18n.tr("Plugin") : I18n.tr("Built-in"))
+                                       + (page.selEntry.gloss ? "  " + page.selEntry.gloss : ""))
+                                    : I18n.tr("Then move it up, down, or across a lane")
                                 color: Tokens.inkFaint
-                                font.family: Tokens.jp
+                                font.family: Tokens.ui
                                 font.pixelSize: Tokens.fSmall
-                            }
-                            UiText {
-                                anchors.verticalCenter: parent.verticalCenter
-                                visible: page.selEntry && page.selEntry.kind === "plugin"
-                                text: I18n.tr("PLUGIN")
-                                color: Tokens.inkFaint
-                                font.family: Tokens.mono
-                                font.pixelSize: Tokens.fTiny
-                                font.letterSpacing: Tokens.trackLabel
+                                elide: Text.ElideRight
                             }
                         }
-
-                        Flow {
-                            width: parent.width
+                        Row {
+                            id: actions
+                            anchors.verticalCenter: parent.verticalCenter
                             spacing: page.tk ? page.tk.gap / 2 : 6
-
                             Btn {
-                                text: "\u25c0"
+                                text: "\u25b2"
                                 armed: page.selEntry && page.selEntry.section !== "" && page.selEntry.index > 0
                                 onAct: page.nudge(-1)
                             }
                             Btn {
-                                text: "\u25b6"
+                                text: "\u25bc"
                                 armed: {
                                     var e = page.selEntry
                                     return e && e.section !== "" && e.index < page.laneIds(e.section).length - 1
@@ -405,26 +427,18 @@ Item {
                                 onAct: page.nudge(1)
                             }
                             Btn {
-                                text: I18n.tr("TO LEFT")
+                                text: "\u25c0 " + I18n.tr("LANE")
                                 armed: page.selEntry && page.selEntry.section !== "left"
-                                onAct: page.move(page.selId, "left", page.laneIds("left").length)
+                                onAct: page.shiftLane(-1)
                             }
                             Btn {
-                                text: I18n.tr("TO CENTER")
-                                armed: page.selEntry && page.selEntry.section !== "center"
-                                onAct: page.move(page.selId, "center", page.laneIds("center").length)
-                            }
-                            Btn {
-                                text: I18n.tr("TO RIGHT")
+                                text: I18n.tr("LANE") + " \u25b6"
                                 armed: page.selEntry && page.selEntry.section !== "right"
-                                onAct: page.move(page.selId, "right", page.laneIds("right").length)
-                            }
-                            Btn {
-                                text: (page.selEntry && page.selEntry.shown) ? I18n.tr("HIDE") : I18n.tr("SHOW")
-                                onAct: page.show(page.selId, !(page.selEntry && page.selEntry.shown))
+                                onAct: page.shiftLane(1)
                             }
                             Btn {
                                 text: I18n.tr("SETTINGS")
+                                armed: !!page.selEntry
                                 onAct: page.openSettings(page.selId)
                             }
                         }

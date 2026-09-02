@@ -34,6 +34,9 @@ QtObject {
     readonly property int chipH: Tokens.px(28)   // a layout-lane widget chip
     readonly property int eyebrowH: Tokens.px(24)
     readonly property int navH: Tokens.px(32)
+    // room under a page's last row while it overflows, so the row can scroll
+    // clear of the plate's bottom fade instead of living inside it
+    readonly property int tailPad: Tokens.s4
 
 
     // ── motion ───────────────────────────────────────────────────────────────

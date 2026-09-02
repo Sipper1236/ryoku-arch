@@ -78,11 +78,16 @@ Item {
         restoreMode: Binding.RestoreNone
     }
 
+    // what is still below the plate's edge; the stage reads it for the fade.
+    readonly property real scrollRemaining: Math.max(0, flick.contentHeight - flick.height - flick.contentY)
+
     Flickable {
         id: flick
         anchors.fill: parent
         contentWidth: width
-        contentHeight: col.implicitHeight
+        // a page that overflows gets a tail, so its last row can scroll clear
+        // of the bottom fade instead of living inside it.
+        contentHeight: col.implicitHeight + (col.implicitHeight > height && page.tk ? page.tk.tailPad : 0)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
 
@@ -158,7 +163,7 @@ Item {
                         label: I18n.tr("Size")
                         unit: "%"
                         value: String(Math.round(100 * (page.root ? page.root.barScale : 1)))
-                        desc: I18n.tr("Scale the QS Bar without changing display scaling")
+                        desc: I18n.tr("Bar scale, apart from the display")
                         source: "shell.json"
                         Step {
                             anchors.right: parent.right
@@ -176,15 +181,43 @@ Item {
                 }
             }
 
-            // ── 02 FORM: one row of named tiles, the way the Hub picks a bar
-            // style. The live silhouette sits at the top of this page already, so a
-            // tile only has to name the shape.
+            // ── 02 MOTION: the stream flowing in the gaps between widgets. Right
+            // under position, so it is the second thing on the page, not the last ──
             Entrance {
                 width: page.colW
                 index: 1
                 SettingCard {
                     width: page.colW
-                    title: "02 FORM"
+                    title: "02 MOTION"
+                    kana: "\u52d5\u304d"
+
+                    SettingRow {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        block: true
+                        label: I18n.tr("Gap animation")
+                        desc: I18n.tr("Motion in the gaps between widgets")
+                        source: "shell.json"
+                        Seg {
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            options: page.animModes.map(m => m.label)
+                            current: page.animLabel(page.curAnim)
+                            onChose: key => page.setAnim(page.animValue(key))
+                        }
+                    }
+                }
+            }
+
+            // ── 03 FORM: one row of named tiles, the way the Hub picks a bar
+            // style. The live silhouette sits at the top of this page already, so a
+            // tile only has to name the shape.
+            Entrance {
+                width: page.colW
+                index: 2
+                SettingCard {
+                    width: page.colW
+                    title: "03 FORM"
                     kana: "\u5f62"
 
                     Item {
@@ -262,10 +295,10 @@ Item {
             // ── 03 SURFACE ──
             Entrance {
                 width: page.colW
-                index: 2
+                index: 3
                 SettingCard {
                     width: page.colW
-                    title: "03 SURFACE"
+                    title: "04 SURFACE"
                     kana: "\u8868\u9762"
 
                     SettingRow {
@@ -319,7 +352,7 @@ Item {
                         divider: true
                         controlWidth: 54
                         label: I18n.tr("Depth")
-                        desc: I18n.tr("Soft shadow")
+                        desc: I18n.tr("Lift the bar and its panels")
                         source: "shell.json"
                         Sw {
                             anchors.right: parent.right
@@ -345,13 +378,13 @@ Item {
                 }
             }
 
-            // ── 04 GAPS: how far the shell stays off each output edge ──
+            // ── 05 GAPS: how far the shell stays off each output edge ──
             Entrance {
                 width: page.colW
-                index: 3
+                index: 4
                 SettingCard {
                     width: page.colW
-                    title: "04 GAPS"
+                    title: "05 GAPS"
                     kana: "\u9593\u9694"
 
                     SettingRow {
@@ -435,10 +468,10 @@ Item {
             // ── 05 ACCENT: the bar's data colour, so the swatches keep their hue ──
             Entrance {
                 width: page.colW
-                index: 4
+                index: 5
                 SettingCard {
                     width: page.colW
-                    title: "05 ACCENT"
+                    title: "06 ACCENT"
                     kana: "\u8272"
 
                     // Following the wallpaper is the honest default: matugen already
@@ -449,7 +482,7 @@ Item {
                         anchors.right: parent.right
                         controlWidth: 54
                         label: I18n.tr("Follow wallpaper")
-                        desc: I18n.tr("Wear the accent the wallpaper produced.")
+                        desc: I18n.tr("Use the wallpaper's accent")
                         source: "shell.json"
                         Sw {
                             anchors.right: parent.right
@@ -466,7 +499,7 @@ Item {
                         divider: true
                         block: true
                         label: I18n.tr("Slot")
-                        desc: I18n.tr("Or pin one colour out of the palette.")
+                        desc: I18n.tr("Or pin one palette colour")
                         source: "shell.json"
                         enabled: page.root ? !page.root.barColorIsAccent : true
                         CcSwatchGrid {
@@ -478,32 +511,6 @@ Item {
                             options: page.root ? page.root.barColorOptions : []
                             current: page.root ? page.root.barColor : ""
                             onChose: id => { if (page.root) page.root.barColor = id }
-                        }
-                    }
-                }
-            }
-
-            // ── 06 MOTION: the stream flowing in the gaps between widgets ──
-            Entrance {
-                width: page.colW
-                index: 5
-                SettingCard {
-                    width: page.colW
-                    title: "06 MOTION"
-                    kana: "\u52d5\u304d"
-
-                    SettingRow {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        block: true
-                        label: I18n.tr("Gap animation")
-                        source: "shell.json"
-                        Seg {
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            options: page.animModes.map(m => m.label)
-                            current: page.animLabel(page.curAnim)
-                            onChose: key => page.setAnim(page.animValue(key))
                         }
                     }
                 }

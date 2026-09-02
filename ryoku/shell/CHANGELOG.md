@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+### Fixed
+- **QS Bar Settings: the head no longer overlaps, the last row is no longer
+  buried, Depth lifts the bar, and every switch is its own size.** The route
+  name was baseline-anchored inside a Row and rode up into the QS BAR //
+  SETTINGS eyebrow on every page; the bottom fade covered the last 24px of
+  every page whether or not it scrolled (Depth, Storage and the RIGHT lane sat
+  under it) and now only shows while there is more below, with a tail so the
+  last row scrolls clear; the Depth switch only shadowed the popouts, so it now
+  deepens the bar shell's own shadow too; a switch, segment or stepper inside a
+  widget's expansion was stretched to the column by its Loader. Gap animation
+  moved from the last card to the second, the Layout route is three lanes side
+  by side (a list per lane, each row with its own switch, a fixed strip beneath
+  to move the pick up, down or across), and every summary and description is
+  a few words so nothing truncates (`qsbar/controlcenter/`, `Theme.qml`,
+  `BarSlot.qml`).
+
+### Added
+- **A Community section in QS Bar Settings' rail.** Every installed bar plugin
+  that is not Ryoku's own (a manifest without `"official": true`) lists there
+  instead of among the shipped widgets, with the same switch, density, colour
+  and settings rows, plus its author, version and a REMOVE action; the route
+  also takes a git URL (`ryoku plugin add <url> --bar --yes`) or opens
+  Ryostore's plugin shelf. `ryoku-shell bar catalog --json` now carries
+  `official`, `author` and `version` (`controlcenter/routes/CommunityRoute.qml`,
+  `kit/CcWidgetList.qml`, `ipc/bar.go`).
+
+- **Rashin's vault now routes an agent to the `ryoku` skill and the plugin
+  path.** Asked for a new bar widget, Hermes read the shell's QML source (on a
+  dev box, the checkout) because nothing in the vault said the skill existed or
+  that a widget is a plugin. `desktop.md` now opens with "Acting on this
+  desktop" (commands, never shipped-file edits; the skill's three files and
+  their resolved path) and its bar section ends with "Adding a widget"
+  (`plugins.md`, `ryoku plugin validate`, `ryoku plugin add <dir|url> --bar
+  --yes`, where it lands); a fresh vault's `AGENTS.md` says the same in two
+  lines (`ryoku/rashin/backend/index.go`, `vault.go`).
+
+
 ### Added
 - **Rashin gives every agent the desktop map: a shipped `ryoku` skill and a
   config source mirror.** `ryoku/rashin/skills/ryoku/` (`SKILL.md`, `bar.md`,

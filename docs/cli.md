@@ -293,7 +293,7 @@ bar without touching JSON.
 - `bar defaults` restore the shipped layout and visibility, leaving presentation
   keys (separators, density, per-widget colour) untouched. `ryoku-shell bar defaults`
 - `bar settings [route|close]` open QS Bar Settings on the active monitor,
-  optionally on a named route (`bars`, `layout`, `widgets`, `dock`); `close`
+  optionally on a named route (`bars`, `layout`, `widgets`, `dock`, `community`); `close`
   puts it away. `ryoku-shell bar settings layout`
 
 ### `ryoku-shell dock`
