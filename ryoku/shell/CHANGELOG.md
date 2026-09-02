@@ -35,6 +35,12 @@
   (`ryogami/wall-ui/`, `ryogami/daemon/`, `services/DaemonClient.qml`).
 
 ### Fixed
+- **Login always brings the shell up.** The user manager can outlive a session
+  (linger, a relogin after a compositor crash) and still hold a `ryoku-shell`
+  bound to the dead compositor; `systemctl --user start` then reported it
+  active and the login landed on bare Hyprland with no shell. The autostart
+  now reloads units, clears a start limit, and `restart`s the shell and
+  wallpaper daemons every session (`hyprland/modules/autostart.lua`).
 - **Placing the audio visualiser keeps it visible on Power Saver.** Super+Alt+M
   forced the visualiser on, but the spectrum stayed frozen under Power Saver,
   low-power mode, Game Mode or silence, so it was an invisible flat line you
