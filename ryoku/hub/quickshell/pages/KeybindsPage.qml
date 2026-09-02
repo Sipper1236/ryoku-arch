@@ -1487,7 +1487,7 @@ Item {
             title: pg.appPickTitle()
             apps: pg.appCatalog
             current: pg.appPickCurrent()
-            onPicked: (cmd) => pg.applyAppPick(cmd)
+            onChosen: (cmd) => pg.applyAppPick(cmd)
             onDismissed: pg.closeAppPicker()
             Connections {
                 target: pg
