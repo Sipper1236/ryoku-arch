@@ -41,7 +41,12 @@ func reconcileBacklight(_ bool) recResult {
 			detail = fmt.Sprintf("hybrid GPU (%s): the kernel reports the dGPU has no working backlight, and the firmware fallback (%s) does not dim the panel",
 				strings.Join(gpus, "+"), strings.Join(devs, ","))
 		}
-		fix := "route the panel to the iGPU: set the BIOS GPU/MUX mode to Hybrid and reboot, then amdgpu_bl0 appears"
+		fix := "route the panel to the iGPU: set the BIOS GPU/MUX mode to Hybrid and reboot"
+		if name := igpuBacklightName(gpus); name != "" {
+			fix += ", then " + name + " appears"
+		} else {
+			fix += " so the panel's native backlight appears"
+		}
 		if sys.Has("supergfxctl") {
 			fix += "; on a supported ASUS laptop `supergfxctl -m Hybrid` switches it without a BIOS trip"
 		}
@@ -89,6 +94,30 @@ func gpuDriversLoaded() []string {
 		}
 	}
 	return out
+}
+
+// igpuBacklightName is the native panel backlight the integrated GPU exposes
+// once the panel is routed to it: intel_backlight for an Intel iGPU (i915/xe),
+// amdgpu_bl0 for an AMD one. Intel wins when both are present, since an Intel
+// iGPU drives the eDP even beside an AMD discrete card. "" when neither driver
+// is loaded, so the hint drops the device name rather than naming the wrong one.
+func igpuBacklightName(gpus []string) string {
+	has := func(m string) bool {
+		for _, g := range gpus {
+			if g == m {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case has("i915") || has("xe"):
+		return "intel_backlight"
+	case has("amdgpu"):
+		return "amdgpu_bl0"
+	default:
+		return ""
+	}
 }
 
 // isLaptop: machine has a battery, i.e. an internal panel whose backlight
