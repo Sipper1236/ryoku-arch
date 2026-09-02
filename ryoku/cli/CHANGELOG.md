@@ -29,8 +29,8 @@
   reconciler keyed Zen off `~/.zen`, but Zen keeps its profiles under XDG
   `~/.config/zen`, so the native-messaging manifest was never installed and the
   palette host was unreachable. It now detects Zen at `~/.config/zen` and writes
-  the manifest into both `~/.config/zen/native-messaging-hosts` and the classic
-  `~/.mozilla/native-messaging-hosts` the fork may read
+  the manifest into `~/.mozilla/native-messaging-hosts`, the classic dir the
+  shipped Zen resolves manifests from (verified live)
   (`internal/doctor/reconcile_browser.go`).
 - **Doctor repairs stock plocate configs instead of breaking their update
   service.** `updatedb.conf` normally spells its variable as

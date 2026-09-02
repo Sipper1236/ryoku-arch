@@ -44,8 +44,9 @@ func reconcileBrowserTheme(checkOnly bool) recResult {
 
 	// A browser family is present when its probe dir exists; the host manifest
 	// then goes into each of its native-messaging dirs. Zen keeps its profiles
-	// under XDG ~/.config/zen and, depending on the build, reads native-messaging
-	// manifests from there or from the classic ~/.mozilla dir, so cover both.
+	// under XDG ~/.config/zen, but resolves native-messaging manifests from the
+	// classic ~/.mozilla dir (verified against the shipped Zen), so probe the
+	// XDG dir and install into ~/.mozilla.
 	type target struct {
 		probe    string
 		dirs     []string
@@ -54,7 +55,7 @@ func reconcileBrowserTheme(checkOnly bool) recResult {
 	targets := []target{
 		{".mozilla", []string{".mozilla/native-messaging-hosts"}, ffManifest},
 		{".librewolf", []string{".librewolf/native-messaging-hosts"}, ffManifest},
-		{".config/zen", []string{".config/zen/native-messaging-hosts", ".mozilla/native-messaging-hosts"}, ffManifest},
+		{".config/zen", []string{".mozilla/native-messaging-hosts"}, ffManifest},
 		{".config/chromium", []string{".config/chromium/NativeMessagingHosts"}, crManifest},
 		{".config/google-chrome", []string{".config/google-chrome/NativeMessagingHosts"}, crManifest},
 		{".config/BraveSoftware/Brave-Browser", []string{".config/BraveSoftware/Brave-Browser/NativeMessagingHosts"}, crManifest},
