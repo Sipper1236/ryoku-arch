@@ -3,6 +3,22 @@
 ## Unreleased
 
 ### Added
+- **Rashin gives every agent the desktop map: a shipped `ryoku` skill and a
+  config source mirror.** `ryoku/rashin/skills/ryoku/` (`SKILL.md`, `bar.md`,
+  `plugins.md`) is the agent skill (safety rules, the command catalogue, the QS
+  Bar and dock guide, the plugin contract); `ryoku-rashin wire` symlinks it into
+  every agent's skills dir (`~/.agents`, `~/.claude`, `~/.codex`, `~/.omp/agent`,
+  `~/.hermes`, each `~/.hermes/profiles/*`), `unwire` removes only those links,
+  and `status --json` gained a `skillWired` flag per agent. The vault's
+  `desktop.md` now carries a generated "Bar and dock" section (the widget ids,
+  visibility keys, and the `ryoku-shell bar`/`dock` crib) built from the qsbar
+  widget catalogue and, when the daemon answers, the installed bar plugins. On
+  every reindex, when prowl-agent is present, Rashin mirrors `~/.config/quickshell`,
+  `~/.config/hypr`, and `~/.config/ryoku/*.json` into
+  `~/.local/share/ryoku/rashin/source/` and indexes it, so `prowlRepo()` and
+  `search_code` answer on a packaged box with no checkout, not only on a dev
+  machine (`rashin/backend/agents.go`, `index.go`, `vault.go`, `prowl.go`,
+  `sourcemirror.go`, `skills/ryoku/`).
 - **A wallpaper video engine toggle (`wallpaper.video_engine`).** Video
   wallpapers now play through one of two engines: `ryogami` (the default, the
   lightweight C player that decodes a cached transcode into `wl_shm` on its own
@@ -17,8 +33,54 @@
   at scan time so the in-shell player advances their frames
   (`modules/wallpaper/`, `ryogami/daemon/`, `ryogami/wall-ui/`,
   `ipc/settings.go`).
+- **A bar and dock CLI on the daemon (`ryoku-shell bar ...` and
+  `ryoku-shell dock ...`).** The bar layout is now data a script or an agent can
+  read and change without touching JSON. `bar list [--json]` reports every
+  widget with its section, index and shown flag; `bar catalog [--json]` merges
+  the built-in widget catalogue with installed bar-capable plugins and their
+  settings schema; `bar move <id> --section <s> [--index N|--before <id>|--after
+  <id>]`, `bar show|hide <id>`, `bar set <id> <key> <value>`, `bar position
+  top|bottom`, `bar form full|fit|dock|notch|islands`, `bar defaults` and `bar
+  settings [route]` mutate placement, visibility and presentation. `dock
+  show|hide`, `dock edge`, `dock autohide on|off`, `dock pin|unpin <app>` and
+  `dock list [--json]` drive the dock. Every mutation is validated against the
+  catalogue (unknown id, unknown key, option out of list are errors, never a
+  silent write) and written through the settings store, the sole writer of
+  shell.json; a plugin's visibility and settings go through `ryoku-plugins-place`
+  (`ipc/bar.go`, `ipc/daemon.go`, `ipc/main.go`).
 
 ### Changed
+- **The QS Bar's widget order is data in shell.json, and store plugins ride the
+  bar as first-class widgets.** The order and membership of the three lanes now
+  lives in `shell.json` under `qsbar.layout` (`{version, left, center, right}` of
+  widget ids), replacing the opaque `~/.cache/quickshell_barorder_v2` cache,
+  which is migrated once on first load (its `B:/E:` gid string is converted to
+  ids through the shipped widget catalogue, then the cache is deleted); a fresh
+  box gets the shipped default. A new `qsbar/core/widgets.json` catalogue names
+  every built-in widget once (id, gid, label, visibility key, its own settings)
+  and is the single source the shell, the daemon CLI and Rashin read. An
+  installed plugin enabled with host `topbarGlyph` is now a layout entry rendered
+  through the same drag-reorderable slot as a built-in (the fixed plugin glyph
+  strip is gone), so it moves, hides and takes width budget like any widget.
+  Visibility stays separate from placement: a hidden built-in keeps its place,
+  and every write goes through the daemon's settings store, the sole writer of
+  shell.json (`modules/bar/barstyles/qsbar/core/`, `.../BarSlot.qml`,
+  `.../BarPlugins.qml`, `.../Theme.qml`, `.../VariantRoot.qml`).
+- **The QS Bar's in-shell panel is rebuilt as QS Bar Settings: four routes about
+  the bar, not nine about the whole shell.** The panel the bar's 力 logo opens is
+  now Bar (帯: position, form, surface, gaps, scale, accent, gap animation,
+  auto-hide), Layout (配置: three lanes of widget chips you move, hide, add and
+  reset, with an add-widget picker of hidden built-ins and installed plugins and
+  a way into Ryostore), Widgets (部品: every catalogue widget as a row you show,
+  size for density, colour, and tune through its own settings) and Dock (台). The
+  Layout route reads and writes the new `qsbar.layout` through the root's
+  barLayout API, so a drag in the panel and a `ryoku-shell bar move` change the
+  same document. The routes it used to carry left for the homes they already had:
+  the launcher mark and the workspaces count/marker are folded into Widgets as
+  those two widgets' settings; picker style and desktop widgets moved to the
+  Hub's Desktop and Widgets pages; the mid-work switches and the session live in
+  the Super+Escape quick settings. The name "Shell Studio" is retired
+  (`modules/bar/barstyles/qsbar/controlcenter/`).
 - **ryogami: the light/dark toggle now retints the whole desktop, and the
   ollama AI tagging subsystem is gone.** The picker's light/dark (and
   scheme/source-colour) controls called a `wall.retheme` RPC the ryogami

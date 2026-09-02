@@ -119,8 +119,6 @@ PanelWindow {
     // from the legacy single-bar implementation)
     IdleInhibitor { window: barSlot; enabled: barSlot.root.idleInhibited }
 
-    BarPlugins { id: barPlugins }
-
     // if unlock ends mid-drag (ESC / ipc lock / click backdrop), kill the drag so the
     // ghost doesn't stay frozen + the source widget doesn't stay dimmed
     Connections {
@@ -753,7 +751,7 @@ PanelWindow {
             swapped = true
         }
         dropModel = null; dropIndex = -1
-        if (swapped) { if (_orderLoaded) saveOrder(); dragging = false }   // content swapped in place + persist
+        if (swapped) { if (barSlot.root.barLayoutReady) saveLayout(); dragging = false }   // content swapped in place + persist
         else { ghostX = ghostHomeX; ghostY = ghostHomeY; snapTimer.restart() }   // snap back
     }
     Timer { id: snapTimer; interval: 240; onTriggered: barSlot.dragging = false }
@@ -765,8 +763,11 @@ PanelWindow {
         dropModel = null; dropIndex = -1
     }
 
-    // ── order persistence (survives restart) ──
-    readonly property string orderCachePath: Quickshell.env("HOME") + "/.cache/quickshell_barorder_v2"
+    // ── bar layout (built from Theme.barLayout / shell.json qsbar.layout) ──
+    // The order and membership of the three lanes is one document in shell.json,
+    // keyed by widget id. This BarSlot renders it through the same slot machinery
+    // it always had: base slots first, then extras, empties dropped. The retired
+    // ~/.cache/quickshell_barorder_v2 is migrated once by Theme on first load.
     readonly property int leftBaseSlotCount: 10
     readonly property int centerBaseSlotCount: 1
     readonly property int rightBaseSlotCount: 7
@@ -776,158 +777,94 @@ PanelWindow {
     readonly property int leftExtraSlotLimit: sideSlotCapacity - leftBaseSlotCount
     readonly property int rightExtraSlotLimit: sideSlotCapacity - rightBaseSlotCount
     readonly property int centerExtraSlotLimit: 3
-    property bool _orderLoaded: false
     function modelContains(m, gid) {
         for (var i = 0; i < m.count; i++) if (m.get(i).gid === gid) return true
         return false
     }
     function extraSlotCount(m, baseCount) { return Math.max(0, m.count - baseCount) }
-    function serializeModel(m) {
-        var slots = []
-        for (var i = 0; i < m.count; i++) {
-            var row = m.get(i)
-            slots.push((row.extra ? "E:" : "B:") + (row.gid === "" ? "_" : row.gid))
-        }
-        return slots.join(",")
-    }
-    function serializeOrder() {
-        return serializeModel(leftModel) + "|" + serializeModel(centerModel) + "|" + serializeModel(rightModel)
-    }
-    function parseRegion(raw, baseCount, maxExtraCount, legacy) {
-        var tokens = raw === "" ? [] : raw.split(",")
-        if (legacy && tokens.length !== baseCount) return null
-        if (!legacy && (tokens.length < baseCount
-                || tokens.length > baseCount + maxExtraCount)) return null
 
-        var entries = []
-        for (var i = 0; i < tokens.length; i++) {
-            if (legacy) {
-                entries.push({ gid: tokens[i], extra: false })
-                continue
-            }
-
-            var token = tokens[i]
-            if (token.length < 3 || token.charAt(1) !== ":") return null
-            var kind = token.charAt(0)
-            if ((i < baseCount && kind !== "B") || (i >= baseCount && kind !== "E")) return null
-            var gid = token.substring(2)
-            entries.push({ gid: gid === "_" ? "" : gid, extra: kind === "E" })
-        }
-        return entries
+    // gid <-> id. Built-ins resolve through the catalogue; a plugin rides the
+    // layout under the gid "P:<id>" so it drags and persists like a built-in.
+    function idToGid(id) {
+        var g = barSlot.root.gidForId(id)
+        if (g) return g
+        if (barSlot.root.barPluginIsBar(id)) return "P:" + id
+        return ""
     }
-    function applyEntries(m, entries) {
+    function gidToId(gid) {
+        if (!gid) return ""
+        if (gid.substring(0, 2) === "P:") return gid.substring(2)
+        return barSlot.root.idForGid(gid)
+    }
+    // Fill baseCount base slots in order, then extra slots for anything beyond;
+    // trailing base slots stay empty (the return targets an in-place drag uses).
+    function buildModel(m, ids, baseCount) {
+        ids = ids || []
+        var gids = []
+        for (var i = 0; i < ids.length; i++) {
+            var g = idToGid(ids[i])
+            if (g) gids.push(g)
+        }
         m.clear()
-        for (var i = 0; i < entries.length; i++) m.append(entries[i])
+        var n = Math.max(baseCount, gids.length)
+        for (var k = 0; k < n; k++)
+            m.append({ gid: k < gids.length ? gids[k] : "", extra: k >= baseCount })
     }
-    function applyOrder(str) {
-        var parts = str.split("|")
-        if (parts.length !== 3) return false
-
-        // Accept the initial fixed-width V2 cache once, then write the slot-aware
-        // B:/E: format on the next edit. Every new cache must keep the immutable
-        // base slots first and stay within its region-specific extra-slot limit.
-        var legacy = parts[0].indexOf(":") < 0
-        var l = parseRegion(parts[0], leftBaseSlotCount, leftExtraSlotLimit, legacy)
-        var c = parseRegion(parts[1], centerBaseSlotCount, centerExtraSlotLimit, legacy)
-        var r = parseRegion(parts[2], rightBaseSlotCount, rightExtraSlotLimit, legacy)
-
-        // Migrate the first V2 slot schema (7/1/7 + optional extras) by adding
-        // the three new compact telemetry base slots after CPU. Existing widget
-        // positions and all user-added slots remain intact.
-        if (!l || !c || !r) {
-            var previousLeft = parseRegion(parts[0], 7, 3, legacy)
-            var previousCenter = parseRegion(parts[1], centerBaseSlotCount,
-                centerExtraSlotLimit, legacy)
-            var previousRight = parseRegion(parts[2], rightBaseSlotCount, 3, legacy)
-            if (!previousLeft || !previousCenter || !previousRight) return false
-
-            var oldBase = previousLeft.slice(0, 7)
-            var oldExtras = previousLeft.slice(7)
-            l = oldBase.slice(0, 5).concat([
-                { gid: "G16", extra: false },
-                { gid: "G17", extra: false },
-                { gid: "G18", extra: false }
-            ], oldBase.slice(5), oldExtras)
-            c = previousCenter
-            r = previousRight
-        }
-
-        // Only accept a complete permutation of G1..G18. Empty slots are legal,
-        // but each registered widget must still occur exactly once.
-        var all = l.concat(c, r), seen = {}
-        for (var i = 0; i < all.length; i++) {
-            var gid = all[i].gid
+    function applyLayout() {
+        // Until Theme has loaded (or migrated) a real layout, keep the shipped
+        // inline ListModel defaults rather than the empty/fallback binding.
+        if (!barSlot.root.barLayoutReady) return
+        var L = barSlot.root.barLayout
+        if (!L) return
+        buildModel(leftModel, L.left, leftBaseSlotCount)
+        buildModel(centerModel, L.center, centerBaseSlotCount)
+        buildModel(rightModel, L.right, rightBaseSlotCount)
+    }
+    function slotIds(m) {
+        var ids = []
+        for (var i = 0; i < m.count; i++) {
+            var gid = m.get(i).gid
             if (gid === "") continue
-            if (!registry[gid] || seen[gid]) return false
-            seen[gid] = true
+            var id = gidToId(gid)
+            if (id) ids.push(id)
         }
-        if (Object.keys(seen).length !== Object.keys(registry).length) return false
-
-        applyEntries(leftModel, l)
-        applyEntries(centerModel, c)
-        applyEntries(rightModel, r)
-        return true
+        return ids
     }
-    function saveOrder() {
-        var serialized = serializeOrder()
-        orderSaveProc.command = ["bash", "-c",
-            "mkdir -p \"$(dirname '" + orderCachePath + "')\" && printf '%s' '" + serialized + "' > '" + orderCachePath + "'"]
-        orderSaveProc.running = false; orderSaveProc.running = true
-        if (!barSlot.root._barLayoutSyncing) barSlot.root.syncBarOrder(barSlot.screenName, serialized)
-    }
-    Process { id: orderSaveProc }
-    Process {
-        id: orderLoadProc
-        command: ["cat", barSlot.orderCachePath]
-        running: true
-        stdout: StdioCollector {
-            onStreamFinished: {
-                var t = this.text.trim()
-                if (t.length > 0) barSlot.applyOrder(t)
-                barSlot._orderLoaded = true
-            }
+    function currentLayoutIds() {
+        return {
+            version: 1,
+            left: slotIds(leftModel),
+            center: slotIds(centerModel),
+            right: slotIds(rightModel)
         }
     }
+    function saveLayout() {
+        barSlot.root.saveBarLayoutFromSlot(currentLayoutIds(), barSlot.screenName)
+    }
+    // Adding/removing an empty extra slot is a local editing affordance only:
+    // empties are not part of the persisted layout, so there is nothing to save.
     function addExtraSlot(m, baseCount, maxExtraCount) {
         if (!m || extraSlotCount(m, baseCount) >= maxExtraCount) return
         m.append({ gid: "", extra: true })
-        if (_orderLoaded) saveOrder()
     }
     function removeExtraSlot(m, index, baseCount) {
         if (!m || index < baseCount || index >= m.count) return
         var row = m.get(index)
         if (!row.extra || row.gid !== "") return
         m.remove(index, 1)
-        if (_orderLoaded) saveOrder()
-    }
-    function resetModel(m, gids, baseCount) {
-        m.clear()
-        for (var i = 0; i < gids.length; i++)
-            m.append({ gid: gids[i], extra: i >= baseCount })
-    }
-    // Restore the confirmed V2 default snapshot, including its intentional
-    // empty base cells and the six optional cells on the right.
-    function resetOrder() {
-        var dL = ["G1","G2","G3","","G5","G6","G4","G7","",""]
-        var dR = ["G9","G10","G11","G14","G12","G13","G16",
-                  "G18","G17","G15","","",""]
-        resetModel(leftModel, dL, leftBaseSlotCount)
-        resetModel(centerModel, ["G8"], centerBaseSlotCount)
-        resetModel(rightModel, dR, rightBaseSlotCount)
-        if (_orderLoaded) saveOrder()
     }
 
     property var layoutController: ({
         ready: function () {
-            return barSlot._orderLoaded && barSlot.backingWindowVisible
+            return barSlot.root.barLayoutReady && barSlot.backingWindowVisible
         },
-        defaultLayout: function () { barSlot.resetOrder() },
-        applyOrder: function (serialized) { barSlot.applyOrder(serialized) }
+        applyLayout: function () { barSlot.applyLayout() }
     })
 
     Component.onCompleted: {
         if (!barSlot.root.activePopupScreenName) barSlot.root.activatePopupScreen(barSlot.screen)
         barSlot.root.registerBarLayoutController(barSlot.screenName, barSlot.layoutController)
+        barSlot.applyLayout()
     }
 
     Component.onDestruction: {
@@ -1341,7 +1278,10 @@ PanelWindow {
                 required property string gid
                 required property bool extra
                 required property int index
-                readonly property bool occupied: gid !== "" && barSlot.registry[gid] !== undefined
+                readonly property bool isPlugin: slot.gid.substring(0, 2) === "P:"
+                readonly property string pluginId: slot.isPlugin ? slot.gid.substring(2) : ""
+                readonly property bool occupied: gid !== ""
+                    && (slot.isPlugin || barSlot.registry[gid] !== undefined)
                 // workspace draws a pill 4px wider than its implicitWidth on each
                 // side; pad its slot symmetrically so inter-group gaps stay uniform.
                 readonly property int pad: (slot.gid === "G2" ? barSlot.root.wsPillPad : 0) + barSlot.root.widgetPad(slot.gid)
@@ -1695,11 +1635,63 @@ PanelWindow {
                     }
                 }
 
+                // A plugin slot hosts the plugin's service + content (glyph
+                // density) exactly as the retired fixed plugin Repeater did, but
+                // inside the drag-reorderable slot so it moves like any widget.
+                Component {
+                    id: pluginHostComp
+                    Item {
+                        id: pluginHostRoot
+                        readonly property var entry: barSlot.root.barPluginEntryFor(slot.pluginId)
+                        readonly property string versionQuery: entry && entry.version
+                            ? "?v=" + encodeURIComponent(entry.version) : ""
+                        readonly property real barContentLeftInset: 6
+                        readonly property real barContentRightInset: 6
+                        implicitWidth: pluginContentSlot.item
+                            ? Math.max(1, pluginContentSlot.item.implicitWidth) + 12 : 0
+                        implicitHeight: 32
+
+                        property var api: QtObject {
+                            readonly property var mainInstance: pluginServiceSlot.item
+                            readonly property var pluginSettings: (pluginHostRoot.entry
+                                && pluginHostRoot.entry.placement
+                                && pluginHostRoot.entry.placement.settings)
+                                ? pluginHostRoot.entry.placement.settings : ({})
+                            readonly property string pluginDir: pluginHostRoot.entry ? pluginHostRoot.entry.dir : ""
+                            function saveSettings() {}
+                        }
+
+                        PluginObjectSlot {
+                            id: pluginServiceSlot
+                            source: pluginHostRoot.entry
+                                ? "file://" + pluginHostRoot.entry.dir + "/service/Main.qml" + pluginHostRoot.versionQuery : ""
+                            configure: (service) => { service.pluginApi = pluginHostRoot.api }
+                        }
+                        PluginObjectSlot {
+                            id: pluginContentSlot
+                            // the kit slot is 0x0 by design; size it to the plugin's
+                            // own report so centring puts the glyph on the bar axis.
+                            width: pluginContentSlot.item ? pluginContentSlot.item.implicitWidth : 0
+                            height: pluginContentSlot.item ? pluginContentSlot.item.implicitHeight : 0
+                            anchors.centerIn: parent
+                            source: pluginHostRoot.entry
+                                ? "file://" + pluginHostRoot.entry.dir + "/content/Widget.qml" + pluginHostRoot.versionQuery : ""
+                            configure: (content) => {
+                                content.pluginApi = pluginHostRoot.api
+                                content.density = "glyph"
+                                content.widthBudget = 220
+                                content.active = true
+                            }
+                        }
+                    }
+                }
+
                 Loader {
                     id: ldr
                     x: slot.pad
                     anchors.verticalCenter: parent.verticalCenter
-                    sourceComponent: slot.occupied ? barSlot.registry[slot.gid] : null
+                    sourceComponent: !slot.occupied ? null
+                        : (slot.isPlugin ? pluginHostComp : barSlot.registry[slot.gid])
                     // dim the original while its ghost is being dragged
                     opacity: (barSlot.dragItem === ldr && barSlot.dragActive) ? 0.25 : 1.0
                 }
@@ -1870,12 +1862,11 @@ PanelWindow {
         readonly property int fitRegionCount:
             (leftRowItem.implicitWidth > 0.5 ? 1 : 0)
             + (centerRowItem.implicitWidth > 0.5 ? 1 : 0)
-            + (pluginRow.implicitWidth > 0.5 ? 1 : 0)
             + (rightRowItem.implicitWidth > 0.5 ? 1 : 0)
         readonly property real fitNaturalWidth: Math.ceil(
             2 * fitPadding
             + leftRowItem.implicitWidth + centerRowItem.implicitWidth
-            + pluginRow.implicitWidth + rightRowItem.implicitWidth
+            + rightRowItem.implicitWidth
             + Math.max(0, fitRegionCount - 1) * fitRegionGap)
 
         // edit-mode frame around the bar while unlocked (gentle pulse)
@@ -2041,10 +2032,8 @@ PanelWindow {
                 }
                 if (start >= 0) runs.push({ a: start, b: end })
             }
-            // Plugins live outside the gid rows, so their pill is added directly.
-            void(pluginRow.x); void(pluginRow.implicitWidth)
-            if (pluginRow.implicitWidth > 0.5)
-                runs.push({ a: pluginRow.x, b: pluginRow.x + pluginRow.implicitWidth })
+            // Plugins now ride the gid rows above, so their pills are already in
+            // runs; no separate plugin run is needed.
             return runs
         }
         // The rendered pill rectangles in island coords: islandRuns extended by
@@ -2149,82 +2138,11 @@ PanelWindow {
                     + (leftRowItem.implicitWidth > 0.5 ? island.fitRegionGap : 0)
                     + centerRowItem.implicitWidth
                     + (centerRowItem.implicitWidth > 0.5 ? island.fitRegionGap : 0)
-                    + pluginRow.implicitWidth
-                    + (pluginRow.implicitWidth > 0.5 ? island.fitRegionGap : 0)
                 : island.width - island.rowInset - implicitWidth
             rmodel: rightModel
             baseCount: barSlot.rightBaseSlotCount
             maxExtraCount: barSlot.rightExtraSlotLimit
         }
-
-        // Store-installed bar plugins, rendered just before the right cluster at
-        // glyph density. Outside the drag-reorder gid model on purpose: plugin
-        // sets change at install time, so they are not persisted layout slots.
-        Row {
-            id: pluginRow
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: barSlot.root.v2WidgetSpacing
-            height: 32
-            x: barSlot.compactShell
-                ? island.fitPadding
-                    + leftRowItem.implicitWidth
-                    + (leftRowItem.implicitWidth > 0.5 ? island.fitRegionGap : 0)
-                    + centerRowItem.implicitWidth
-                    + (centerRowItem.implicitWidth > 0.5 ? island.fitRegionGap : 0)
-                : rightRowItem.x - implicitWidth
-                    - (implicitWidth > 0.5 ? island.centerGap : 0)
-
-            Repeater {
-                model: barPlugins.pluginIds
-
-                delegate: Item {
-                    id: pslot
-                    required property string modelData
-                    readonly property var entry: barPlugins.entryFor(pslot.modelData)
-                    readonly property string versionQuery: pslot.entry && pslot.entry.version
-                        ? "?v=" + encodeURIComponent(pslot.entry.version) : ""
-
-                    implicitWidth: contentSlot.item
-                        ? Math.max(1, contentSlot.item.implicitWidth) + 12 : 0
-                    width: implicitWidth
-                    height: 32
-                    visible: implicitWidth > 0.5
-
-                    property var api: QtObject {
-                        readonly property var mainInstance: serviceSlot.item
-                        readonly property var pluginSettings: (pslot.entry && pslot.entry.placement
-                            && pslot.entry.placement.settings) ? pslot.entry.placement.settings : ({})
-                        readonly property string pluginDir: pslot.entry ? pslot.entry.dir : ""
-                        function saveSettings() {}
-                    }
-
-                    PluginObjectSlot {
-                        id: serviceSlot
-                        source: pslot.entry
-                            ? "file://" + pslot.entry.dir + "/service/Main.qml" + pslot.versionQuery : ""
-                        configure: (service) => { service.pluginApi = pslot.api }
-                    }
-
-                    PluginObjectSlot {
-                        id: contentSlot
-                        // the kit slot is 0x0 by design; size it to the plugin's
-                        // own report so centring puts the glyph on the bar axis.
-                        width: contentSlot.item ? contentSlot.item.implicitWidth : 0
-                        height: contentSlot.item ? contentSlot.item.implicitHeight : 0
-                        anchors.centerIn: parent
-                        source: pslot.entry
-                            ? "file://" + pslot.entry.dir + "/content/Widget.qml" + pslot.versionQuery : ""
-                        configure: (content) => {
-                            content.pluginApi = pslot.api
-                            content.density = "glyph"
-                            content.widthBudget = 220
-                            content.active = true
-                        }
-                    }
-                }
-            }
-        }
-
         // ── slot-aware panel X positions: publish per-screen anchors ──
         // find a group's slot and map its (frac·width) to window/screen X.
         function groupX(gid, frac) {

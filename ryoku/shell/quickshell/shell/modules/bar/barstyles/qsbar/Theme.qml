@@ -4,6 +4,7 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import Quickshell.Services.UPower
 import shell.services
+import "core"
 import "Palette.js" as Palette
 
 Item {
@@ -212,38 +213,26 @@ Item {
         return keys
     }
 
-    function applyToBarLayoutControllers(actionName) {
+    function _applyLayoutToBars(exceptScreen) {
         var keys = barLayoutControllerKeys()
 
         _barLayoutSyncing = true
         try {
             for (var i = 0; i < keys.length; i++) {
+                if (exceptScreen && keys[i] === exceptScreen) continue
                 var controller = barLayoutControllers[keys[i]]
-                if (controller && controller[actionName]) controller[actionName]()
+                if (controller && controller.applyLayout) controller.applyLayout()
             }
         } finally {
             _barLayoutSyncing = false
         }
     }
 
-    function syncBarOrder(sourceScreenName, serialized) {
-        if (_barLayoutSyncing || !serialized) return
-
-        _barLayoutSyncing = true
-        try {
-            var keys = barLayoutControllerKeys()
-            for (var i = 0; i < keys.length; i++) {
-                if (keys[i] === sourceScreenName) continue
-                var controller = barLayoutControllers[keys[i]]
-                if (controller && controller.applyOrder) controller.applyOrder(serialized)
-            }
-        } finally {
-            _barLayoutSyncing = false
-        }
-    }
-
+    // Legacy combined reset: shipped order and visibility PLUS presentation.
+    // The panel's own RESET LAYOUT calls barLayoutReset(); this stays for any
+    // caller that wants the whole bar returned to shipped in one move.
     function resetAllBarLayouts() {
-        applyToBarLayoutControllers("defaultLayout")
+        barLayoutReset()
         resetBarLayoutPresentation()
     }
 
@@ -262,6 +251,362 @@ Item {
         else if ((separatorsChanged || densityChanged || widgetFillsChanged)
                 && _widgetsLoaded) saveWidgets()
     }
+
+    // ─────────────────────── bar layout as data (qsbar.layout) ───────────────
+    // The bar's widget order lives in shell.json under qsbar.layout, one document
+    // of { version, left, center, right } id arrays. Built-in ids come from the
+    // catalogue (BarCatalog); a plugin id is an installed plugin enabled on the
+    // bar. `_storedLayout` is the raw persisted document; `barLayout` is the
+    // live, normalised view every consumer reads (duplicates dropped, known
+    // widgets the layout omits appended). Visibility is separate: a built-in
+    // stays in the layout when hidden, a plugin drops out when it is not enabled
+    // on the bar.
+    BarCatalog { id: barCat }
+    BarPlugins { id: barPluginHost }
+
+    property var _storedLayout: null
+    property bool barLayoutReady: false
+    property bool _barLayoutInitialized: false
+    readonly property var barLayout: _normalizeLayout(_storedLayout)
+
+    // The set of ids that may hold a place in the bar: every built-in (always,
+    // even hidden) plus every plugin currently enabled and hosted on the bar.
+    readonly property var barPluginIds: barPluginHost.pluginIds
+    // Installed plugins whose manifest declares topbarGlyph (installed, not
+    // necessarily on the bar) - the add-widget picker's plugin group.
+    readonly property var barPluginCatalog: barPluginHost.barCapable
+    function barPluginEntryFor(id) { return barPluginHost.entryFor(id) }
+    function barPluginIsBar(id) { return barPluginHost.isEnabledBar(id) }
+
+    // A plugin enabled after the layout was written appears live and lands at the
+    // end of its section; it is not persisted until the next explicit edit, so
+    // toggling a plugin never races the daemon's shell.json writes. The bars
+    // follow barLayout itself, not barPluginIds: the normalised layout re-derives
+    // after the id set changes, and a handler on the ids ran before that
+    // re-derivation and handed the bars the old arrays (the plugin never drew).
+    onBarLayoutChanged: if (barLayoutReady) _applyLayoutToBars("")
+
+    function _eligibleIds() {
+        var m = ({})
+        var ents = barCat.entries
+        for (var i = 0; i < ents.length; i++) m[ents[i].id] = true
+        var pids = barPluginIds
+        for (var j = 0; j < pids.length; j++) m[pids[j]] = true
+        return m
+    }
+    function _eligibleOrder() {
+        var out = []
+        var ents = barCat.entries
+        for (var i = 0; i < ents.length; i++) out.push(ents[i].id)
+        var pids = barPluginIds
+        for (var j = 0; j < pids.length; j++) out.push(pids[j])
+        return out
+    }
+    // Built-ins have no manifest, so a missing built-in falls to the right lane;
+    // a plugin honours its manifest defaults.bar.section when it names one.
+    function _defaultSectionFor(id) {
+        if (barCat.byId(id)) return "right"
+        var e = barPluginEntryFor(id)
+        var sec = (e && e.manifest && e.manifest.defaults && e.manifest.defaults.bar)
+            ? e.manifest.defaults.bar.section : ""
+        return (sec === "left" || sec === "center" || sec === "right") ? sec : "right"
+    }
+    function _normalizeLayout(raw) {
+        var secNames = ["left", "center", "right"]
+        var out = { version: 1, left: [], center: [], right: [] }
+        var used = ({})
+        var eligible = _eligibleIds()
+        for (var s = 0; s < 3; s++) {
+            var arr = (raw && raw[secNames[s]]) || []
+            for (var i = 0; i < arr.length; i++) {
+                var id = arr[i]
+                if (eligible[id] && !used[id]) { out[secNames[s]].push(id); used[id] = true }
+            }
+        }
+        var order = _eligibleOrder()
+        for (var k = 0; k < order.length; k++) {
+            var mid = order[k]
+            if (used[mid]) continue
+            out[_defaultSectionFor(mid)].push(mid)
+            used[mid] = true
+        }
+        return out
+    }
+    function _cloneLayout(L) {
+        return {
+            version: 1,
+            left: ((L && L.left) || []).slice(),
+            center: ((L && L.center) || []).slice(),
+            right: ((L && L.right) || []).slice()
+        }
+    }
+    function _sectionIndexOf(L, id) {
+        var secNames = ["left", "center", "right"]
+        for (var s = 0; s < 3; s++) {
+            var arr = (L && L[secNames[s]]) || []
+            var idx = arr.indexOf(id)
+            if (idx >= 0) return { section: secNames[s], index: idx }
+        }
+        return { section: "", index: -1 }
+    }
+
+    // The shipped default order (design section 1). Presentation keys (separators,
+    // density, per-widget colour) are untouched by a layout reset.
+    function _shippedLayout() {
+        return {
+            version: 1,
+            left: ["launcher", "workspaces", "status", "cpu", "volume", "memory", "ai"],
+            center: ["clock"],
+            right: ["media", "quick", "network", "power", "battery", "brightness",
+                    "cputemp", "storage", "gpu", "bluetooth", "layout"]
+        }
+    }
+
+    // Convert the retired ~/.cache/quickshell_barorder_v2 string
+    // ("B:G1,B:G16,...|B:G8|B:G9,...") to id arrays via the catalogue's gid map.
+    // Empty cells ("_"/"") and the B:/E: slot-kind prefixes are dropped: the new
+    // layout carries placement only. This is the function the migration cites.
+    function _cacheToLayout(str) {
+        var parts = String(str).split("|")
+        if (parts.length !== 3) return null
+        var secNames = ["left", "center", "right"]
+        var out = { version: 1, left: [], center: [], right: [] }
+        for (var s = 0; s < 3; s++) {
+            var raw = parts[s]
+            var tokens = raw === "" ? [] : raw.split(",")
+            for (var i = 0; i < tokens.length; i++) {
+                var tok = tokens[i]
+                var gid = (tok.length >= 2 && tok.charAt(1) === ":") ? tok.substring(2) : tok
+                if (gid === "" || gid === "_") continue
+                var id = barCat.idOf(gid)
+                if (id) out[secNames[s]].push(id)
+            }
+        }
+        return out
+    }
+
+    function _commitLayout(raw, persist) {
+        barLayoutReady = true
+        _barLayoutInitialized = true
+        _storedLayout = raw ? raw : { version: 1, left: [], center: [], right: [] }
+        if (persist) _persistLayout(barLayout)
+    }
+    function _persistLayout(L) {
+        var v = { version: 1, left: L.left, center: L.center, right: L.right }
+        _cfgCtl.queued += "call settings.patch "
+            + JSON.stringify({ path: "qsbar.layout", value: v }) + "\n"
+        if (_cfgCtl.connected) _cfgCtl.flushQueued()
+        else _cfgCtl.connected = true
+    }
+
+    // First load with no qsbar.layout: migrate the cache once (or write the
+    // shipped default), persist it, then delete the cache. Runs exactly once.
+    readonly property string _barOrderCachePath: Quickshell.env("HOME") + "/.cache/quickshell_barorder_v2"
+    function _migrateBarLayout() {
+        if (_barLayoutInitialized) return
+        _barLayoutInitialized = true
+        _barCacheLoadProc.running = true
+    }
+    Process {
+        id: _barCacheLoadProc
+        command: ["cat", theme._barOrderCachePath]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var t = (this.text || "").trim()
+                var migrated = t.length > 0 ? theme._cacheToLayout(t) : null
+                theme._commitLayout(migrated ? migrated : theme._shippedLayout(), true)
+                theme._applyLayoutToBars("")
+                Quickshell.execDetached(["rm", "-f", theme._barOrderCachePath])
+            }
+        }
+    }
+
+    // ── the merged catalogue every panel/CLI reads (design section 4) ──
+    readonly property var barCatalog: _buildBarCatalog()
+    function _buildBarCatalog() {
+        var out = []
+        var L = barLayout
+        var ents = barCat.entries
+        for (var i = 0; i < ents.length; i++) {
+            var e = ents[i]
+            var si = _sectionIndexOf(L, e.id)
+            out.push({
+                id: e.id, gid: e.gid || "",
+                label: e.label || e.id, gloss: e.gloss || "",
+                category: e.category || "", desc: e.desc || "",
+                kind: "builtin",
+                shown: e.visKey ? _modForVisKey(e.visKey) : true,
+                section: si.section, index: si.index,
+                settings: e.settings || [], pluginDir: ""
+            })
+        }
+        var cap = barPluginCatalog
+        for (var j = 0; j < cap.length; j++) {
+            var p = cap[j]
+            var man = p.manifest || ({})
+            var pl = p.placement || ({})
+            var psi = _sectionIndexOf(L, p.id)
+            out.push({
+                id: p.id, gid: "",
+                label: man.name || p.id, gloss: "",
+                category: "", desc: man.description || "",
+                kind: "plugin",
+                shown: pl.enabled === true && pl.host === "topbarGlyph",
+                section: psi.section, index: psi.index,
+                settings: (man.metadata && man.metadata.settings) || [],
+                pluginDir: p.dir || ""
+            })
+        }
+        return out
+    }
+
+    // ── the root API BarSettings and the qsbar IPC drive (design section 4) ──
+    signal barSettingsOpenRequested(string route)
+    function openBarSettings(route) {
+        barSettingsOpenRequested((route === undefined || route === null) ? "" : String(route))
+    }
+    function gidForId(id) { return barCat.gidOf(id) }
+    function idForGid(gid) { return barCat.idOf(gid) }
+
+    function barLayoutMove(id, section, index) {
+        if (!id || ["left", "center", "right"].indexOf(section) < 0) return
+        var L = _cloneLayout(barLayout)
+        var secs = ["left", "center", "right"]
+        for (var s = 0; s < 3; s++)
+            L[secs[s]] = L[secs[s]].filter(function (x) { return x !== id })
+        var arr = L[section]
+        var idx = (index === undefined || index === null) ? arr.length
+            : Math.max(0, Math.min(index, arr.length))
+        arr.splice(idx, 0, id)
+        _commitLayout(L, true)
+        _applyLayoutToBars("")
+    }
+
+    function barLayoutReset() {
+        _applyShippedVisibility()
+        _commitLayout(_shippedLayout(), true)
+        _applyLayoutToBars("")
+    }
+    function _applyShippedVisibility() {
+        var wl = _widgetsLoaded
+        _widgetsLoaded = false
+        modStatus = true; modMemory = true; modCpu = true; modVolume = true
+        modWeather = true; modNetwork = true; modBrightness = true; modMedia = true
+        modMpris = true; modQuick = true; modBattery = true; modLayout = true
+        modCpuTemperature = true; modGpu = true; modStorage = true
+        modClaude = false; modPower = false; modBluetooth = false
+        _widgetsLoaded = wl
+        if (wl) saveWidgets()
+    }
+
+    // Called by a BarSlot when its in-place drag reorders a lane: persist the
+    // whole layout, then re-apply to every OTHER monitor (the source already
+    // reflects the drag, so re-applying to it would repack it mid-edit).
+    function saveBarLayoutFromSlot(raw, sourceScreen) {
+        _commitLayout(raw, true)
+        _applyLayoutToBars(sourceScreen)
+    }
+
+    function barLayoutShow(id, on) {
+        var e = barCat.byId(id)
+        if (e) {
+            if (!e.visKey) return   // launcher/workspaces/clock are always shown
+            _setVisByKey(e.visKey, on === true)
+            return
+        }
+        if (on === true) {
+            _placePlugin([id, "host", "topbarGlyph"])
+            _placePlugin([id, "enabled", "true"])
+        } else {
+            _placePlugin([id, "enabled", "false"])
+        }
+    }
+
+    function barWidgetGet(id, key) {
+        var e = barCat.byId(id)
+        if (e) {
+            if (_isVisKeySetting(id, key)) return _modForVisKey(key)
+            return theme[key]
+        }
+        var pe = barPluginEntryFor(id)
+        if (pe && pe.placement && pe.placement.settings
+                && pe.placement.settings[key] !== undefined)
+            return pe.placement.settings[key]
+        return undefined
+    }
+    function barWidgetSet(id, key, value) {
+        var e = barCat.byId(id)
+        if (e) {
+            if (_isVisKeySetting(id, key)) { _setVisByKey(key, value === true); return }
+            theme[key] = value   // the change handler persists through saveWidgets
+            return
+        }
+        var obj = ({}); obj[key] = value
+        _placePlugin([id, "settings", JSON.stringify(obj)])
+    }
+
+    // A catalogue settings row with visKey:true (clock's Weather) toggles a
+    // widgets visibility key instead of a plain Theme property.
+    function _isVisKeySetting(id, key) {
+        var e = barCat.byId(id)
+        if (!e || !e.settings) return false
+        for (var i = 0; i < e.settings.length; i++)
+            if (e.settings[i].key === key && e.settings[i].visKey === true) return true
+        return false
+    }
+    // Direct (not bracket) property access so barCatalog's `shown` binding
+    // captures the mod* dependency and re-derives when visibility changes.
+    function _modForVisKey(visKey) {
+        switch (visKey) {
+        case "status": return modStatus
+        case "memory": return modMemory
+        case "cpu": return modCpu
+        case "volume": return modVolume
+        case "weather": return modWeather
+        case "network": return modNetwork
+        case "brightness": return modBrightness
+        case "media": return modMedia
+        case "mpris": return modMpris
+        case "quick": return modQuick
+        case "claude": return modClaude
+        case "power": return modPower
+        case "bluetooth": return modBluetooth
+        case "gpu": return modGpu
+        case "cpuTemperature": return modCpuTemperature
+        case "storage": return modStorage
+        case "battery": return modBattery
+        case "layout": return modLayout
+        }
+        return true
+    }
+    function _setVisByKey(visKey, on) {
+        switch (visKey) {
+        case "status": modStatus = on; break
+        case "memory": modMemory = on; break
+        case "cpu": modCpu = on; break
+        case "volume": modVolume = on; break
+        case "weather": modWeather = on; break
+        case "network": modNetwork = on; break
+        case "brightness": modBrightness = on; break
+        case "media": modMedia = on; break
+        case "mpris": modMpris = on; break
+        case "quick": modQuick = on; break
+        case "claude": modClaude = on; break
+        case "power": modPower = on; break
+        case "bluetooth": modBluetooth = on; break
+        case "gpu": modGpu = on; break
+        case "cpuTemperature": modCpuTemperature = on; break
+        case "storage": modStorage = on; break
+        case "battery": modBattery = on; break
+        case "layout": modLayout = on; break
+        }
+    }
+
+    readonly property string _pluginShellDir: Quickshell.env("RYOKU_SHELL_DIR")
+    readonly property string _pluginPlaceTool: (_pluginShellDir && _pluginShellDir.length > 0)
+        ? _pluginShellDir + "/quickshell/plugins/ryoku-plugins-place"
+        : "ryoku-plugins-place"
+    function _placePlugin(args) { Quickshell.execDetached([_pluginPlaceTool].concat(args)) }
 
     function activatePopupScreen(screen) {
         if (!screen || screen.name === "") return
@@ -2857,6 +3202,11 @@ Item {
         q.widgetColorStyles = serializeWidgetColorStyles()
         q.barSeps = barSeps
         q.iconOnlyGids = iconOnlyGids
+        // Carry the live in-memory layout, never the (possibly stale) Config
+        // frame: a widget toggle firing this must not revert a just-made move
+        // that Config has not re-read yet.
+        if (barLayoutReady)
+            q.layout = { version: 1, left: barLayout.left, center: barLayout.center, right: barLayout.right }
         q.widgets = {
             "status": modStatus, "memory": modMemory, "cpu": modCpu, "volume": modVolume,
             "weather": modWeather, "network": modNetwork, "brightness": modBrightness,
@@ -2939,6 +3289,27 @@ Item {
             if (w.storage        !== undefined) modStorage        = w.storage
             if (w.battery        !== undefined) modBattery        = w.battery
             if (w.layout         !== undefined) modLayout         = w.layout
+        }
+        // Bar layout (design section 1): apply the stored document, and on the
+        // first load without one migrate the retired cache (or write the shipped
+        // default) exactly once. A normalised incoming equal to the live layout
+        // is our own persist echo, so skip re-applying it.
+        if (q.layout && q.layout.left !== undefined) {
+            var incoming = {
+                version: 1,
+                left: q.layout.left || [],
+                center: q.layout.center || [],
+                right: q.layout.right || []
+            }
+            if (JSON.stringify(_normalizeLayout(incoming)) !== JSON.stringify(barLayout)) {
+                _commitLayout(incoming, false)
+                _applyLayoutToBars("")
+            } else {
+                barLayoutReady = true
+                _barLayoutInitialized = true
+            }
+        } else {
+            _migrateBarLayout()
         }
         _widgetsLoaded = wl
     }

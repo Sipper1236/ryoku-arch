@@ -109,3 +109,52 @@ this same manager scene.
 
 Do not introduce a parallel renderer, unbounded component loader, or direct
 configuration writer.
+
+## QS Bar layout (`qsbar.layout`)
+
+The **qsbar** top bar (the shipped default; style selection lives in
+`docs/barstyles.md`) keeps its widget order as data in `~/.config/ryoku/shell.json`
+under `qsbar.layout`, not in a cache file:
+
+```json
+"qsbar": {
+  "layout": {
+    "version": 1,
+    "left":   ["launcher", "workspaces", "status", "cpu", "volume", "memory", "ai"],
+    "center": ["clock"],
+    "right":  ["media", "quick", "network", "power", "battery", "brightness",
+               "cputemp", "storage", "gpu", "bluetooth", "layout"]
+  },
+  "widgets": { "status": true, "power": false, "...": true }
+}
+```
+
+- An **entry is a widget id**: a built-in id, or the manifest id of an installed
+  plugin enabled on the bar. The order within a section is the order on the bar.
+- The **built-in ids** (and their internal `G1..G19` slot gids, labels,
+  visibility keys and own settings) are catalogued once in
+  `shell/modules/bar/barstyles/qsbar/core/widgets.json`. That file is the single
+  source the shell, the daemon (`ryoku-shell bar ...`) and Rashin read; nothing
+  hand-lists widgets elsewhere. Built-in ids are reserved: `ryoku plugin add`
+  refuses a manifest that claims one.
+- **Visibility is separate from placement.** A built-in listed in the layout but
+  `false` in `qsbar.widgets` (keyed by the catalogue's `visKey`) keeps its place
+  and does not render. A plugin is shown when `~/.config/ryoku/plugins.json` has
+  it `enabled` with `host: "topbarGlyph"`. Widgets with no `visKey` (launcher,
+  workspaces, clock) are always shown.
+- Every id occurs **at most once**; duplicates are dropped, and a known widget
+  the layout omits is appended to `right` (a plugin honours its manifest
+  `defaults.bar.section` when it names one). A plugin enabled after the layout was
+  written lands at the end of its section.
+- Separators (`qsbar.barSeps`), density (`qsbar.iconOnlyGids`) and per-widget
+  colour (`qsbar.widgetColorStyles`) are presentation, keyed by gid, and are
+  untouched by a layout move or reset.
+- **Migration, once.** On first load with no `qsbar.layout`, the retired
+  `~/.cache/quickshell_barorder_v2` string (`B:G1,B:G16,...|B:G8|B:G9,...`) is
+  converted to ids through the catalogue's gid map, written to `qsbar.layout`,
+  and the cache file is deleted; empty cells are dropped. With no cache file, the
+  shipped default above is written instead. The `G1..G19` slot ids stay internal
+  to `BarSlot.qml`.
+- The layout is one document. A move rewrites the whole `qsbar.layout` through the
+  daemon's settings store (the sole writer of `shell.json`); the bar re-reads on
+  change and every monitor's bar follows.
