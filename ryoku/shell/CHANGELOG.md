@@ -35,6 +35,18 @@
   (`ryogami/wall-ui/`, `ryogami/daemon/`, `services/DaemonClient.qml`).
 
 ### Fixed
+- **Live video wallpapers decode on the GPU when it can.** The ryogami C player
+  opened a CPU-only decoder, so a clip cost about 15% of a core per monitor. It
+  now tries VA-API, NVDEC, then VDPAU first and only falls back to software,
+  mapping just the decode driver and never a GL context, so the light-RSS
+  behaviour holds where no accelerator is present (`livewall/livewall.c`,
+  `livewall/build.sh`).
+- **A live video wallpaper no longer stays black after a fullscreen app
+  closes.** The player free-ran on its own timer with no frame callback, so once
+  its background surface was occluded the loop kept decoding into an unseen
+  surface and could leave a stale or black frame on reveal. It now gates each
+  frame on a `wl_surface.frame` callback: it idles while hidden and repaints the
+  moment the wallpaper is visible again (`livewall/livewall.c`).
 - **Launcher actions now invoke live shell routes and shipped helpers.** The
   consolidated shell removed the old `toolkit`, `sysinfo`, and `clipboard`
   daemon verbs, but the action catalog still launched them and silently
