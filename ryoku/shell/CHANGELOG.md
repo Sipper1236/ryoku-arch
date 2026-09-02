@@ -19,6 +19,16 @@
   `BarSlot.qml`).
 
 ### Added
+- **QS Bar Settings > Community warns, and runs the plugin CLI in place.** The
+  route opens with the community warning (Ryoku does not review or maintain
+  these; they run in your shell with your permissions), every community row
+  carries EXPORT, SHARE TO RYOSTORE and REMOVE, and the ADD field takes a git URL
+  or a local folder. Each action runs `ryoku plugin ...` here and prints its
+  result in a console strip (with OPEN FOLDER / OPEN PULL REQUEST when there is
+  one), so a bad URL or a missing preview is never silent. A plugin's `int`
+  setting now shows its number beside the stepper
+  (`controlcenter/routes/CommunityRoute.qml`, `kit/CcWidgetList.qml`).
+
 - **A Community section in QS Bar Settings' rail.** Every installed bar plugin
   that is not Ryoku's own (a manifest without `"official": true`) lists there
   instead of among the shipped widgets, with the same switch, density, colour

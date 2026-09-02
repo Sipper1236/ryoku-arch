@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell
 import "Widgets.js" as Widgets
 import "../../modules"
 import Ryoku.Ui
@@ -11,8 +10,8 @@ import Ryoku.Ui.Singletons
 // one, and an on/off switch; selecting it expands to its density (icon only), its
 // per-widget colour, its own settings from the catalogue rendered by type
 // through the root barWidget seam, and, for a community plugin, its author line
-// and a REMOVE action. The colour popover floats at route level, so the sheet
-// only asks for it (`colorRequested`).
+// and its EXPORT / SHARE / REMOVE actions. The colour popover and the plugin
+// CLI runs live at route level, so the sheet only asks for them (signals).
 SettingCard {
     id: list
     property var root: null
@@ -21,6 +20,10 @@ SettingCard {
     property string selId: ""      // the expanded widget row
     property string colorGid: ""   // the widget whose colour popover the route has open
     signal colorRequested(string gid, string label)
+    // the route runs these through the plugin CLI and shows the result.
+    signal exportRequested(string id)
+    signal shareRequested(string id)
+    signal removeRequested(string id)
 
     // Per-widget colour is gated on widgetHasFill so the sheet stays error-free if
     // the live Theme (or the offscreen probe) does not expose the helpers.
@@ -41,13 +44,6 @@ SettingCard {
     // density (icon-only) is keyed by gid, not id.
     function isIcon(gid) { return !!(list.root && list.root.iconOnly && list.root.iconOnly(gid)) }
     function toggleDensity(gid) { if (list.root && list.root.toggleIconOnly) list.root.toggleIconOnly(gid) }
-    // a community plugin leaves through the plugin CLI; the bar re-derives from
-    // the plugins.json change it makes.
-    function removePlugin(id) {
-        Quickshell.execDetached(["ryoku", "plugin", "remove", id])
-        if (list.selId === id) list.selId = ""
-    }
-
     // one catalogue setting, rendered by type; options may be plain strings
     // (built-in) or {value,label} objects (a plugin manifest).
     component WSetting: Column {
@@ -134,11 +130,26 @@ SettingCard {
         }
         Component {
             id: stepK
-            Step {
-                from: (ws.setting && ws.setting.min !== undefined) ? ws.setting.min : 0
-                to: (ws.setting && ws.setting.max !== undefined) ? ws.setting.max : 100
-                value: { var v = Number(list.getW(ws.wid, ws.skey)); return isNaN(v) ? from : v }
-                onModified: (v) => list.setW(ws.wid, ws.skey, v)
+            // the number sits beside its stepper: a Step alone shows no readout,
+            // and a plugin's int setting has no SettingRow value slot to use.
+            Row {
+                spacing: list.tk ? list.tk.gap : 12
+                UiText {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: String(stepCtl.value)
+                    color: Tokens.ink
+                    font.family: Tokens.ui
+                    font.pixelSize: Tokens.fBody
+                    font.weight: Font.Light
+                }
+                Step {
+                    id: stepCtl
+                    anchors.verticalCenter: parent.verticalCenter
+                    from: (ws.setting && ws.setting.min !== undefined) ? ws.setting.min : 0
+                    to: (ws.setting && ws.setting.max !== undefined) ? ws.setting.max : 100
+                    value: { var v = Number(list.getW(ws.wid, ws.skey)); return isNaN(v) ? from : v }
+                    onModified: (v) => list.setW(ws.wid, ws.skey, v)
+                }
             }
         }
         Component {
@@ -395,14 +406,14 @@ SettingCard {
                         }
                     }
 
-                    // a community plugin: who wrote it, and the way out.
-                    Row {
+                    // a community plugin: who wrote it, and its three doors: out
+                    // (REMOVE), to a folder (EXPORT), to the catalogue (SHARE).
+                    Column {
                         visible: wr.isPlugin && !wr.modelData.official
                         width: parent.width
-                        spacing: list.tk ? list.tk.gap : 12
+                        spacing: list.tk ? list.tk.gap / 2 : 6
                         UiText {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - removeBtn.width - parent.spacing
+                            width: parent.width
                             text: (wr.modelData.author ? wr.modelData.author : I18n.tr("Unknown author"))
                                 + (wr.modelData.version ? "  v" + wr.modelData.version : "")
                             color: Tokens.inkFaint
@@ -410,10 +421,21 @@ SettingCard {
                             font.pixelSize: Tokens.fTiny
                             elide: Text.ElideRight
                         }
-                        Btn {
-                            id: removeBtn
-                            text: I18n.tr("REMOVE")
-                            onAct: list.removePlugin(wr.wid)
+                        Flow {
+                            width: parent.width
+                            spacing: list.tk ? list.tk.gap / 2 : 6
+                            Btn {
+                                text: I18n.tr("EXPORT")
+                                onAct: list.exportRequested(wr.wid)
+                            }
+                            Btn {
+                                text: I18n.tr("SHARE TO RYOSTORE")
+                                onAct: list.shareRequested(wr.wid)
+                            }
+                            Btn {
+                                text: I18n.tr("REMOVE")
+                                onAct: list.removeRequested(wr.wid)
+                            }
                         }
                     }
 

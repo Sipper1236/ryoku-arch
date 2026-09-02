@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import "../kit"
 import "../../modules"
 import Ryoku.Ui
@@ -7,10 +8,14 @@ import Ryoku.Ui.Singletons
 
 // Community route (有志): every bar plugin installed from outside Ryoku, kept
 // apart from the shipped set so a widget someone else wrote is never mixed in
-// with the built-ins. The same CcWidgetList sheet as Widgets, so a community
-// widget is shown, tuned and coloured exactly like a built-in; each row also
-// names its author and can REMOVE the plugin. Below the sheet, the two ways in:
-// a git URL handed to `ryoku plugin add --bar`, and Ryostore's plugin shelf.
+// with the built-ins, under a plain warning that Ryoku does not review it. The
+// same CcWidgetList sheet as Widgets, so a community widget is shown, tuned and
+// coloured exactly like a built-in; each row also names its author and can
+// EXPORT it (a Ryostore-shaped folder), SHARE it (the catalogue pull request)
+// or REMOVE it. Those run the plugin CLI here, with the result printed in a
+// console strip, so a bad URL or a missing preview is never silent. Below the
+// sheet, the two ways in: a git URL or a local folder handed to `ryoku plugin
+// add --bar`, and Ryostore's plugin shelf.
 Item {
     id: page
     property var root: null
@@ -32,14 +37,59 @@ Item {
         return out
     }
 
-    // `ryoku plugin add` clones, validates and installs without running anything
-    // from the plugin; --bar places it on the bar, which re-derives on the
-    // plugins.json change. The field clears once the install is handed off.
-    function addFromGit(url) {
-        var u = String(url || "").trim()
+    // ── the plugin CLI, run here so its result is visible ──
+    // One job at a time; the console strip shows what is running, then the
+    // command's last lines. `ryoku plugin add` clones/copies, validates and
+    // installs without running anything from the plugin; --bar places it on the
+    // bar, which re-derives on the plugins.json change.
+    property string jobLabel: ""
+    property string jobText: ""     // the last lines, for the strip
+    property string jobFull: ""     // everything, for the path and the URL
+    property bool jobFailed: false
+    readonly property string jobPath: {
+        var m = /-> (\/\S+)/.exec(page.jobFull)
+        return m ? m[1] : ""
+    }
+    readonly property string jobUrl: {
+        var m = /(https:\/\/github\.com\/\S+)/.exec(page.jobFull)
+        return m ? m[1] : ""
+    }
+    Process {
+        id: job
+        property string out: ""
+        stdout: StdioCollector { onStreamFinished: job.out += this.text }
+        stderr: StdioCollector { onStreamFinished: job.out += this.text }
+        onExited: (code) => {
+            page.jobFull = job.out.replace(/\x1b\[[0-9;]*m/g, "")
+            var lines = page.jobFull.trim().split("\n").filter(l => l.trim() !== "")
+            page.jobText = lines.slice(-3).join("\n")
+            page.jobFailed = code !== 0
+            if (page.jobText === "") page.jobText = code === 0 ? I18n.tr("done") : I18n.tr("failed (exit " + code + ")")
+        }
+    }
+    function run(label, cmd) {
+        if (job.running) return
+        page.jobLabel = label
+        page.jobText = ""
+        page.jobFull = ""
+        page.jobFailed = false
+        job.out = ""
+        job.command = cmd
+        job.running = true
+    }
+    function addFrom(source) {
+        var u = String(source || "").trim()
         if (u === "") return
-        Quickshell.execDetached(["ryoku", "plugin", "add", u, "--bar", "--yes"])
+        // a folder typed the shell way: no shell runs here, so expand it
+        if (u.indexOf("~/") === 0) u = Quickshell.env("HOME") + u.substring(1)
+        page.run(I18n.tr("Adding ") + u, ["ryoku", "plugin", "add", u, "--bar", "--yes"])
         gitField.text = ""
+    }
+    function exportPlugin(id) { page.run(I18n.tr("Exporting ") + id, ["ryoku", "plugin", "export", id]) }
+    function sharePlugin(id)  { page.run(I18n.tr("Sharing ") + id, ["ryoku", "plugin", "share", id]) }
+    function removePlugin(id) {
+        page.run(I18n.tr("Removing ") + id, ["ryoku", "plugin", "remove", id])
+        if (page.selId === id) page.selId = ""
     }
 
     // what is still below the plate's edge; the stage reads it for the fade.
@@ -58,9 +108,48 @@ Item {
             width: page.colW
             spacing: page.tk ? page.tk.sectionGap : 24
 
+            // ── the warning every community widget sits under ──
             Entrance {
                 width: page.colW
                 index: 0
+                Rectangle {
+                    width: page.colW
+                    height: warnRow.implicitHeight + (page.tk ? page.tk.gap * 2 : 24)
+                    radius: Tokens.radius
+                    color: "transparent"
+                    border.width: Tokens.border
+                    border.color: Tokens.lineStrong
+                    Row {
+                        id: warnRow
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: page.tk ? page.tk.gap : 12
+                        anchors.rightMargin: page.tk ? page.tk.gap : 12
+                        spacing: page.tk ? page.tk.gap : 12
+                        IconText {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "warning"
+                            color: Tokens.inkDim
+                            font.pixelSize: Tokens.fRow
+                        }
+                        UiText {
+                            id: warnText
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - Tokens.fRow - parent.spacing
+                            text: I18n.tr("Community plugin. Ryoku does not review or maintain it: it runs inside your shell with your permissions, so inspect its code before you trust it.")
+                            color: Tokens.inkDim
+                            font.family: Tokens.ui
+                            font.pixelSize: Tokens.fSmall
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+            }
+
+            Entrance {
+                width: page.colW
+                index: 1
                 visible: page.communityEntries.length > 0
                 CcWidgetList {
                     id: clist
@@ -75,13 +164,16 @@ Item {
                         if (page.colorGid === gid) { page.colorGid = ""; page.colorLabel = "" }
                         else { page.colorGid = gid; page.colorLabel = label }
                     }
+                    onExportRequested: (id) => page.exportPlugin(id)
+                    onShareRequested: (id) => page.sharePlugin(id)
+                    onRemoveRequested: (id) => page.removePlugin(id)
                 }
             }
 
             // nothing installed yet: say so plainly, in the sheet's own frame.
             Entrance {
                 width: page.colW
-                index: 0
+                index: 1
                 visible: page.communityEntries.length === 0
                 Rectangle {
                     width: page.colW
@@ -114,9 +206,77 @@ Item {
                 }
             }
 
+            // ── the console strip: what the plugin CLI is doing, and its result ──
             Entrance {
                 width: page.colW
-                index: 1
+                index: 2
+                visible: page.jobLabel !== ""
+                Rectangle {
+                    width: page.colW
+                    height: consoleCol.implicitHeight + (page.tk ? page.tk.gap * 2 : 24)
+                    radius: Tokens.radius
+                    color: Tokens.paperLift
+                    border.width: Tokens.border
+                    border.color: page.jobFailed ? Tokens.lineStrong : Tokens.line
+                    Column {
+                        id: consoleCol
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: page.tk ? page.tk.gap : 12
+                        anchors.rightMargin: page.tk ? page.tk.gap : 12
+                        spacing: page.tk ? page.tk.gap / 2 : 6
+                        Row {
+                            spacing: page.tk ? page.tk.gap / 2 : 6
+                            UiText {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: job.running ? I18n.tr("WORKING") : (page.jobFailed ? I18n.tr("FAILED") : I18n.tr("DONE"))
+                                color: Tokens.inkFaint
+                                font.family: Tokens.mono
+                                font.pixelSize: Tokens.fMicro
+                                font.letterSpacing: Tokens.trackMark
+                                font.weight: Font.DemiBold
+                            }
+                            UiText {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: page.jobLabel
+                                color: Tokens.inkDim
+                                font.family: Tokens.ui
+                                font.pixelSize: Tokens.fSmall
+                                elide: Text.ElideRight
+                            }
+                        }
+                        UiText {
+                            visible: page.jobText !== ""
+                            width: parent.width
+                            text: page.jobText
+                            color: page.jobFailed ? Tokens.ink : Tokens.inkMuted
+                            font.family: Tokens.mono
+                            font.pixelSize: Tokens.fTiny
+                            wrapMode: Text.WrapAnywhere
+                        }
+                        Flow {
+                            width: parent.width
+                            spacing: page.tk ? page.tk.gap / 2 : 6
+                            visible: !job.running && (page.jobPath !== "" || page.jobUrl !== "")
+                            Btn {
+                                visible: page.jobPath !== ""
+                                text: I18n.tr("OPEN FOLDER")
+                                onAct: Quickshell.execDetached(["xdg-open", page.jobPath])
+                            }
+                            Btn {
+                                visible: page.jobUrl !== ""
+                                text: I18n.tr("OPEN PULL REQUEST")
+                                onAct: Quickshell.execDetached(["xdg-open", page.jobUrl])
+                            }
+                        }
+                    }
+                }
+            }
+
+            Entrance {
+                width: page.colW
+                index: 3
                 SettingCard {
                     width: page.colW
                     title: "ADD"
@@ -127,8 +287,8 @@ Item {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         block: true
-                        label: I18n.tr("From a git repo")
-                        desc: I18n.tr("Cloned, checked, then placed on the bar")
+                        label: I18n.tr("From a git repo or a folder")
+                        desc: I18n.tr("Checked, installed, then placed on the bar")
                         Row {
                             anchors.left: parent.left
                             anchors.right: parent.right
@@ -138,15 +298,15 @@ Item {
                                 id: gitField
                                 width: parent.width - addBtn.width - parent.spacing
                                 tabular: true
-                                placeholder: "https://github.com/someone/ryoku-widget"
-                                onCommitted: (v) => page.addFromGit(v)
+                                placeholder: "https://github.com/someone/ryoku-widget  or  ~/my-widget"
+                                onCommitted: (v) => page.addFrom(v)
                             }
                             Btn {
                                 id: addBtn
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: I18n.tr("ADD")
                                 primary: true
-                                onAct: page.addFromGit(gitField.text)
+                                onAct: page.addFrom(gitField.text)
                             }
                         }
                     }
