@@ -35,6 +35,11 @@
   (`ryogami/wall-ui/`, `ryogami/daemon/`, `services/DaemonClient.qml`).
 
 ### Fixed
+- **Placing the audio visualiser keeps it visible on Power Saver.** Super+Alt+M
+  forced the visualiser on, but the spectrum stayed frozen under Power Saver,
+  low-power mode, Game Mode or silence, so it was an invisible flat line you
+  could not aim. Placement now holds the spectrum live for as long as it is
+  being positioned (`modules/visualizer/`).
 - **Super+W opens the wallpaper picker on a fresh install.** The picker only
   builds once its config loads, but nothing created `~/.config/ryogami-wall` on
   first run, so `configLoaded` never turned true: Super+W did nothing and the
