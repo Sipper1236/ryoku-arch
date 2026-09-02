@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **Doctor keeps the `ryoku` agent skill wired.** When Rashin is enabled but
+  its shipped `ryoku` skill is not linked into the always-created agent skills
+  dirs (`~/.agents`, `~/.hermes`), the rashin reconciler now runs
+  `ryoku-rashin wire`, so an update that ships a new skill reaches every agent
+  without a manual step. It stays a no-op when the skill is not installed or the
+  links are already in place, and never wires a box that left Rashin off
+  (`internal/doctor/reconcile_rashin_daemon.go`).
 - **`ryoku debug` prints a shareable diagnostic bundle.** The bug issue
   template asked reporters to attach `ryoku-debug` output, but no such command
   existed. `ryoku debug` now prints the same read-only, secrets-free report as
@@ -37,6 +44,21 @@
   are enabled against the AMD GPU that composites the desktop: the first turns
   power-saver into whole-desktop lag, the second washes panel colours
   (`internal/doctor/reconcile_gpu_pin.go`, `reconcile_ppd_amdgpu.go`).
+- **`ryoku plugin` installs shell plugins from git, through the store's
+  supply-chain transaction.** `ryoku plugin add <git-url> [--bar] [--yes]`
+  clones to a staging dir, validates the manifest (a well-formed lowercase id
+  that is neither a reserved built-in widget nor already installed, a name and
+  version, entry points that are relative with no `..` and actually exist, a host
+  set that is a subset of `framePopout|desktopWidget|topbarGlyph`, and no
+  symlinks anywhere in the tree), then installs it with `ryostore install plugins
+  <id> --from <dir>` so the shell's `discover.sh` finds it (the same receipt +
+  content-hashed view + journal a store install writes); `--bar` enables it on
+  the bar through `ryoku-plugins-place`. It prints an unsandboxed-code warning
+  and requires `--yes` or an interactive y/N before cloning, and never runs
+  anything from the plugin. `ryoku plugin remove <id>` uninstalls through
+  `ryostore remove` and drops the placement; `list [--json]` reports store
+  receipts and dev overrides (each row marked `store` or `dev`) merged with the
+  placement; `validate <dir>` checks a local tree (`plugin.go`, `main.go`).
 
 ### Fixed
 - **`ryoku track` takes effect without a relogin.** The channel it persists

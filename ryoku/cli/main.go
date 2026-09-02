@@ -63,6 +63,8 @@ func main() {
 		err = cmdRecovery(os.Args[2:])
 	case "track":
 		err = cmdTrack(os.Args[2:])
+	case "plugin":
+		err = cmdPlugin(os.Args[2:])
 	case "doctor":
 		err = doctor.Run(os.Args[2:])
 	case "debug":
@@ -104,6 +106,7 @@ func usage() {
   keyring        show or set how the GNOME keyring unlocks at sign-in
   security-key   enroll and wire a FIDO2/U2F security key for PAM
   import <path>  bring an existing config in: scan, resolve clashes, apply (--undo)
+  plugin <cmd>   install/remove/list/validate a shell plugin from git
 `)
 }
 
