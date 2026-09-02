@@ -126,6 +126,28 @@
   per theme change (the colour is re-applied on login and on resume instead).
 
 ### Fixed
+- **The Keybinds page loads again.** Yesterday's Default Apps fix bound
+  `onChosen` on the page's `AppPicker`, but the type that name resolves to from
+  `pages/` is `Ryoku.Ui.AppPicker`, whose signal is `picked`; Quickshell refused
+  the whole file and the page rendered blank. The handler is `onPicked` again
+  (`pages/KeybindsPage.qml`), and the publish gate now lints every shipped root
+  for this class (`bin/ryoku-dev-lint-qml`).
+- **A rice's fastfetch emblem survives updates.** `rice apply` copied the
+  emblem over the shipped `fastfetch/fastfetch-emblem.png`, which
+  `ryoku materialize` re-lays on every update, so the readout reset to the
+  brand mark each time. It now lands on the user-owned `ryoku-logo.<ext>` path
+  the Fastfetch page's import uses and repoints `config.jsonc` at it; a new
+  `rice emblem` subcommand re-applies the active rice's emblem once a box is on
+  the shipped one, and `ryoku doctor` runs it (`backend/rice.go`,
+  `backend/fastfetch.go`).
+- **The Hub's scheme cards and a rice's colour mode no longer fight the shell's
+  theme.** `shell.json` `theme.theme` is the colour master and the daemon shadows
+  it into `theme.json` `followWallpaper` on every load, so a MONO/LIGHT/DARK pick
+  that only wrote `theme.json` flipped back to the wallpaper palette at the next
+  sync, and picking Wallpaper again in the shell was a no-op because
+  `theme.theme` already said so: the desktop stuck on the wrong palette. Both
+  now select the theme through `ryoku-shell theme` (Wallpaper to follow, Default
+  to lock) and write the shadow after (`backend/schemes.go`, `backend/rice.go`).
 - **"Unlock with fingerprint" can be switched off on a box with no reader.** The
   switch was gated on a present sensor, so a machine with no fingerprint hardware
   showed it stuck on with no way to turn it off; it is now always operable (a

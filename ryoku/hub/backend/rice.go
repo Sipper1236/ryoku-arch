@@ -656,13 +656,15 @@ func applyRice(slug string, layers []string) error {
 		}
 	}
 
-	st := loadThemeState()
 	// a rice built after the toggle carries its app-theming choice; apply it so
 	// a shared full-system look reaches (or spares) the recipient's apps the same
 	// way it did the author's. an older rice (nil) leaves the recipient's setting.
+	// Held aside and re-applied below: the colour step reloads theme.json after
+	// the daemon has synced it.
+	var themeApps *bool
 	if r.Color.ThemeApps != nil {
 		ta := *r.Color.ThemeApps
-		st.ThemeApps = &ta
+		themeApps = &ta
 	}
 	if r.Assets.Wallpaper != "" {
 		// a video wall lands in the livewalls pool (Super+W cycles it like the
@@ -682,16 +684,33 @@ func applyRice(slug string, layers []string) error {
 	// palette from the new wall and turns follow back on, so a fixed rice must
 	// re-assert its palette and follow=false last, or the wallpaper's matugen
 	// colours overwrite the fixed ones.
+	// The shell's theme.theme is the master theme.json shadows (see
+	// selectShellTheme): a fixed rice must leave it off Wallpaper, or the daemon's
+	// next sync turns follow back on and the wallpaper palette replaces the
+	// rice's. Its look layers may have selected a named scheme already; only a
+	// leftover Wallpaper selection is moved to Default.
 	if r.Color.Mode == "fixed" {
+		if !staticThemeActive() {
+			selectShellTheme("Default")
+		}
+		st := loadThemeState()
 		st.FollowWallpaper = false
 		st.Scheme = ""
+		if themeApps != nil {
+			st.ThemeApps = themeApps
+		}
 		saveThemeState(st)
 		if pal := readPalette(filepath.Join(dir, r.Color.Palette)); pal != nil {
 			writePalette(pal)
 		}
 		_ = riceRun("ryogami", "wallpaper", "repaint")
 	} else {
+		selectShellTheme("Wallpaper")
+		st := loadThemeState()
 		st.FollowWallpaper = true
+		if themeApps != nil {
+			st.ThemeApps = themeApps
+		}
 		saveThemeState(st)
 	}
 	if r.Assets.Hero != "" {
@@ -707,9 +726,7 @@ func applyRice(slug string, layers []string) error {
 		_ = riceRun("hyprctl", "setcursor", o.Cursor.Theme, fmt.Sprintf("%d", o.Cursor.Size))
 	}
 	if r.Assets.Fastfetch != "" {
-		dst := filepath.Join(filepath.Dir(ryokuConfigDir()), "fastfetch", "fastfetch-emblem.png")
-		_ = os.MkdirAll(filepath.Dir(dst), 0o755)
-		_ = copyFile(filepath.Join(dir, r.Assets.Fastfetch), dst)
+		_, _ = applyFastfetchEmblem(filepath.Join(dir, r.Assets.Fastfetch))
 	}
 	// profile hero: copy the bundled image into the profile store and point the
 	// hero at it, so the recipient's Profile page wears the rice's face. profile.json
@@ -746,6 +763,28 @@ func activeRice() string {
 }
 
 func setActiveRice(slug string) { _ = atomicWrite(activePath(), []byte(slug), 0o644) }
+
+// reapplyRiceEmblem lands the active rice's fastfetch emblem again when the
+// readout is back on the shipped brand mark. Boxes riced before applyRice used
+// the user-owned ryoku-logo path had the rice's emblem copied over the shipped
+// fastfetch-emblem.png, which every update re-laid; `ryoku doctor` calls this
+// so one update after the fix restores the rice's logo. A logo the user imported
+// themselves (any other source) is never touched. Returns the stored source, or
+// "" when nothing needed doing.
+func reapplyRiceEmblem() (string, error) {
+	slug := activeRice()
+	if slug == "" {
+		return "", nil
+	}
+	r, dir, err := loadRice(slug)
+	if err != nil || r.Assets.Fastfetch == "" {
+		return "", nil
+	}
+	if !fastfetchOnShippedEmblem() {
+		return "", nil
+	}
+	return applyFastfetchEmblem(filepath.Join(dir, r.Assets.Fastfetch))
+}
 
 // --- the UI-facing list ----------------------------------------------------
 
@@ -1136,7 +1175,7 @@ func ricePreflight() error { return printJSON(preflightData()) }
 
 func runRice(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("rice needs list|preflight|capture|apply|restore|save|fork|delete|import|publish|setwall|files|export")
+		return fmt.Errorf("rice needs list|preflight|capture|apply|restore|save|fork|delete|import|publish|setwall|files|export|emblem")
 	}
 	switch args[0] {
 	case "preflight":
@@ -1160,6 +1199,15 @@ func runRice(args []string) error {
 			return err
 		}
 		setActiveRice(args[1])
+		return nil
+	case "emblem":
+		p, err := reapplyRiceEmblem()
+		if err != nil {
+			return err
+		}
+		if p != "" {
+			fmt.Println(p)
+		}
 		return nil
 	case "restore":
 		slot := ".baseline"

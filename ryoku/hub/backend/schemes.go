@@ -95,13 +95,27 @@ func currentScheme() string {
 	return "custom"
 }
 
+// selectShellTheme sets shell.json theme.theme through the daemon, the one
+// writer of that file. theme.theme is the colour master: the daemon derives
+// theme.json's followWallpaper from it on every load and patch, so a scheme
+// change that only wrote theme.json (what this file used to do) was undone the
+// next time the daemon synced, and picking Wallpaper again in the shell was a
+// no-op because theme.theme already said so -- the desktop stuck on the wrong
+// palette. Best-effort: with no daemon (a TTY, a box mid-update) the caller's
+// theme.json write below still persists the choice and the daemon syncs at
+// its next load.
+func selectShellTheme(name string) {
+	_ = exec.Command("ryoku-shell", "theme", name).Run()
+}
+
 // applyScheme sets the desktop palette mode. follow re-derives from the current
 // wallpaper (the reset); light/dark lock a curated preset that survives wallpaper
 // changes (themePaletteLocked keeps it). Reused by the Appearance control.
 func applyScheme(mode string) error {
-	st := loadThemeState()
 	switch mode {
 	case "follow":
+		selectShellTheme("Wallpaper")
+		st := loadThemeState()
 		st.Scheme = ""
 		st.FollowWallpaper = true
 		saveThemeState(st)
@@ -110,12 +124,20 @@ func applyScheme(mode string) error {
 			return err
 		}
 		// the daemon derives (honouring the per-image tune); no re-animation.
+		// Explicit, not left to the theme patch: when theme.theme already read
+		// Wallpaper the patch is a no-op and nothing else would repaint.
 		_ = exec.Command("ryogami", "wallpaper", "repaint").Run()
 	case "light", "dark", "mono":
 		pal, err := loadScheme(mode)
 		if err != nil {
 			return err
 		}
+		// Default is the shell's compiled base palette (the MONO card); the
+		// curated light/dark presets lock the apps and idle the wallpaper
+		// pipeline the same way. Anything but Wallpaper keeps followWallpaper
+		// off across daemon restarts.
+		selectShellTheme("Default")
+		st := loadThemeState()
 		st.Scheme = mode
 		st.FollowWallpaper = false
 		saveThemeState(st)
