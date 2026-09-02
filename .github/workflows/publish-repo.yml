@@ -174,6 +174,41 @@ jobs:
           done
           exit "$missing"
 
+      # Sign the Ryoku browser theme extension so ryoku-desktop ships it. Zen
+      # only loads AMO-signed extensions, and signing is not reproducible, so it
+      # runs here (in-tree, no artifact committed to git) right before the build
+      # copies ryoku/browser into the package. Optional: without the AMO
+      # credentials the step is skipped and the doctor omits the theme, so a fork
+      # or a secret-less run still publishes every other package.
+      - name: Sign the Ryoku theme extension (optional)
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
+        run: |
+          set -uo pipefail
+          if [[ -z "${WEB_EXT_API_KEY:-}" || -z "${WEB_EXT_API_SECRET:-}" ]]; then
+            echo "::notice::AMO credentials unset; publishing without the signed Ryoku theme extension."
+            exit 0
+          fi
+          # npx (from npm) runs web-ext; nodejs is in the toolchain but npm is not.
+          pacman -S --noconfirm --needed npm >/dev/null
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          # AMO rejects re-signing a version, so the extension version must move
+          # every publish: VERSION's numeric core plus the commit count. It stays
+          # AMO-valid (<=4 numeric parts) and strictly increases with each commit.
+          core="$(sed -E 's/[^0-9.].*$//' VERSION)"
+          ver="${core}.$(git rev-list --count HEAD)"
+          for m in ryoku/browser/manifest.firefox.json ryoku/browser/manifest.chromium.json; do
+            sed -i "s/\"version\": *\"[^\"]*\"/\"version\": \"$ver\"/" "$m"
+          done
+          echo "::notice::Signing Ryoku theme extension v$ver"
+          if sh ryoku/browser/sign.sh; then
+            echo "::notice::Signed ryoku-theme.xpi ($ver); shipping it in ryoku-desktop."
+          else
+            echo "::warning::AMO signing failed; publishing without the signed theme extension."
+            rm -f ryoku/browser/ryoku-theme.xpi
+          fi
+
       - name: Build and sign the [ryoku] repo
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
