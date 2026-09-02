@@ -1002,6 +1002,7 @@ func matugenCarrier(pal map[string]string) map[string]any {
 			g, _ = strconv.ParseInt(stripped[2:4], 16, 0)
 			b, _ = strconv.ParseInt(stripped[4:6], 16, 0)
 		}
+		h, s, l := rgbToHSL(r, g, b)
 		co := map[string]any{
 			"hex":          hex,
 			"hex_stripped": stripped,
@@ -1009,6 +1010,10 @@ func matugenCarrier(pal map[string]string) map[string]any {
 			"green":        strconv.FormatInt(g, 10),
 			"blue":         strconv.FormatInt(b, 10),
 			"rgb":          fmt.Sprintf("%d, %d, %d", r, g, b),
+			"hue":          strconv.Itoa(h),
+			"saturation":   strconv.Itoa(s),
+			"lightness":    strconv.Itoa(l),
+			"hsl":          fmt.Sprintf("hsl(%d, %d%%, %d%%)", h, s, l),
 		}
 		entry := map[string]any{"default": co, "dark": co, "light": co}
 		for key, val := range co {
@@ -1021,6 +1026,42 @@ func matugenCarrier(pal map[string]string) map[string]any {
 		put(k+"_argb", "#ff"+strings.TrimPrefix(v, "#"))
 	}
 	return map[string]any{"colors": colors}
+}
+
+// rgbToHSL converts an 8-bit sRGB triple to HSL as hue in degrees [0,360) and
+// saturation/lightness in whole percent, the units CSS hsl() and Obsidian's
+// --accent-h/s/l expect. The carrier is hex/rgb only in matugen json mode, so a
+// template that needs the accent as an HSL triple (Obsidian derives its whole
+// accent chain from --accent-h/s/l) gets it from here rather than a hook.
+func rgbToHSL(r, g, b int64) (int, int, int) {
+	rf, gf, bf := float64(r)/255, float64(g)/255, float64(b)/255
+	max := math.Max(rf, math.Max(gf, bf))
+	min := math.Min(rf, math.Min(gf, bf))
+	l := (max + min) / 2
+	if max == min {
+		return 0, 0, int(math.Round(l * 100)) // achromatic: hue and saturation undefined
+	}
+	d := max - min
+	var s float64
+	if l > 0.5 {
+		s = d / (2 - max - min)
+	} else {
+		s = d / (max + min)
+	}
+	var h float64
+	switch max {
+	case rf:
+		h = (gf - bf) / d
+		if gf < bf {
+			h += 6
+		}
+	case gf:
+		h = (bf-rf)/d + 2
+	default:
+		h = (rf-gf)/d + 4
+	}
+	h /= 6
+	return int(math.Round(h * 360)), int(math.Round(s * 100)), int(math.Round(l * 100))
 }
 
 // templateGroup maps a matugen template block name to its roster key, so one
@@ -1100,8 +1141,61 @@ func matugenRenderTemplates(shell map[string]string, k matugenKnobs) {
 	// silently undid it.
 	if k.ThemeRyokuApps && themeAppsEnabled() {
 		matugenRenderFiltered(filepath.Join(dir, "apps.toml"), carrierPath, enabled)
+		// matugen wrote the shared snippet target; poke each vault's symlink so
+		// Obsidian's watcher, which never sees the out-of-vault target change,
+		// reloads the new palette without a restart.
+		if enabled("obsidian") {
+			nudgeObsidian()
+		}
 	} else {
 		blankGtk(matugenConfigHome())
+	}
+}
+
+// nudgeObsidian re-links the palette snippet inside every registered Obsidian
+// vault so the vault's file watcher fires and Obsidian reloads the freshly
+// rendered CSS. matugen writes one shared snippet target outside every vault
+// (~/.config/matugen/generated/obsidian.css); the vault holds a symlink to it,
+// and inotify on the vault's snippets directory does not follow the link, so
+// Obsidian never learns the target changed. A symlink recreated atomically
+// (temp name then rename) fires IN_MOVED_* inside the vault, which the watcher
+// does see, and leaves a symlink so the doctor's snippet check stays satisfied.
+// Only a vault whose ryoku.css is already a symlink is touched; a regular file
+// there is the user's own and left alone. Best-effort throughout: a missing
+// registry or a link that will not recreate is skipped, never surfaced, so a
+// palette apply never fails on Obsidian's account.
+func nudgeObsidian() {
+	b, err := os.ReadFile(filepath.Join(matugenConfigHome(), "obsidian", "obsidian.json"))
+	if err != nil {
+		return
+	}
+	var doc struct {
+		Vaults map[string]struct {
+			Path string `json:"path"`
+		} `json:"vaults"`
+	}
+	if json.Unmarshal(b, &doc) != nil {
+		return
+	}
+	generated := filepath.Join(matugenConfigHome(), "matugen", "generated", "obsidian.css")
+	for _, v := range doc.Vaults {
+		vault := strings.TrimSpace(v.Path)
+		if vault == "" {
+			continue
+		}
+		link := filepath.Join(vault, ".obsidian", "snippets", "ryoku.css")
+		fi, err := os.Lstat(link)
+		if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+			continue // no link yet (doctor not run) or a user's own file
+		}
+		tmp := link + ".ryoku-tmp"
+		_ = os.Remove(tmp)
+		if os.Symlink(generated, tmp) != nil {
+			continue
+		}
+		if os.Rename(tmp, link) != nil {
+			_ = os.Remove(tmp)
+		}
 	}
 }
 
