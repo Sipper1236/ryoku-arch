@@ -362,7 +362,9 @@ func barSectionBody() string {
 	b.WriteString("ryoku plugin add <dir-or-git-url> --bar --yes\n")
 	b.WriteString("```\n\n")
 	b.WriteString("It lands on the bar and under QS Bar Settings > Community (`ryoku-shell bar\n")
-	b.WriteString("settings community`); `ryoku plugin remove <id>` takes it off again.\n")
+	b.WriteString("settings community`); `ryoku plugin remove <id>` takes it off again, and\n")
+	b.WriteString("`ryoku plugin share <id>` (only when the user asks to publish) opens the\n")
+	b.WriteString("Ryostore pull request that lists it for everyone.\n")
 	b.WriteString(vaultBarFenceEnd + "\n")
 	return b.String()
 }

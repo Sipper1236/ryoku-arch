@@ -3,6 +3,20 @@
 ## Unreleased
 
 ### Added
+- **`ryoku plugin add` takes a folder, and `export` / `share` carry a widget
+  to Ryostore.** `add <dir>` copies a plugin written on this desktop (by hand or
+  by Rashin) through the same validation and store transaction a git URL gets,
+  so no git repo is needed. `export <id>` writes the installed plugin to
+  `~/Documents/ryoku-plugins/<id>/` with `product-manifest.json` (the
+  catalogue's per-file sha256/size/mode, docs and preview media `install:
+  false`) and `registry-entry.json` (a complete, community `plugins/registry.json`
+  row with `hosts` and the `bar-widget`/`desktop-widget` tag), under git.
+  `share <id>` exports if needed, then lays it into a fork of `neur0map/ryostore`
+  as `plugins/<id>/`, upserts the registry entry, pushes `plugin/<id>` and opens
+  the pull request with the catalogue's checklist (as the plugin's author when
+  git has no identity); without `gh` it opens the submission form prefilled
+  (`plugin.go`, `plugin_share.go`).
+
 - **Doctor keeps the `ryoku` agent skill wired.** When Rashin is enabled but
   its shipped `ryoku` skill is not linked into the always-created agent skills
   dirs (`~/.agents`, `~/.hermes`), the rashin reconciler now runs

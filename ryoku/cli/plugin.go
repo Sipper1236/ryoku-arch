@@ -12,11 +12,12 @@ import (
 	"ryoku-cli/internal/sys"
 )
 
-// plugin.go is the `ryoku plugin` CLI: install a shell plugin from a git repo,
-// remove it, list what is installed, or validate a local plugin tree. Install
-// clones to a staging dir, validates the manifest against the shared rules
-// (relative entry points, a known host set, no symlinks, an id that is neither a
-// reserved built-in widget nor already installed), then moves it into
+// plugin.go is the `ryoku plugin` CLI: install a shell plugin from a git repo
+// or a local folder, remove it, list what is installed, or validate a local
+// plugin tree (export and share live in plugin_share.go). Install stages a copy,
+// validates the manifest against the shared rules (relative entry points, a
+// known host set, no symlinks, an id that is neither a reserved built-in widget
+// nor already installed), then installs it through ryostore's transaction into
 // ~/.local/share/ryoku/plugins/<id>. It never executes anything from the plugin.
 
 // knownHosts is the set a manifest may declare (docs/plugins.md). A manifest
@@ -69,19 +70,28 @@ func cmdPlugin(args []string) error {
 		return cmdPluginList(args[1:])
 	case "validate":
 		return cmdPluginValidate(args[1:])
+	case "export":
+		return cmdPluginExport(args[1:])
+	case "share":
+		return cmdPluginShare(args[1:])
 	case "-h", "--help", "help":
 		return pluginUsage()
 	}
-	return fmt.Errorf("unknown plugin command %q (use: add, remove, list, validate)", args[0])
+	return fmt.Errorf("unknown plugin command %q (use: add, remove, list, validate, export, share)", args[0])
 }
 
 func pluginUsage() error {
 	fmt.Print(`Usage: ryoku plugin <command>
 
-  add <git-url> [--bar] [--yes]  clone, validate, and install a plugin
-  remove <id>                    uninstall a plugin and drop its placement
-  list [--json]                  installed plugins with host and enabled state
-  validate <dir>                 check a local plugin tree's manifest
+  add <git-url|dir> [--bar] [--yes]  fetch, validate, and install a plugin;
+                                     --bar puts it on the QS Bar
+  remove <id>                        uninstall a plugin and drop its placement
+  list [--json]                      installed plugins with host and enabled state
+  validate <dir>                     check a local plugin tree's manifest
+  export <id> [--to <dir>]           copy an installed plugin out as a Ryostore
+                                     folder (product manifest + registry entry)
+  share <id> [--from <dir>]          export, then open the Ryostore pull request
+                                     (or the submission form without gh)
 `)
 	return nil
 }
@@ -236,32 +246,45 @@ func cmdPluginAdd(args []string) error {
 		}
 	}
 	if url == "" {
-		return fmt.Errorf("usage: ryoku plugin add <git-url> [--bar] [--yes]")
+		return fmt.Errorf("usage: ryoku plugin add <git-url|dir> [--bar] [--yes]")
 	}
-	if !sys.Has("git") {
-		return fmt.Errorf("git is required to add a plugin")
+	// A local folder (a widget written on this desktop, by hand or by an agent)
+	// is copied; anything else is a git URL and is cloned.
+	local := sys.Exists(filepath.Join(url, "manifest.json"))
+	if !local && !sys.Has("git") {
+		return fmt.Errorf("git is required to add a plugin from a URL")
 	}
 
 	fmt.Println(sys.Amber("Warning: a plugin runs unsandboxed inside your shell, with your"))
 	fmt.Println(sys.Amber("permissions. Only install plugins you trust."))
-	if !yes && !confirm(fmt.Sprintf("Clone and install %s?", url)) {
+	verb := "Clone"
+	if local {
+		verb = "Copy"
+	}
+	if !yes && !confirm(fmt.Sprintf("%s and install %s?", verb, url)) {
 		return fmt.Errorf("aborted")
 	}
 
-	// Stage the clone in a temp dir; ryostore reads the bytes from here and
-	// installs them through its supply-chain transaction (receipt + content-hashed
-	// view + journal), which is what the shell's discover.sh requires to load it.
+	// Stage a copy in a temp dir; ryostore reads the bytes from here and installs
+	// them through its supply-chain transaction (receipt + content-hashed view +
+	// journal), which is what the shell's discover.sh requires to load it.
 	staging, err := os.MkdirTemp("", "ryoku-plugin-staging-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(staging)
 	src := filepath.Join(staging, "src")
-	if err := sys.Run("git", "clone", "--depth", "1", url, src); err != nil {
-		return fmt.Errorf("clone failed: %w", err)
+	if local {
+		if err := copyPluginTree(url, src); err != nil {
+			return fmt.Errorf("copy failed: %w", err)
+		}
+	} else {
+		if err := sys.Run("git", "clone", "--depth", "1", url, src); err != nil {
+			return fmt.Errorf("clone failed: %w", err)
+		}
+		// Drop the git metadata: it is not part of the plugin and can carry symlinks.
+		_ = os.RemoveAll(filepath.Join(src, ".git"))
 	}
-	// Drop the git metadata: it is not part of the plugin and can carry symlinks.
-	_ = os.RemoveAll(filepath.Join(src, ".git"))
 
 	m, err := validateManifest(src, reservedIDs())
 	if err != nil {

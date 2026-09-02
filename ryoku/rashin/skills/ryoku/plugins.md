@@ -39,11 +39,20 @@ validates the manifest, then moves it into place; it never executes anything
 from the plugin.
 
 ```
-ryoku plugin add <git-url> [--bar]   clone, validate, install; --bar enables it on the bar
-ryoku plugin list [--json]           installed plugins and their enable/host state
-ryoku plugin remove <id>             uninstall
-ryoku plugin validate <path|url>     check a manifest without installing
+ryoku plugin add <git-url|dir> [--bar] [--yes]   copy or clone, validate, install; --bar puts it on the bar
+ryoku plugin list [--json]                       installed plugins and their enable/host state
+ryoku plugin remove <id>                         uninstall (and drop its placement)
+ryoku plugin validate <dir>                      check a manifest without installing
+ryoku plugin export <id> [--to <dir>]            a Ryostore-shaped folder: files, product-manifest.json,
+                                                 registry-entry.json, under git (default ~/Documents/ryoku-plugins/<id>)
+ryoku plugin share <id>                          export, then open the Ryostore pull request (gh) or the form
 ```
+
+A widget you write for the user goes in its own folder (say `~/ryoku-plugins/<id>/`
+or a temp dir), then `ryoku plugin validate <dir>` and `ryoku plugin add <dir> --bar
+--yes`; git is not needed for a local folder. It then shows on the bar and under QS
+Bar Settings > Community, where the user can EXPORT or SHARE it. Do not run
+`share` unless the user asks to publish: it opens a public pull request.
 
 `--bar` enables the plugin and places it on the bar (host `topbarGlyph`) through
 the shell's own placement path. `list --json` returns
@@ -57,16 +66,21 @@ id already installed.
 
 ```bash
 ryoku plugin add https://github.com/someone/ryoku-weather --bar
+ryoku plugin add ~/my-widget --bar --yes   # a folder on this desktop
 ryoku plugin list --json
 ryoku plugin validate ./my-plugin
 ryoku plugin remove ryoku-weather
+ryoku plugin export my-widget              # a Ryostore-shaped folder + git repo
+ryoku plugin share my-widget               # the Ryostore pull request (asked for)
 ```
 
 ## Ryostore
 
 Ryostore is the curated distribution front for plugins, bar styles, and rices;
-`ryostore-install` fetches a bundle's source into the same
-`~/.local/share/ryoku/plugins/<id>/` layout. Git remains the open door for
-anything not in the store. Either way the same placement rules apply: enable it
-and pick its host in Ryoku Settings, or with `ryoku plugin add --bar` for the
-bar.
+its Plugins tab parts BAR widgets (manifest `hosts` includes `topbarGlyph`) from
+DESKTOP ones, and lists community plugins (not `"official": true`) under a
+warning that Ryoku does not review or maintain them. Git and a local folder
+remain the open door for anything not in the store. Either way the same
+placement rules apply: enable it and pick its host in Ryoku Settings, or with
+`ryoku plugin add --bar` for the bar. `ryoku plugin share <id>` is how a widget
+made here gets listed there.

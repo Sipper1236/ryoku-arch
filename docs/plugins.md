@@ -121,10 +121,35 @@ island.
 Declare `topbarGlyph` in `hosts`, and include `"glyph"` in
 `capabilities.densities` - a plugin that only draws a card is a poor bar glyph.
 
-Install a bar plugin straight from git with `ryoku plugin add <git-url> --bar`,
-which validates the manifest, installs it under
-`~/.local/share/ryoku/plugins/<id>`, and enables it on the bar; `ryoku plugin
-list|remove|validate` manage it afterwards.
+What the bar host sets on your `content` (read them, never assign them):
+
+| Property | Value on the bar |
+| --- | --- |
+| `density` | `"glyph"` |
+| `widthBudget` | `220` (logical px; cap any text you draw to it) |
+| `active` | `true` while mounted |
+| `pluginApi` | your handle: `mainInstance`, `pluginSettings`, `pluginDir` |
+
+The host reads your `implicitWidth`/`implicitHeight` and centres the view in a
+slot about 32 px tall. Draw the mark with the shell's own icon font: `Text {
+font.family: "Material Symbols Rounded"; text: "vpn_lock" }` (the font ships
+with the desktop, ligature names are the symbol names). Hover text is yours to
+add; `QtQuick.Controls`' `ToolTip` resolves inside a plugin and matches the
+shell when styled from the kit `Theme`. On the bar your settings are rendered
+by QS Bar Settings, which draws these `metadata.settings` types: `toggle`,
+`choice` (a segment bar up to four plain options, chips beyond), `multi`, `int`
+(a stepper with `min`/`max`) and `text`; `slider` and `image` are desktop-widget
+menu types and do not render there, so a bar widget picks from the first set.
+
+Install a bar plugin straight from git, or from a folder on this desktop, with
+`ryoku plugin add <git-url|dir> --bar`: it validates the manifest, installs the
+files through Ryostore's transaction (a receipt and a content-hashed copy under
+`~/.local/share/ryoku/plugins/<id>`), enables it on the bar, and the shell
+picks it up on the `plugins.json` change, no restart. It lists under QS Bar
+Settings > Community (any plugin whose manifest is not `"official": true`)
+with the community warning, its author, its switch and settings, and
+EXPORT / SHARE TO RYOSTORE / REMOVE. `ryoku plugin list|remove|validate`
+manage it from a terminal; see "Share it" below for export and share.
 
 > Island and window hosts are planned but not built yet. Declare only
 > `framePopout`, `desktopWidget`, or `topbarGlyph` in your manifest today.
@@ -218,8 +243,11 @@ A non-visual `QtObject`/`Item` that holds state and does the work (HTTP, running
 your `bin/` scripts, parsing results). Ryoku keeps one instance alive and hands
 it to your content as `pluginApi.mainInstance`.
 Declare user options as a `metadata.settings` schema in your manifest (below).
-Ryoku renders the controls, seeds your defaults on install, and persists changes
-to `plugins.json`; read the live values from `pluginApi.pluginSettings`.
+Ryoku renders the controls, seeds your defaults when the plugin is enabled, and
+persists changes to `plugins.json`; read the live values from
+`pluginApi.pluginSettings`. Read every key behind its default anyway: a plugin
+enabled before a setting existed, or a settings block a user trimmed, has no
+value for it, and `undefined` must not become your poll interval.
 
 ---
 
@@ -268,16 +296,25 @@ to `plugins.json`; read the live values from `pluginApi.pluginSettings`.
 ```
 
 - `hosts` - declare **only the hosts you actually support and have tested**
-  (today: `framePopout`, `desktopWidget`). Don't list hosts that don't work.
+  (today: `framePopout`, `desktopWidget`, `topbarGlyph`). Don't list hosts that
+  don't work.
 - `defaults` - *suggestions*. The user's choices in Settings always win. For
   `framePopout`, `align` is `start`, `center` or `end`, and `edge: "center"`
-  asks for the centred (modal) surface, which opens only on request.
+  asks for the centred (modal) surface, which opens only on request. A bar
+  widget's defaults are just `{ "host": "topbarGlyph", "icon": "...", "label":
+  "..." }`, plus an optional `"bar": { "section": "left|center|right" }` for
+  the lane it first lands in (the end of the right lane when absent; the
+  Layout route moves it from there, and that choice is kept). `icon` is a
+  Material Symbols Rounded ligature name (`vpn_lock`, `extension`, ...), the
+  mark menus and pickers show for the plugin.
+- `official` - leave `false`. Only first-party Ryoku plugins set `true`; every
+  other plugin lists under QS Bar Settings > Community and carries the store's
+  community warning.
 - **A plugin never gets a keybind of its own.** Ryoku has no plugins-menu leader
   and reads no `key` field from your manifest; do not ship one, and do not tell
   users a chord opens your plugin. A frame popout opens on hover at its edge, or
   through `ryoku-shell plugin <id>`, which the user can bind to whatever chord
   they like in Settings → Keybinds. The shipped bind table stays Ryoku's.
-- `official` - leave `false`. Only first-party Ryoku plugins set `true`.
 - `files` - any extra files the plugin ships beyond its entry points and
   `commands` (helper QML a view imports, images, data). Install fetches the entry
   points, `commands`, `README.md`, and everything listed here; a file you forget
@@ -287,14 +324,48 @@ to `plugins.json`; read the live values from `pluginApi.pluginSettings`.
 
 ## Install, enable, place
 
-- **Install**: drop your folder in `~/.local/share/ryoku/plugins/<id>/`, or ship
-  it through an `ryostore` bundle (`ryostore-install` fetches the source).
+- **Install**: `ryoku plugin add <git-url|dir> [--bar]` (validated, then
+  installed through Ryostore's transaction so the shell's `discover.sh` loads
+  it), or install it from Ryostore itself. Never hand-copy into
+  `~/.local/share/ryoku/plugins/`: a folder without a receipt is not loaded.
 - **Enable & place**: Ryoku Settings → Plugins. The user toggles it on, picks a
   host, and (for a frame popout) the edge. Placement saves to
   `~/.config/ryoku/plugins.json`; the shell watches that file and retunes live -
   no restart.
 - **Desktop widgets** are then moved/resized/hidden directly on the wallpaper
   (drag, corner-resize, right-click) - not from Settings.
+
+---
+
+## Share it
+
+A widget written on one desktop (by hand, or by asking Rashin) reaches every
+other one through Ryostore. Two commands do the packaging, so the catalogue's
+per-file hashes are never typed by hand:
+
+```bash
+ryoku plugin export vpn      # ~/Documents/ryoku-plugins/vpn/: the files,
+                             # product-manifest.json, registry-entry.json, a git repo
+ryoku plugin share vpn       # exports if needed, then opens the Ryostore pull
+                             # request (gh logged in) or the submission form
+```
+
+`export` copies the installed plugin out, writes `product-manifest.json` (the
+sha256/size/mode of every file, docs and preview media marked `install: false`,
+executables `0755`) and `registry-entry.json` (a complete `plugins/registry.json`
+row: `official: false`, `hosts` from the manifest, the `bar-widget` or
+`desktop-widget` tag added), and puts the folder under git. `share` lays that
+into a fork of `neur0map/ryostore` as `plugins/<id>/`, upserts the registry
+entry, pushes `plugin/<id>` and opens the pull request with the catalogue's
+checklist; without `gh` it opens the submission form prefilled and tells you to
+push the folder somewhere public first. A real `assets/preview-widget.png` is
+required either way. Both actions are also buttons on the plugin's row under QS
+Bar Settings > Community.
+
+Ryostore lists community plugins under a warning: the review is for listing, not
+a security audit, and a plugin runs unsandboxed in the user's shell. The store's
+Plugins tab parts BAR widgets (manifest `hosts` includes `topbarGlyph`) from
+DESKTOP ones; tag yours `bar-widget` or `desktop-widget` to match.
 
 ---
 
