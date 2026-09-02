@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/godbus/dbus/v5"
@@ -37,6 +38,12 @@ type powerProfilesState struct {
 	applyTimer   *time.Timer // debounce for re-applying the active profile after a ppd switch
 	applyMu      sync.Mutex  // serialises applies so overlapping fires never race
 	lastApplyErr string      // profile whose apply last failed; logged once per change
+
+	// restoreDone: a PropertiesChanged before restore-on-login finishes is ppd's
+	// boot default, not a user pick. acFlipNs: unix-nanos of the last AC flip; a
+	// change within autoSwitchWindow of it is automatic, not a pick.
+	restoreDone atomic.Bool
+	acFlipNs    atomic.Int64
 }
 
 // startPowerProfiles brings the power-profile integration up, registers the
@@ -97,6 +104,7 @@ func (d *daemon) startPowerProfiles() {
 			log.Printf("ryoku-shell: restore power profile %q: %v", saved, err)
 		}
 	}
+	p.restoreDone.Store(true)
 
 	p.publish()
 }
@@ -182,22 +190,40 @@ func (p *powerProfilesState) persistProfile(name string) {
 	}
 }
 
-// maybePersistActive saves the current profile as the user's choice, unless it is
-// the transient power-saver autoprofile sets while on battery -- that switch must
-// not become the remembered preference. Runs on every PropertiesChanged, so it
-// captures a profile set through any path: the bar's power widget shells out to
-// `powerprofilesctl set` directly, not this daemon's setProfile.
+const autoSwitchWindow = 6 * time.Second
+
+// persistDecision reports whether active should be saved as the user's choice.
+// Pure, so the guard is unit-tested without a bus or clock.
+func persistDecision(active string, restoreDone, onBattery, saverFeature bool, sinceACFlip time.Duration) bool {
+	switch {
+	case active == "" || !restoreDone:
+		return false
+	case active == ppSaver && onBattery && saverFeature:
+		return false // autoprofile's battery switch, not a choice
+	case sinceACFlip < autoSwitchWindow:
+		return false // automatic reaction to plugging or unplugging
+	default:
+		return true
+	}
+}
+
+// noteACFlip records that AC just plugged or unplugged.
+func (p *powerProfilesState) noteACFlip() { p.acFlipNs.Store(time.Now().UnixNano()) }
+
+// maybePersistActive saves the current profile as the user's choice on any path
+// (the bar widget shells out to powerprofilesctl, not this daemon), skipping the
+// changes persistDecision flags as automatic. Runs on every PropertiesChanged.
 func (p *powerProfilesState) maybePersistActive() {
 	active := p.activeProfile()
-	if active == "" {
-		return
+	sinceFlip := time.Duration(1) << 62
+	if ns := p.acFlipNs.Load(); ns != 0 {
+		sinceFlip = time.Since(time.Unix(0, ns))
 	}
-	if active == ppSaver {
-		if st := readPowerState(); st.present && st.discharging && perfFlag("autoPowerSaverOnBattery") {
-			return
-		}
+	st := readPowerState()
+	onBattery := st.present && st.discharging
+	if persistDecision(active, p.restoreDone.Load(), onBattery, perfFlag("autoPowerSaverOnBattery"), sinceFlip) {
+		p.persistProfile(active)
 	}
-	p.persistProfile(active)
 }
 
 // readPersistedProfile returns the user's last saved profile, or "" when none is
