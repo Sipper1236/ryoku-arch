@@ -57,8 +57,8 @@ its place; if it does not, remove it.
   and do not cast.
 - **The print texture rides the chrome, never the content.** The poster
   ornaments are real, but they belong on the always-present furniture, not
-  behind the thing being read: `Reg` sits behind a nav rail (the Hub's, the
-  Shell Studio's) and `Marginalia` + `Barcode` fill the rail's dead last inch.
+  behind the thing being read: `Reg` sits behind a nav rail (the Hub's,
+  QS Bar Settings') and `Marginalia` + `Barcode` fill the rail's dead last inch.
   A settings plate gets flat paper. `Grain` is for art surfaces only. A texture
   under a control is decoration the reader has to see past, so it is a bug.
 - **Latin names the thing, kanji seals it.** Every nav item, section eyebrow and

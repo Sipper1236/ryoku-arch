@@ -125,6 +125,19 @@
   installed and a board is connected, and stays silent otherwise. No EEPROM write
   per theme change (the colour is re-applied on login and on resume instead).
 
+### Changed
+- **Bar Studio drops its QS Bar and Dock sections.** The page keeps the bar-style
+  gallery and the built-in style editors (Sumi's frame and rails, Obi, Nacre); QS
+  Bar's layout, widgets, form and dock now live in QS Bar Settings, and a QS BAR
+  card under the gallery shows the live layout order (watched off shell.json) and
+  opens the panel with `ryoku-shell bar settings`
+  (`quickshell/pages/BarStudioPage.qml`, `quickshell/schema/BarStudioPage.js`).
+- **Picker style moves to the Desktop page.** The theme, wallpaper and media
+  picker layout leaves Bar Studio for a PICKERS section on the Desktop page; it
+  writes only `qsbar.pickerStyle` through the daemon settings seam, so the bar's
+  own layout and widgets under `qsbar` are never overwritten
+  (`quickshell/pages/DesktopPage.qml`).
+
 ### Fixed
 - **The Keybinds page loads again.** Yesterday's Default Apps fix bound
   `onChosen` on the page's `AppPicker`, but the type that name resolves to from

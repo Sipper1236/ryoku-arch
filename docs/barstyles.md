@@ -128,7 +128,7 @@ barstyles/
     components/      // shared pieces (import them namespaced)
     modules/         // the bar widgets
     panels/          // the popout bodies
-    controlcenter/   // its own settings panel, the Shell Studio (the logo opens it)
+    controlcenter/   // its own settings panel, QS Bar Settings (the logo opens it)
 ```
 
 Only `Scene.qml` is required; the rest is the style's own business, and a
@@ -534,21 +534,33 @@ function shows(id) { return !Config.qsbar || Config.qsbar[id] !== false; }
 W.Media { visible: win.shows("media") && Media.present }
 ```
 
-QS Bar's `barScale` setting is a 1.0–2.0 multiplier for its height. Bar Studio
-and Shell Studio expose it as **Size** (100–200%), so a high-DPI output can use a
+QS Bar's `barScale` setting is a 1.0–2.0 multiplier for its height. QS Bar
+Settings exposes it as **Size** (100–200%), so a high-DPI output can use a
 larger bar without changing its display scale.
 
 Where that key is edited is the style's call. The built-in Sumi bar is edited from
 **Bar Studio** in Ryoku Settings (`hub/quickshell/pages/BarStudioPage.qml`), which
 snapshots the keys and applies them live. A folder style usually ships its own
-settings surface instead, the way QS Bar carries the **Shell Studio**
-(`controlcenter/`, opened by clicking the bar's 力 logo): a rail of nine routes
-(Bar, Widgets, Logo, Spaces, Pickers, Dock, Desktop, System, Session) over the
-same `Ryoku.Ui` form kit the Hub uses -- `SettingCard`, `SettingRow` and the eight
-controls -- so a quick panel and the settings app read as one language and the
-studio owns no second vocabulary. It is a quick panel, not a second Hub: it edits
-the keys you reach for mid-work and sends the rest to Ryoku Settings. A style with
-no settings omits all of this.
+settings surface instead, the way QS Bar carries **QS Bar Settings** (see below).
+A style with no settings omits all of this.
+
+## QS Bar Settings
+
+QS Bar carries its own settings panel, **QS Bar Settings** (`controlcenter/`), the
+plate the bar's 力 logo opens. It is a quick panel, not a second Hub: four routes
+over the same `Ryoku.Ui` form kit the rest of Ryoku Settings uses.
+
+| Route | Gloss | Holds |
+|---|---|---|
+| Bar | 帯 | position, form, surface, gaps, scale, accent, gap animation, auto-hide |
+| Layout | 配置 | the three lanes: move, hide, add and reset the bar's widgets |
+| Widgets | 部品 | every widget as a row: on/off, density, colour and its own settings |
+| Dock | 台 | the app dock: enabled, edge, autohide, magnify, labels, frost, pinned apps |
+
+Open it from the bar logo, or from a terminal or a keybind with `ryoku-shell bar
+settings [route]`. The picker style and desktop widgets it used to carry now live
+in the Hub (Desktop and Widgets pages); session and mid-work toggles live in the
+Super+Escape quick settings.
 
 ## Frame menus
 

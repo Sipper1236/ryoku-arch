@@ -104,18 +104,27 @@ surface at a time, so they take turns rather than overlap.
 
 ### 3. Bar glyph - rides the bar
 
-It sits on the bar as its own module, immediately left of the status cluster, in
-its own island when the bar is in islands form. Your content is rendered at
-`glyph` density on the bar's axis, so it must stay small: report a mark-sized
+It rides the top bar as its own module, in a section you choose (left, centre or
+right) and at the position in that lane you drag it to. Your content is rendered
+at `glyph` density on the bar's axis, so it must stay small: report a mark-sized
 `implicitWidth`/`implicitHeight` (roughly the bar's inner height) and Ryoku
-centres it and reserves exactly that much room.
+centres it and reserves exactly that much room; in islands form it gets its own
+island.
 
 - Ryoku handles the **island pill, spacing, and the bar's width arithmetic**.
-- A bar glyph is **not** a drag-reorderable widget: plugin sets change whenever
-  something is installed, so glyphs are not persisted layout slots.
+- A bar glyph **is a layout entry**, the same kind of entry as a built-in widget:
+  it lives in `shell.json` `qsbar.layout`, so a user drags it between lanes in QS
+  Bar Settings' Layout route or moves it from a terminal with `ryoku-shell bar
+  move <id> --section left|center|right`. It shows once it is enabled with
+  `host: topbarGlyph` in `plugins.json`.
 
 Declare `topbarGlyph` in `hosts`, and include `"glyph"` in
 `capabilities.densities` - a plugin that only draws a card is a poor bar glyph.
+
+Install a bar plugin straight from git with `ryoku plugin add <git-url> --bar`,
+which validates the manifest, installs it under
+`~/.local/share/ryoku/plugins/<id>`, and enables it on the bar; `ryoku plugin
+list|remove|validate` manage it afterwards.
 
 > Island and window hosts are planned but not built yet. Declare only
 > `framePopout`, `desktopWidget`, or `topbarGlyph` in your manifest today.
