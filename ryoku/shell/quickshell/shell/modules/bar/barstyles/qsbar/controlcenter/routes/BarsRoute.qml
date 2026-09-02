@@ -4,11 +4,14 @@ import "../../modules"
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 
-// Bar editor route on the Shell Studio kit. A live bar-surface panel: every
-// control writes straight to `root` (the qsbar Theme), so the running bar
-// updates live and mirrors to Bar Studio. Root reads stay null-guarded - the
-// page may briefly exist before `root` is assigned, and some tokens live on the
-// V2 Theme first (guard the barShellStyleValid call in particular).
+// Bar route (帯) on the QS Bar Settings kit. A live bar-surface panel: every
+// control writes straight to `root` (the qsbar Theme), so the running bar updates
+// live and mirrors to Bar Studio. The page opens with the live bar silhouette,
+// then numbered sections carry the surface knobs. Arranging the widgets is the
+// Layout route's job, so this page holds no layout controls. Root reads stay
+// null-guarded - the page may briefly exist before `root` is assigned, and some
+// tokens live on the V2 Theme first (guard the barShellStyleValid call in
+// particular).
 Item {
     id: page
     property var root: null
@@ -49,7 +52,7 @@ Item {
         { v: 1, label: "Stream" },
         { v: 2, label: "Surge" },
         { v: 3, label: "Bolt" },
-	{ v: 4, label: "Bolt-2"},
+        { v: 4, label: "Bolt-2" },
         { v: 7, label: "Reactor" },
         { v: 8, label: "Quotes" }
     ]
@@ -63,11 +66,6 @@ Item {
             if (page.animModes[i].label === label) return page.animModes[i].v;
         return 0;
     }
-
-    // Restore-layout arms on the first click and fires on the second, so a
-    // mis-aimed pointer never wipes the layout; it disarms itself after a beat.
-    property bool armedRestore: false
-    Timer { id: restoreDisarm; interval: 2600; onTriggered: page.armedRestore = false }
 
     // The last palette slot the bar actually wore, so switching Follow wallpaper
     // off puts back the colour that was there instead of a default.
@@ -87,7 +85,6 @@ Item {
         contentHeight: col.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        onContentYChanged: console.log("[cy] " + Math.round(contentY) + " ch=" + Math.round(contentHeight))
 
         Column {
             id: col
@@ -115,13 +112,13 @@ Item {
                 }
             }
 
-            // ── POSITION ──
+            // ── 01 POSITION ──
             Entrance {
                 width: page.colW
                 index: 0
                 SettingCard {
                     width: page.colW
-                    title: "POSITION"
+                    title: "01 POSITION"
                     kana: "\u4f4d\u7f6e"
 
                     SettingRow {
@@ -179,20 +176,19 @@ Item {
                 }
             }
 
-            // ── FORM: one row of named tiles, the way the Hub picks a bar style.
-            // The live silhouette sits at the top of this page already, so a tile
-            // only has to name the shape; five schematics of it were five copies
-            // of the same drawing and most of the panel's height.
+            // ── 02 FORM: one row of named tiles, the way the Hub picks a bar
+            // style. The live silhouette sits at the top of this page already, so a
+            // tile only has to name the shape.
             Entrance {
                 width: page.colW
                 index: 1
                 SettingCard {
                     width: page.colW
-                    title: "FORM"
+                    title: "02 FORM"
                     kana: "\u5f62"
 
                     Item {
-                    width: parent.width
+                        width: parent.width
                         height: formRow.height + (page.tk ? page.tk.gap * 2 : 24)
 
                         Row {
@@ -214,7 +210,7 @@ Item {
                                     required property var modelData
                                     readonly property bool on: page.activeForm === modelData.form
 
-                                width: formRow.cellW
+                                    width: formRow.cellW
                                     height: Tokens.px(58)
                                     radius: Tokens.radius
                                     color: ftile.on ? Tokens.bone : (fma.containsMouse ? Tokens.tint5 : "transparent")
@@ -230,7 +226,7 @@ Item {
                                         spacing: 2
 
                                         UiText {
-                                        width: parent.width
+                                            width: parent.width
                                             text: I18n.tr(ftile.modelData.label).toUpperCase()
                                             color: ftile.on ? Tokens.inkOnBone : Tokens.inkDim
                                             elide: Text.ElideRight
@@ -240,7 +236,7 @@ Item {
                                             font.letterSpacing: Tokens.trackLabel
                                         }
                                         UiText {
-                                        width: parent.width
+                                            width: parent.width
                                             text: I18n.tr(ftile.modelData.detail)
                                             color: ftile.on ? Tokens.inkOnBoneDim : Tokens.inkFaint
                                             elide: Text.ElideRight
@@ -263,13 +259,13 @@ Item {
                 }
             }
 
-            // ── SURFACE ──
+            // ── 03 SURFACE ──
             Entrance {
                 width: page.colW
                 index: 2
                 SettingCard {
                     width: page.colW
-                    title: "SURFACE"
+                    title: "03 SURFACE"
                     kana: "\u8868\u9762"
 
                     SettingRow {
@@ -349,13 +345,13 @@ Item {
                 }
             }
 
-            // ── GAPS: how far the shell stays off each output edge ──
+            // ── 04 GAPS: how far the shell stays off each output edge ──
             Entrance {
                 width: page.colW
                 index: 3
                 SettingCard {
                     width: page.colW
-                    title: "GAPS"
+                    title: "04 GAPS"
                     kana: "\u9593\u9694"
 
                     SettingRow {
@@ -436,13 +432,13 @@ Item {
                 }
             }
 
-            // ── ACCENT: the bar's data colour, so the swatches keep their hue ──
+            // ── 05 ACCENT: the bar's data colour, so the swatches keep their hue ──
             Entrance {
                 width: page.colW
                 index: 4
                 SettingCard {
                     width: page.colW
-                    title: "ACCENT"
+                    title: "05 ACCENT"
                     kana: "\u8272"
 
                     // Following the wallpaper is the honest default: matugen already
@@ -487,13 +483,13 @@ Item {
                 }
             }
 
-            // ── MOTION: the stream flowing in the gaps between widgets ──
+            // ── 06 MOTION: the stream flowing in the gaps between widgets ──
             Entrance {
                 width: page.colW
                 index: 5
                 SettingCard {
                     width: page.colW
-                    title: "MOTION"
+                    title: "06 MOTION"
                     kana: "\u52d5\u304d"
 
                     SettingRow {
@@ -508,51 +504,6 @@ Item {
                             options: page.animModes.map(m => m.label)
                             current: page.animLabel(page.curAnim)
                             onChose: key => page.setAnim(page.animValue(key))
-                        }
-                    }
-                }
-            }
-
-            // ── LAYOUT: unlock to arrange, or restore the defaults ──
-            Entrance {
-                width: page.colW
-                index: 6
-                SettingCard {
-                    width: page.colW
-                    title: "LAYOUT"
-                    kana: "\u914d\u7f6e"
-
-                    SettingRow {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        footH: 32
-                        label: I18n.tr("Edit layout")
-                        Btn {
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: I18n.tr("EDIT LAYOUT")
-                            onAct: {
-                                if (page.root) page.root.barUnlocked = true
-                                if (page.cc) page.cc.close()
-                            }
-                        }
-                    }
-                    SettingRow {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        divider: true
-                        footH: 32
-                        label: I18n.tr("Restore layout")
-                        Btn {
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: page.armedRestore ? I18n.tr("Confirm") : I18n.tr("RESTORE LAYOUT")
-                            onAct: {
-                                if (!page.armedRestore) { page.armedRestore = true; restoreDisarm.restart(); return }
-                                page.armedRestore = false
-                                restoreDisarm.stop()
-                                if (page.root && page.root.resetAllBarLayouts) page.root.resetAllBarLayouts()
-                            }
                         }
                     }
                 }
