@@ -13,6 +13,15 @@
   (`ryowalls/bin/ryowalls`).
 
 ### Added
+- `ryostore/`: **Plugins browse as ALL / BAR / DESKTOP, and community plugins
+  carry a warning.** The Plugins tab gets the same subtab strip Themes and Decor
+  use: BAR is every plugin whose `hosts` includes `topbarGlyph`, DESKTOP the
+  rest. A plugin whose registry entry is not `official: true` shows a COMMUNITY
+  tag and a warning band on its detail (Ryoku does not review or maintain it; it
+  runs in your shell with your permissions), and the backend marks it
+  `metadata.community` (`quickshell/App.qml`, `ProductDetail.qml`,
+  `lib/store.js`, `backend/provider_plugins.go`).
+
 - `ryostore/backend`: **`ryostore install plugins <id> --from <dir>` installs a
   plugin from a local directory through the same supply-chain transaction as a
   registry install.** It builds a ProductManifest by walking the directory

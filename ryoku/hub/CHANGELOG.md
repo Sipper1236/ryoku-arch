@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **Add-ons warns on a community plugin.** A plugin whose manifest is not
+  `official: true` opens with the same warning the Store and QS Bar Settings
+  print, before its placement controls (`pages/AddonsPage.qml`).
+
 - **Desktop > General gains managed shell-reload media.** Preview an image,
   animation, or muted video; use Default or Add Asset with visible format
   guidance, managed import, a persisted CUSTOM ASSET On/Off switch that retains
