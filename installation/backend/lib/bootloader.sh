@@ -398,6 +398,10 @@ ryoku_windows_entry() {
 
 # Add the selected non-Windows ESP loader to a dedicated-ESP install. Windows is
 # handled separately by ryoku_windows_entry.
+# $1/$2 are optional (production runs argless with the /mnt defaults; the limine
+# bootloader test injects temp paths), so SC2120's "arguments never passed" is
+# expected here.
+# shellcheck disable=SC2120
 ryoku_dedicated_existing_entry() {
   local mode=${RYOKU_RESOLVED_ESP_MODE:-${RYOKU_ESP_MODE:-shared}}
   local conf=${1:-/mnt/boot/limine.conf} state=${2:-/mnt/etc/ryoku/limine-existing-esp}
