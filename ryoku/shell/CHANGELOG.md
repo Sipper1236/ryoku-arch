@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+- **A bar plugin can open a panel under its glyph.** A plugin that ships
+  `entryPoints.panel` (a `content/Panel.qml`) opens it in a shared
+  `PluginPanel` window on the same connected surface the built-in panels use:
+  one panel at a time, Escape or a click outside closes it, and opening
+  Network or Battery closes it the way they close each other. `pluginApi` gains
+  `stateDir` (`$XDG_STATE_HOME/ryoku/plugins/<id>`, created on load),
+  `saveSetting(key, value)` (through `ryoku-plugins-place`, so `plugins.json`
+  keeps its one writer), and on the bar `panelOpen`, `openPanel()`,
+  `closePanel()`, `togglePanel()`. A bar row now rebuilds only when its widget
+  order really changed, so a settings write no longer restarts every plugin on
+  the bar (`qsbar/panels/PluginPanel.qml`, `BarSlot.qml`, `Theme.qml`).
+
 ### Fixed
 - **QS Bar Settings: the head no longer overlaps, the last row is no longer
   buried, Depth lifts the bar, and every switch is its own size.** The route
