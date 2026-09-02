@@ -50,6 +50,10 @@ const AgentsTemplate = "# Ryoku system vault\n" +
 	"its config path, the binary that owns it, and how to reload it. Guessing paths\n" +
 	"wastes tokens the map already spent.\n" +
 	"\n" +
+	"To change the desktop, use the `ryoku` skill (linked into your skills dir;\n" +
+	"`desktop.md` names its path): commands, never edits to shipped files. A new\n" +
+	"bar widget is a plugin, per the skill's `plugins.md`.\n" +
+	"\n" +
 	"## What is here\n" +
 	"\n" +
 	"- `system.md` generated: hardware, kernel, GPU, disks, displays.\n" +

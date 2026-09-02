@@ -158,11 +158,33 @@ var desktopMap = []desktopMapRow{
 	{"System vault", "~/.local/share/ryoku/rashin/", "ryoku-rashin", "ryoku-rashin index"},
 }
 
+// actingBody is the first thing desktop.md says: how an agent changes this
+// desktop. It names the shipped `ryoku` skill with its resolved path, so an
+// agent that only followed the vault pointer (and never loaded the skill by
+// itself) still reaches the plugin and command contracts instead of reading
+// shell source.
+func actingBody() string {
+	var b strings.Builder
+	b.WriteString("## Acting on this desktop\n\n")
+	b.WriteString("Change the desktop through commands (`ryoku`, `ryoku-shell`, `ryoku-hub`,\n")
+	b.WriteString("`ryogami`, `hyprctl`), never by editing shipped files. The `ryoku` skill is\n")
+	b.WriteString("the contract for that: `SKILL.md` (rules and the command catalogue), `bar.md`\n")
+	b.WriteString("(the QS Bar model), `plugins.md` (how a new widget is written and installed).\n")
+	if d := skillSourceDir(); d != "" {
+		fmt.Fprintf(&b, "Read them at `%s/` (also linked into each agent's skills dir as `ryoku`).\n", d)
+	} else {
+		b.WriteString("It is linked into each agent's skills dir as `ryoku` by `ryoku-rashin wire`.\n")
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
 // ryokuPackages are queried for installed versions in desktop.md.
 var ryokuPackages = []string{"ryoku-shell", "ryoku-hub", "ryoku", "ryoku-blobs", "ryoku-desktop", "ryoku-rashin"}
 
 func desktopBody() string {
 	var b strings.Builder
+	b.WriteString(actingBody())
 	b.WriteString("## Subsystem map\n\n")
 	b.WriteString("| Subsystem | Config path | Owner | Reload |\n|---|---|---|---|\n")
 	for _, r := range desktopMap {
@@ -329,7 +351,18 @@ func barSectionBody() string {
 	b.WriteString("```\n\n")
 	b.WriteString("Run these through `ryoku-shell` (e.g. `ryoku-shell bar move clock --section right`).\n")
 	b.WriteString("Installed plugins live in `~/.local/share/ryoku/plugins/<id>/`; their bar\n")
-	b.WriteString("placement and settings persist in `~/.config/ryoku/plugins.json`.\n")
+	b.WriteString("placement and settings persist in `~/.config/ryoku/plugins.json`.\n\n")
+	b.WriteString("### Adding a widget\n\n")
+	b.WriteString("A widget that is not in the table above is a plugin, never an edit to the\n")
+	b.WriteString("shipped QML under `~/.config/quickshell/` or `/usr/share/ryoku/`. Read the\n")
+	b.WriteString("`ryoku` skill's `plugins.md` for the contract (manifest.json, service/Main.qml,\n")
+	b.WriteString("content/Widget.qml, host `topbarGlyph`), write it in its own directory, then:\n\n")
+	b.WriteString("```\n")
+	b.WriteString("ryoku plugin validate <dir>\n")
+	b.WriteString("ryoku plugin add <dir-or-git-url> --bar --yes\n")
+	b.WriteString("```\n\n")
+	b.WriteString("It lands on the bar and under QS Bar Settings > Community (`ryoku-shell bar\n")
+	b.WriteString("settings community`); `ryoku plugin remove <id>` takes it off again.\n")
 	b.WriteString(vaultBarFenceEnd + "\n")
 	return b.String()
 }
