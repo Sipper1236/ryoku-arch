@@ -13,6 +13,7 @@
 //	ryoku deploy            DEV ONLY: build + materialize from a checkout
 //	ryoku recovery          last resort: reset to main + redeploy (overwrites configs)
 //	ryoku doctor            run convergent reconcilers (also runs inside update)
+//	ryoku debug             print a shareable diagnostic bundle for bug reports
 //
 // The concerns live in their own folders: internal/updater (update, status,
 // rollback, channel, run-state, materialize, version), internal/doctor (the
@@ -64,6 +65,8 @@ func main() {
 		err = cmdTrack(os.Args[2:])
 	case "doctor":
 		err = doctor.Run(os.Args[2:])
+	case "debug":
+		err = doctor.Debug(os.Args[2:])
 	case "keyring":
 		err = keyring.Run(os.Args[2:])
 	case "security-key":
@@ -97,6 +100,7 @@ func usage() {
   deploy         DEV ONLY: deploy from a repo checkout (RYOKU_REPO)
   recovery       last resort: reset to main and redeploy (overwrites configs)
   doctor         run convergent reconcilers (idempotent stateful fixes)
+  debug          print a shareable diagnostic bundle for bug reports
   keyring        show or set how the GNOME keyring unlocks at sign-in
   security-key   enroll and wire a FIDO2/U2F security key for PAM
   import <path>  bring an existing config in: scan, resolve clashes, apply (--undo)

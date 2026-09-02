@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+- **`ryoku debug` prints a shareable diagnostic bundle.** The bug issue
+  template asked reporters to attach `ryoku-debug` output, but no such command
+  existed. `ryoku debug` now prints the same read-only, secrets-free report as
+  `ryoku doctor --report` (versions, system state, doctor findings, recent
+  error logs) straight to stdout so it pastes into an issue
+  (`main.go`, `internal/doctor/report.go`).
 - **Browser animations for Zen.** Doctor deploys a Ryoku `userChrome.css`
   animation sheet into each Zen profile (`chrome/ryoku-animations.css`,
   `@import`ed without disturbing a user's own rules) and the Zen policy enables
