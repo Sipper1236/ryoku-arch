@@ -2688,7 +2688,7 @@ Scope {
         open: true
         rice: wallpaperSelector._workshopRice
         onApplyRequested: function(slug) {
-          Quickshell.execDetached(["ryoku-hub", "rice", "apply", slug])
+          Quickshell.execDetached(["ryoku-hub", "rice", "apply", slug, "all"])
           wallpaperSelector._workshopOpen = false
           wallpaperSelector.ricesOpen = false
         }
