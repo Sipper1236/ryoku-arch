@@ -32,7 +32,7 @@ hl.on("hyprland.start", function()
     -- PartOf=graphical-session.target and nothing stops that target, so a
     -- previous session's frontend survives and every ScreenCast request it
     -- proxies times out instead of reaching the backend.
-    hl.exec_cmd("dbus-update-activation-environment --systemd --all; systemctl --user daemon-reload; systemctl --user reset-failed ryoku-shell ryogami 2>/dev/null; systemctl --user start hyprland-session.target; systemctl --user restart ryoku-shell; systemctl --user restart ryogami; systemctl --user try-restart xdg-desktop-portal.service xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service")
+    hl.exec_cmd("dbus-update-activation-environment --systemd --all; systemctl --user daemon-reload; systemctl --user reset-failed ryogami ryoku-shell 2>/dev/null; systemctl --user start hyprland-session.target; systemctl --user restart ryoku-shell; systemctl --user restart ryogami; systemctl --user try-restart xdg-desktop-portal.service xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service")
     -- Polkit authentication is answered by the shell's own agent (the island
     -- that matches the rest of the desktop), so the stock Qt agent must not
     -- take the session's single agent slot. Stopping it is idempotent and
