@@ -22,15 +22,14 @@
 amd-ucode
 vulkan-radeon
 lib32-vulkan-radeon
-# VA-API video decode (the live wallpaper and media players hardware-decode
-# through it instead of burning a core in software).
-libva-mesa-driver
 
 [intel]
 intel-ucode
 vulkan-intel
 lib32-vulkan-intel
-# VA-API video decode for Gen8+ Intel (see [amd]); iHD is the modern driver.
+# intel-media-driver is the iHD VA-API driver for Gen8+ Intel, so the live
+# wallpaper and media players hardware-decode instead of burning a CPU core.
+# AMD VA-API already ships in mesa and libva comes with ffmpeg, both in base.
 intel-media-driver
 
 [nvidia]

@@ -3,11 +3,12 @@
 ## Unreleased
 
 ### Added
-- `hardware.packages`: **AMD and Intel get VA-API video-decode drivers.**
-  `libva-mesa-driver` (AMD) and `intel-media-driver` (Intel) join the per-vendor
-  sections so the live video wallpaper and media players hardware-decode instead
-  of burning a CPU core in software. NVIDIA already decodes via NVDEC through
-  `nvidia-utils`. All three bake into the offline ISO closure.
+- `hardware.packages`: **Intel gets the iHD VA-API video-decode driver.**
+  `intel-media-driver` joins the `[intel]` section so the live video wallpaper
+  and media players hardware-decode on Gen8+ Intel instead of burning a CPU
+  core in software. AMD's VA-API already ships in `mesa` and NVIDIA decodes via
+  NVDEC through `nvidia-utils`, so only Intel needed a package. It bakes into
+  the offline ISO closure.
 
 - `base.packages`: **Bash and Zsh receive Fish-like editing.** `blesh`, `zsh`,
   `zsh-autosuggestions`, `zsh-syntax-highlighting` and
