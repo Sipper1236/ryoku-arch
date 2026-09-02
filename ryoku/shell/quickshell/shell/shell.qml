@@ -339,14 +339,13 @@ ShellRoot {
 
     // Bring the durable services online and prewarm the slow scans so the first
     // open of each surface is instant. Ported from pill/shell.qml 170-194:
-    // device restore + ddc prewarm, wallpaper index warm, and re-arming the
-    // persisted Keep-Awake / Game Mode external inhibitors.
+    // device restore + ddc prewarm and re-arming the persisted Keep-Awake /
+    // Game Mode external inhibitors.
     Component.onCompleted: {
         Devices.restore();
         root.syncCaffeine(Flags.keepAwake ? "start" : "stop");
         if (Flags.gameMode)
             root.syncGameMode("start");
-        WallIndex.refresh();
         Devices.probeDisplays();
     }
 

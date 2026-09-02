@@ -28,7 +28,6 @@ singleton Camera Camera.qml
 singleton Keypresses Keypresses.qml
 singleton Toggles Toggles.qml
 singleton VoiceBars VoiceBars.qml
-singleton WallIndex WallIndex.qml
 singleton Capture Capture.qml
 singleton Clipboard Clipboard.qml
 singleton Events Events.qml
