@@ -337,7 +337,8 @@ func TestChannelUpdateReconcilesDivergence(t *testing.T) {
 }
 
 func TestRyokuChannelDefaultAndOverride(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // no persisted environment.d channel, so default applies
+	cfg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", cfg) // no persisted environment.d channel, so default applies
 	t.Setenv("RYOKU_CHANNEL", "")
 	if got := ryokuChannel(); got != "main" {
 		t.Errorf("default channel = %q, want main", got)
@@ -345,6 +346,18 @@ func TestRyokuChannelDefaultAndOverride(t *testing.T) {
 	t.Setenv("RYOKU_CHANNEL", "unstable-dev")
 	if got := ryokuChannel(); got != "unstable-dev" {
 		t.Errorf("override channel = %q, want unstable-dev", got)
+	}
+	// `ryoku track main` persisted the switch, but the session still carries the
+	// env it captured at login: the persisted channel must win, or status and the
+	// Hub report the old channel until a reboot.
+	if err := os.MkdirAll(filepath.Join(cfg, "environment.d"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg, "environment.d", "ryoku.conf"), []byte("RYOKU_CHANNEL=main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := ryokuChannel(); got != "main" {
+		t.Errorf("tracked channel = %q, want main over the stale env", got)
 	}
 }
 
@@ -600,20 +613,20 @@ func TestSyncChannelErrorsOnUntrackedCollision(t *testing.T) {
 }
 
 // A box just switched with `ryoku track` has RYOKU_CHANNEL in environment.d but
-// not yet in the live env (that waits for a relogin). ryokuChannel must read the
-// persisted value, else status/update measure against the default main and show
-// updates that never clear.
+// the live env still carries the channel captured at login. ryokuChannel must
+// read the persisted value over the env, else status and the Hub (which runs
+// status under the session env) report the old channel until a relogin.
 func TestChannelUsesPersistedChannel(t *testing.T) {
 	cfg := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", cfg)
 	writeFile(t, filepath.Join(cfg, "environment.d", "ryoku.conf"), "RYOKU_CHANNEL=unstable-dev\n")
 
-	t.Setenv("RYOKU_CHANNEL", "") // live env unset, as before a relogin
+	t.Setenv("RYOKU_CHANNEL", "")
 	if got := ryokuChannel(); got != "unstable-dev" {
 		t.Fatalf("persisted channel: got %q, want unstable-dev", got)
 	}
-	t.Setenv("RYOKU_CHANNEL", "main") // an explicit live env still wins
-	if got := ryokuChannel(); got != "main" {
-		t.Fatalf("env override: got %q, want main", got)
+	t.Setenv("RYOKU_CHANNEL", "main") // the stale session env from before the switch
+	if got := ryokuChannel(); got != "unstable-dev" {
+		t.Fatalf("stale env: got %q, want the persisted unstable-dev", got)
 	}
 }

@@ -39,6 +39,12 @@
   (`internal/doctor/reconcile_gpu_pin.go`, `reconcile_ppd_amdgpu.go`).
 
 ### Fixed
+- **`ryoku track` takes effect without a relogin.** The channel it persists
+  to `environment.d` now wins over the live `RYOKU_CHANNEL`, which the session
+  captured at login and kept reporting after a switch (`ryoku status` and the
+  Hub said unstable-dev on a box tracking main); the script also pushes the new
+  channel into the user manager and the D-Bus activation env so the shell it
+  restarts carries it (`internal/updater/channel.go`, `bin/ryoku-track`).
 - **Lock fixes reach existing boxes.** The in-session lock bundle lives under
   `~/.local/share`, outside materialize, and was laid once at install: every
   lockscreen fix since shipped only to fresh installs. `reconcileLockscreen`

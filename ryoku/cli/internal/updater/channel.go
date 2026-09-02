@@ -19,16 +19,18 @@ import (
 // A packaged install has no checkout, so these report "no channel" and the
 // caller falls back to the pacman view of the [ryoku] repo.
 
-// ryokuChannel: the branch update tracks. The live RYOKU_CHANNEL env wins; then
-// the channel `ryoku track` persisted to environment.d, which the session loads
-// only at the next login -- reading it here keeps `ryoku status`/`update` on the
-// tracked branch on a just-switched box instead of measuring against the default
-// and showing updates that never clear. Every other box follows main.
+// ryokuChannel: the branch update tracks. The channel `ryoku track` persisted
+// to environment.d is the truth; the live RYOKU_CHANNEL env is only what the
+// session captured at login, and after a switch it is stale until the next
+// login: with the env winning, `ryoku track main` left `ryoku status` and the
+// Hub (which runs it under the session env) saying unstable-dev. The env still
+// serves as a one-off override on a box that never tracked, and every other box
+// follows main.
 func ryokuChannel() string {
-	if c := strings.TrimSpace(os.Getenv("RYOKU_CHANNEL")); c != "" {
+	if c := sys.TrackedChannel(); c != "" {
 		return c
 	}
-	if c := sys.TrackedChannel(); c != "" {
+	if c := strings.TrimSpace(os.Getenv("RYOKU_CHANNEL")); c != "" {
 		return c
 	}
 	return "main"
