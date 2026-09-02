@@ -9,6 +9,12 @@ import (
 )
 
 func TestReconcileZen(t *testing.T) {
+	// The signed theme xpi is absent here, so the base policy is written verbatim;
+	// TestZenPolicyThemeExtension covers the injected form.
+	origXPI := zenThemeXPI
+	zenThemeXPI = filepath.Join(t.TempDir(), "no-theme.xpi")
+	defer func() { zenThemeXPI = origXPI }()
+
 	// No Zen install anywhere is a clean no-op, so an update never touches a
 	// user who does not have Zen.
 	if r := reconcileZenInto([]string{filepath.Join(t.TempDir(), "absent")}, false); r.status != recOK {
@@ -64,5 +70,46 @@ func TestReconcileZen(t *testing.T) {
 	}
 	if r := reconcileZenInto([]string{root}, false); r.status != recFixed {
 		t.Fatalf("stale rewrite: status %v, want fixed", r.status)
+	}
+}
+
+func TestZenPolicyThemeExtension(t *testing.T) {
+	orig := zenThemeXPI
+	defer func() { zenThemeXPI = orig }()
+
+	// No signed xpi: the palette-follow theme extension is omitted.
+	zenThemeXPI = filepath.Join(t.TempDir(), "absent.xpi")
+	if bytes.Contains(zenPolicyBytes(), []byte("ryoku-theme@ryoku.arch")) {
+		t.Fatal("theme extension present without a signed xpi")
+	}
+
+	// Signed xpi present: it is added to ExtensionSettings from the local file.
+	xpi := filepath.Join(t.TempDir(), "ryoku-theme.xpi")
+	if err := os.WriteFile(xpi, []byte("PK\x03\x04"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	zenThemeXPI = xpi
+	var doc struct {
+		Policies struct {
+			ExtensionSettings map[string]struct {
+				InstallationMode string `json:"installation_mode"`
+				InstallURL       string `json:"install_url"`
+			} `json:"ExtensionSettings"`
+		} `json:"policies"`
+	}
+	if err := json.Unmarshal(zenPolicyBytes(), &doc); err != nil {
+		t.Fatalf("policy with theme ext is not valid JSON: %v", err)
+	}
+	e, ok := doc.Policies.ExtensionSettings["ryoku-theme@ryoku.arch"]
+	if !ok {
+		t.Fatal("theme extension missing when the signed xpi is present")
+	}
+	if e.InstallURL != "file://"+xpi {
+		t.Fatalf("theme install_url = %q, want file://%s", e.InstallURL, xpi)
+	}
+	for _, id := range []string{"uBlock0@raymondhill.net", "jid1-MnnxcxisBPnSXQ@jetpack"} {
+		if _, ok := doc.Policies.ExtensionSettings[id]; !ok {
+			t.Fatalf("base extension %s dropped when adding the theme", id)
+		}
 	}
 }

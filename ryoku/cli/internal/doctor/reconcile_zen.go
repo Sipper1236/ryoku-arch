@@ -3,6 +3,7 @@ package doctor
 import (
 	"bytes"
 	_ "embed"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,15 +12,55 @@ import (
 	"ryoku-cli/internal/sys"
 )
 
-// zenPolicies is the Ryoku Zen policy, shipped in the ryoku binary and written
-// verbatim into a detected Zen install. It is a Firefox enterprise policies.json
-// (Zen is a Firefox fork and honours it on Linux): the shipped extensions
-// (uBlock Origin, Privacy Badger, both installed removable, not forced) and the
-// Wayland / hardware-decode / privacy pref defaults, set as defaults the user
-// can still override.
+// zenPolicies is the base Ryoku Zen policy, embedded in the ryoku binary. It is a
+// Firefox enterprise policies.json (Zen is a Firefox fork and honours it on
+// Linux): the shipped extensions (uBlock Origin, Privacy Badger, installed
+// removable, not forced) and the Wayland / hardware-decode / privacy pref
+// defaults, set as defaults the user can still override. The palette-follow
+// Ryoku theme extension is added on top only when its signed xpi is present, see
+// zenPolicyBytes.
 //
 //go:embed zen_policies.json
 var zenPolicies []byte
+
+// zenThemeXPI is where the AMO-signed Ryoku theme extension is shipped once a
+// release signs it. Zen enforces extension signing (a branded release build), so
+// an unsigned extension cannot load and this file only exists after a signing
+// pass; until then the theme extension is simply omitted. Overridable in tests.
+var zenThemeXPI = "/usr/share/ryoku/browser/ryoku-theme.xpi"
+
+// zenPolicyBytes returns the policy to write. Without the signed theme xpi it is
+// the embedded payload verbatim; when the xpi is present it also installs the
+// Ryoku palette-follow extension from that local file, so signing the extension
+// in a release lights the browser theme up with no further change here.
+func zenPolicyBytes() []byte {
+	base := bytes.TrimSpace(zenPolicies)
+	if !sys.Exists(zenThemeXPI) {
+		return base
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(base, &doc); err != nil {
+		return base
+	}
+	pol, _ := doc["policies"].(map[string]any)
+	if pol == nil {
+		return base
+	}
+	ext, _ := pol["ExtensionSettings"].(map[string]any)
+	if ext == nil {
+		ext = map[string]any{}
+		pol["ExtensionSettings"] = ext
+	}
+	ext["ryoku-theme@ryoku.arch"] = map[string]any{
+		"installation_mode": "normal_installed",
+		"install_url":       "file://" + zenThemeXPI,
+	}
+	out, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return base
+	}
+	return out
+}
 
 // zenInstallRoots lists the directories a Zen install may live under. The policy
 // belongs in <root>/distribution/policies.json, where it applies to every
@@ -57,7 +98,7 @@ func reconcileZen(checkOnly bool) recResult {
 }
 
 func reconcileZenInto(roots []string, checkOnly bool) recResult {
-	want := bytes.TrimSpace(zenPolicies)
+	want := zenPolicyBytes()
 	var present, pending, did []string
 	seen := map[string]bool{}
 	for _, root := range roots {

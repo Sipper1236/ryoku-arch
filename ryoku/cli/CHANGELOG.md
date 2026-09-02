@@ -9,8 +9,10 @@
   removable, not forced) plus the Wayland / hardware-decode and privacy pref
   defaults, set as defaults the user can still change. It is a no-op without
   Zen, so a user who installs Zen themselves picks up the extensions and
-  optimizations on the next `ryoku doctor`, and a box without Zen is untouched
-  (`internal/doctor/reconcile_zen.go`).
+  optimizations on the next `ryoku doctor`, and a box without Zen is untouched.
+  The palette-follow Ryoku theme extension is added to the same policy once its
+  AMO-signed xpi is shipped (`ryoku/browser/sign.sh`), since Zen refuses unsigned
+  extensions (`internal/doctor/reconcile_zen.go`).
 - **Doctor clears stale GPU render pins and audits power-profiles-daemon's
   amdgpu actions.** A laptop pinned by an older `ryoku-gpu persist` policy kept
   rendering the whole desktop on the discrete GPU, which then could never
