@@ -130,16 +130,45 @@ version (`core.r<commit-count>.g<sha>`) that `pacman -Syu` upgrades to.
 - **A removed or renamed `shell.json` key, or a changed default that must reach
   existing users, needs a `doctor` reconciler** (materialize never edits a user's
   `shell.json`). An additive key needs nothing.
-- **Never ship into a path the user's own tools write.** `materialize` clobbers
-  every shipped file, so laying Ryoku's defaults where an app writes the user's
-  choice resets that choice on each update: `~/.config/mimeapps.list` did exactly
-  that to default apps. Ship such defaults one layer down where the format
-  provides one (`/usr/share/applications/mimeapps.list` for mime defaults), or
-  make the file a `generatedSeed` if it has no layering.
+- **Never ship into a path the user's own tools write, and never write a tool's
+  output into a shipped path.** `materialize` clobbers every shipped file, so
+  laying Ryoku's defaults where an app writes the user's choice resets that
+  choice on each update: `~/.config/mimeapps.list` did exactly that to default
+  apps. Ship such defaults one layer down where the format provides one
+  (`/usr/share/applications/mimeapps.list` for mime defaults), or make the file
+  a `generatedSeed` if it has no layering. The same rule read the other way:
+  a rice used to copy its emblem over the shipped
+  `fastfetch/fastfetch-emblem.png`, and every update put the brand mark back.
+  Anything Ryoku writes on the user's behalf (an imported logo, a rice asset)
+  goes to a user-owned name the package never ships (`fastfetch/ryoku-logo.*`).
 - **A user override belongs in `~/.config/ryoku/user_edits`, never in a shipped
   path.** The base still ships every file (the delivery check stays green) and
   the overlay wins on top. A whole-file fork opts out of upstream fixes for that
   one file, so prefer an overlay for anything additive.
+- **Everything a user runs must converge on update, wherever it lives.**
+  `materialize` covers `~/.config`; a payload installed elsewhere (the lock
+  bundle under `~/.local/share`, the SDDM greeter skin under
+  `/usr/share/sddm/themes`) needs a `doctor` reconciler that compares content
+  with the shipped copy and re-lays it on drift, not one that only checks it
+  exists. An install-once path silently pins every existing box to the release
+  it was installed with: the lock shipped fixes for weeks that no updated box
+  ever received.
+- **One master per setting.** Two stores that both claim a value drift, and the
+  next sync of either undoes the other: the colour master is `shell.json`
+  `theme.theme` (the daemon shadows it into `theme.json` `followWallpaper` on
+  every load), so the Hub's scheme cards and a rice select the theme through
+  `ryoku-shell theme` instead of writing the shadow. A new setting gets one
+  writer; every other surface reads.
+- **Shipped QML must load, not just exist.** One file that cannot instantiate
+  blanks its whole surface (a Hub page, a shell root), and Quickshell reports it
+  only in the instance log. `bin/ryoku-dev-lint-qml` fails on the qmllint
+  classes that mean "will not load", resolved against the installed modules;
+  the publish gate runs it over the materialized tree.
+- **Login restarts the session daemons.** The user manager can outlive a
+  session (linger, a relogin after a compositor crash) and still hold a
+  `ryoku-shell` bound to the dead compositor; `start` then does nothing and the
+  login lands on bare Hyprland. The autostart reloads units, clears a start
+  limit, and `restart`s the shell and wallpaper daemons every session.
 - **A change reaches users only after `main` fast-forwards.** Keep the gap small;
   the delivery check reports it on every push.
 
@@ -151,3 +180,8 @@ version (`core.r<commit-count>.g<sha>`) that `pacman -Syu` upgrades to.
 - The install-test workflow builds the ISO and runs a real, unattended install in
   a VM, then verifies the desktop comes up, so a broken install or a missing
   package is caught before a user hits it.
+- `bin/ryoku-dev-lint-qml <config-root>...` fails on QML that cannot load. The
+  publish gate (`installation/tests/container-install.sh`) runs it over the
+  materialized shell and Hub trees against the installed Qt modules, the same
+  import path a user's session resolves; run it on a dev box after
+  `ryoku deploy` before pushing a QML change.
