@@ -35,6 +35,12 @@
   (`ryogami/wall-ui/`, `ryogami/daemon/`, `services/DaemonClient.qml`).
 
 ### Fixed
+- **The visualiser stays inside the screen.** Its box is a fraction of the
+  screen, but the placer let a drag or wheel resize leave up to a quarter of it
+  past an edge, where the spectrum is simply cut off, and that box was saved
+  and restored on every login. Every write now clamps size to the screen and
+  position to what the size leaves, and a box stored off-screen is folded back
+  once on load (`modules/visualizer/Singletons/Config.qml`).
 - **Login always brings the shell up.** The user manager can outlive a session
   (linger, a relogin after a compositor crash) and still hold a `ryoku-shell`
   bound to the dead compositor; `systemctl --user start` then reported it
