@@ -6,6 +6,11 @@ A ground-up hardening of the installer for real hardware. Granular backend and
 ISO detail live in `backend/CHANGELOG.md` and `iso/CHANGELOG.md`.
 
 ### Added
+- **Zen is the default browser on new installs.** The ISO and install script
+  now install `zen-browser-bin` (post-install, best-effort, online-only) and set
+  it as the default web browser. `ryoku update` never installs Zen or repoints a
+  browser, so existing boxes are untouched; the Super+B browser role prefers Zen
+  when present and falls back to Chromium otherwise.
 - **Dual-boot handles old 96 MiB Windows EFI partitions.** The installer
   automatically uses a dedicated Ryoku ESP when the existing ESP lacks 8 MiB
   free, without moving Windows partitions or changing the required free-space

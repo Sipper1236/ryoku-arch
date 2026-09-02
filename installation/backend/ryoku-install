@@ -206,6 +206,8 @@ main() {
   ryoku_bootloader
 
   ryoku_aur || true
+  # with the AUR set installed, point the default browser at Zen if it landed.
+  ryoku_default_browser
 
   # the AUR step may have installed limine-mkinitcpio-hook, whose pacman
   # hooks rebuilt the boot menu as the UKI tree: retire the flat placeholder

@@ -134,3 +134,30 @@ BOOTSTRAP
   fi
   return 0
 }
+
+# ryoku_default_browser points the target user's default web browser at Zen on a
+# fresh install, but only when Zen actually installed (the AUR set is best-effort
+# and online-only). It sets just the http/https scheme handlers via xdg-mime, so
+# an HTML file still opens in the editor. Install-time only: `ryoku update` never
+# repoints a browser, so an existing box keeps whatever default it had.
+ryoku_default_browser() {
+  local u="$RYOKU_USERNAME" desk="" d
+  if [[ -n ${RYOKU_DRYRUN:-} ]]; then
+    log "DRYRUN: set Zen as the default web browser for $u if installed"
+    return 0
+  fi
+  for d in zen.desktop zen-browser.desktop app.zen_browser.zen.desktop; do
+    if [[ -f /mnt/usr/share/applications/$d ]]; then desk=$d; break; fi
+  done
+  if [[ -z $desk ]]; then
+    log "default browser: Zen not installed; leaving the browser default unchanged"
+    return 0
+  fi
+  if arch-chroot /mnt runuser -u "$u" -- env "HOME=/home/$u" "USER=$u" "LOGNAME=$u" \
+    xdg-mime default "$desk" x-scheme-handler/http x-scheme-handler/https 2>/dev/null; then
+    log "default browser: set Zen ($desk) for $u"
+  else
+    log "default browser: warning, could not set Zen for $u (continuing)"
+  fi
+  return 0
+}
