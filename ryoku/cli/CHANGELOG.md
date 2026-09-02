@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- **Browser animations for Zen.** Doctor deploys a Ryoku `userChrome.css`
+  animation sheet into each Zen profile (`chrome/ryoku-animations.css`,
+  `@import`ed without disturbing a user's own rules) and the Zen policy enables
+  the legacy-stylesheet load. CSS-only motion on Zen's own chrome hooks, tinted
+  from the palette via `--zen-primary-color`: tab open/switch, url-bar focus
+  blur, trackpad swipe, workspace switch, and a top page-load bar. Honours
+  `prefers-reduced-motion`; no privileged JavaScript
+  (`internal/doctor/reconcile_zen_userchrome.go`).
 - **Doctor applies the Ryoku Zen policy whenever Zen is detected.** A new
   reconciler writes a Firefox enterprise `policies.json` into any Zen install it
   finds: the shipped extensions (uBlock Origin and Privacy Badger, installed

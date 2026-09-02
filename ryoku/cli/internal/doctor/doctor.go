@@ -148,6 +148,7 @@ func reconcilers() []reconciler {
 		{"flatpak app channel", reconcileFlatpakRemote},
 		{"browser theme host", reconcileBrowserTheme},
 		{"zen browser policy", reconcileZen},
+		{"zen browser animations", reconcileZenUserChrome},
 		{"launcher local-frost default", reconcileLauncherLocalFrostDefault},
 		{"user edits overlay", reconcileUserEdits},
 		{"default app map", reconcileMimeDefaults},
