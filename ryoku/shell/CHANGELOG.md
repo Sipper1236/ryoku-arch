@@ -35,6 +35,12 @@
   (`ryogami/wall-ui/`, `ryogami/daemon/`, `services/DaemonClient.qml`).
 
 ### Fixed
+- **Super+W opens the wallpaper picker on a fresh install.** The picker only
+  builds once its config loads, but nothing created `~/.config/ryogami-wall` on
+  first run, so `configLoaded` never turned true: Super+W did nothing and the
+  daemon had no stored wallpaper. The picker now seeds the config from the
+  shipped example on first run, and re-seeds if `config.json` is deleted
+  (`ryogami/wall-ui/qml/services/BootstrapService.qml`).
 - **Live video wallpapers decode on the GPU when it can.** The ryogami C player
   opened a CPU-only decoder, so a clip cost about 15% of a core per monitor. It
   now tries VA-API, NVDEC, then VDPAU first and only falls back to software,

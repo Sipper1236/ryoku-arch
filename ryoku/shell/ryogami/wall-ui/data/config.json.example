@@ -1,5 +1,5 @@
 {
-    "compositor": "niri",
+    "compositor": "hyprland",
     "monitor": "",
     "general": {
         "closeOnSelection": false,
