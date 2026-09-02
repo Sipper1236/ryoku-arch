@@ -6,6 +6,11 @@ A ground-up hardening of the installer for real hardware. Granular backend and
 ISO detail live in `backend/CHANGELOG.md` and `iso/CHANGELOG.md`.
 
 ### Added
+- **The publish gate lints the materialized QML for load failures.**
+  `tests/container-install.sh` runs `bin/ryoku-dev-lint-qml` over the shell and
+  Hub trees against the installed Qt modules after `ryoku materialize`, so a
+  file that cannot instantiate (a handler on a signal the type lacks) fails the
+  publish instead of blanking a page on every user's box.
 - **Zen is the default browser on new installs.** The ISO and install script
   now install `zen-browser-bin` (post-install, best-effort, online-only) and set
   it as the default web browser. `ryoku update` never installs Zen or repoints a

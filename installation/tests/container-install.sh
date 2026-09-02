@@ -159,4 +159,13 @@ if (( ${#missing[@]} )); then
   exit 1
 fi
 
+# 6. every shipped QML root must LOAD against the installed Qt modules, not just
+#    exist. One file that cannot instantiate (a handler on a signal the type does
+#    not have, a property that is not there) blanks its whole surface: a Hub page
+#    renders empty, a shell root paints bare Hyprland. This is the same import
+#    path a user's session resolves, so a finding here is a finding on their box.
+log "linting the materialized QML for load failures"
+"$REPO/bin/ryoku-dev-lint-qml" "$cfg/quickshell/shell" "$cfg/quickshell/hub" \
+  || die "shipped QML cannot load (see above); a user's desktop would come up broken"
+
 log "container-install: OK -- ryoku-desktop delivered the full config to $cfg"
