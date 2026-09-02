@@ -103,6 +103,7 @@ func Update(args []string) error {
 			return err
 		}
 		rashinReindex()
+		prowlRefresh()
 		progress.at("doctor")
 		offerSnapperHelpers()
 		runFreshDoctor()
@@ -332,6 +333,7 @@ func updateStage2(pre string) error {
 	hyprReload()
 	startShell()
 	rashinReindex()
+	prowlRefresh()
 
 	progress.at("doctor")
 	offerSnapperHelpers()
@@ -354,6 +356,53 @@ func rashinReindex() {
 	if err := sys.Run(pkgBin("ryoku-rashin"), "index"); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: rashin reindex failed: %v\n", err)
 	}
+}
+
+// prowlRefresh keeps a dev box's prowl-agent current after an update. A packaged
+// box already got it through `pacman -Syu`, so this runs `prowl-agent update`
+// only when the binary is on PATH but not owned by a pacman package (a dev or
+// manual install). Best effort, and it logs one line either way.
+func prowlRefresh() {
+	path, err := exec.LookPath("prowl-agent")
+	if err != nil {
+		return
+	}
+	switch prowlDecide(true, prowlPacmanOwned(path)) {
+	case prowlManaged:
+		fmt.Println("==> prowl-agent is managed by pacman; refreshed with the system packages")
+	case prowlSelfUpdate:
+		fmt.Println("==> Updating prowl-agent")
+		if err := sys.Run(path, "update"); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: prowl-agent update failed: %v\n", err)
+		}
+	}
+}
+
+// prowlPacmanOwned reports whether path belongs to an installed pacman package;
+// `pacman -Qo <path>` exits non-zero for a file no package owns (a dev install).
+func prowlPacmanOwned(path string) bool {
+	return exec.Command("pacman", "-Qo", path).Run() == nil
+}
+
+// prowlAction is what an update should do about prowl-agent.
+type prowlAction int
+
+const (
+	prowlNoop       prowlAction = iota // not installed; nothing to do
+	prowlManaged                       // pacman-owned; the system upgrade covered it
+	prowlSelfUpdate                    // dev install; run `prowl-agent update`
+)
+
+// prowlDecide is the pure update decision, split out so it is unit-testable
+// without a live PATH or pacman.
+func prowlDecide(onPath, pacmanOwned bool) prowlAction {
+	if !onPath {
+		return prowlNoop
+	}
+	if pacmanOwned {
+		return prowlManaged
+	}
+	return prowlSelfUpdate
 }
 
 // clearStalePacmanLock mirrors doctor's reconcilePacmanLock right before the

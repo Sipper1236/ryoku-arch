@@ -25,6 +25,13 @@ ordered steps, the current label, a live log tail, and, on failure, the error
 and the pre-update snapshot), so the update island and the Hub's Updates page
 render a determinate run and a one-click rollback.
 
+After the desktop is back, the update refreshes the agent OS when it is present:
+`ryoku-rashin index` regenerates the vault and re-indexes the config mirror with
+Prowl, then `prowl-agent` is brought current. On a dev box (Prowl on PATH but
+not owned by a pacman package) it runs `prowl-agent update`; a packaged box
+already got the new build from `pacman -Syu`, so the step just logs that the
+binary is managed by pacman. Both are best effort and never fail an update.
+
 ## materialize: the config a user receives
 
 `ryoku materialize` lays the package's base config (`/usr/share/ryoku/config`,

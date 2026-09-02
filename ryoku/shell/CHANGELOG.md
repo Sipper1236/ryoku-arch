@@ -79,6 +79,17 @@
   `search_code` answer on a packaged box with no checkout, not only on a dev
   machine (`rashin/backend/agents.go`, `index.go`, `vault.go`, `prowl.go`,
   `sourcemirror.go`, `skills/ryoku/`).
+- **Prowl ships with the desktop, and Rashin sets it up.** `prowl-agent` (the
+  code-intelligence indexer and MCP server the agent brain reads source with) is
+  now a signed `[ryoku]` package that `ryoku-rashin` depends on, so every rashin
+  box has it instead of a hand-install. `ryoku-rashin index` now runs
+  `prowl-agent init --integrations agents,agent-skills,claude,omp` in the config
+  mirror (was `none`, under a 120s budget), so the mirror carries Prowl's
+  `AGENTS.md` block, MCP config and skills next to its code index, and
+  `ryoku-rashin wire` also runs `prowl-agent skills --yes --clients <detected>`
+  for the claude, omp and hermes clients it detects (skipped on a Prowl without
+  the non-interactive `--yes`), installing Prowl's own skill beside the `ryoku`
+  one (`rashin/backend/sourcemirror.go`, `agents.go`).
 - **A wallpaper video engine toggle (`wallpaper.video_engine`).** Video
   wallpapers now play through one of two engines: `ryogami` (the default, the
   lightweight C player that decodes a cached transcode into `wl_shm` on its own

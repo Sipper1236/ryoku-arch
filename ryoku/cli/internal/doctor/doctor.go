@@ -168,6 +168,7 @@ func reconcilers() []reconciler {
 		{"ryoku shell daemon", reconcileShellDaemon},
 		{"duplicate desktop instances", reconcileShellInstances},
 		{"rashin agent daemon", reconcileRashinDaemon},
+		{"prowl-agent for rashin", reconcileProwlAgent},
 		{"recordings directory", reconcileRecordingsDir},
 		{"failed services", reconcileFailedUnits},
 		{"btrfs device health", reconcileBtrfsHealth},

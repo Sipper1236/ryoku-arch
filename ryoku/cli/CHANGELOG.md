@@ -3,6 +3,22 @@
 ## Unreleased
 
 ### Added
+- **`ryoku plugin new` scaffolds a plugin in the right place, and `validate`
+  audits it.** `new <id> [--bar|--desktop|--popout]` writes a working plugin
+  under `~/Documents/ryoku-plugins/<id>/` (manifest, service, view, bar panel
+  for `--bar`, README, LICENSE, and an `AGENTS.md` carrying the eleven plugin
+  rules so any agent opening the folder follows them) and git-inits it as the
+  author. `validate <dir>` now runs a static audit beside the manifest checks:
+  blocking rules `symlink`, `escalation` (sudo/doas/su, or pkexec not declared
+  in `capabilities.privileged`), `pipe-shell`, `internal-import`,
+  `config-write`, `secret`, `binary`; warnings `undeclared-command`,
+  `undeclared-host`, `dynamic-shell`, `outside-write`, `large-tree`. Findings
+  print as `rule  path:line  message` (`--json` for machines; `--allow <rule>`
+  to downgrade one); `add` refuses blocking findings unless `--allow-findings`.
+  `list --json` carries each plugin's `capabilities` (`plugin_audit.go`,
+  `plugin_new.go`, `plugin_template/`).
+
+### Added
 - **`ryoku plugin add` takes a folder, and `export` / `share` carry a widget
   to Ryostore.** `add <dir>` copies a plugin written on this desktop (by hand or
   by Rashin) through the same validation and store transaction a git URL gets,
@@ -24,6 +40,14 @@
   without a manual step. It stays a no-op when the skill is not installed or the
   links are already in place, and never wires a box that left Rashin off
   (`internal/doctor/reconcile_rashin_daemon.go`).
+- **`ryoku update` keeps prowl-agent current, and doctor flags it when
+  missing.** After the post-update Rashin reindex, `ryoku update` refreshes
+  prowl-agent: on a dev box (on PATH but not owned by a pacman package) it runs
+  `prowl-agent update`, and on a packaged box it logs that the binary is managed
+  by pacman (the system upgrade already delivered it). A new doctor reconciler
+  reports a rashin-enabled box that lacks the binary with the fix
+  `sudo pacman -S prowl-agent` (`internal/updater/update.go`,
+  `internal/doctor/reconcile_rashin_daemon.go`, `internal/doctor/doctor.go`).
 - **`ryoku debug` prints a shareable diagnostic bundle.** The bug issue
   template asked reporters to attach `ryoku-debug` output, but no such command
   existed. `ryoku debug` now prints the same read-only, secrets-free report as
