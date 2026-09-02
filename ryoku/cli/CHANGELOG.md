@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- **Doctor applies the Ryoku Zen policy whenever Zen is detected.** A new
+  reconciler writes a Firefox enterprise `policies.json` into any Zen install it
+  finds: the shipped extensions (uBlock Origin and Privacy Badger, installed
+  removable, not forced) plus the Wayland / hardware-decode and privacy pref
+  defaults, set as defaults the user can still change. It is a no-op without
+  Zen, so a user who installs Zen themselves picks up the extensions and
+  optimizations on the next `ryoku doctor`, and a box without Zen is untouched
+  (`internal/doctor/reconcile_zen.go`).
 - **Doctor clears stale GPU render pins and audits power-profiles-daemon's
   amdgpu actions.** A laptop pinned by an older `ryoku-gpu persist` policy kept
   rendering the whole desktop on the discrete GPU, which then could never

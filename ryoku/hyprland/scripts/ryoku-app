@@ -33,7 +33,10 @@ store="${XDG_CONFIG_HOME:-$HOME/.config}/ryoku/hypr.json"
 
 fallback() {
 	case "$1" in
-	browser)  echo "chromium" ;;
+	browser)
+		if command -v zen >/dev/null 2>&1; then echo "zen"
+		elif command -v zen-browser >/dev/null 2>&1; then echo "zen-browser"
+		else echo "chromium"; fi ;;
 	terminal) echo "kitty" ;;
 	editor)   echo "kitty -e nvim" ;;
 	files)    echo "nautilus" ;;

@@ -147,6 +147,7 @@ func reconcilers() []reconciler {
 		{"obsidian palette snippet", reconcileObsidianSnippet},
 		{"flatpak app channel", reconcileFlatpakRemote},
 		{"browser theme host", reconcileBrowserTheme},
+		{"zen browser policy", reconcileZen},
 		{"launcher local-frost default", reconcileLauncherLocalFrostDefault},
 		{"user edits overlay", reconcileUserEdits},
 		{"default app map", reconcileMimeDefaults},
