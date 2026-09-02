@@ -58,6 +58,19 @@ grep -q '^DisableSandboxNetwork' /etc/pacman.conf \
 log "building [ryoku] packages from the checkout -> $OUT"
 RYOKU_REPO_NAME=ryoku-local "$REPO/installation/tests/build-ryoku-repo.sh"
 
+# Regression guard for the CachyOS oh-my-zsh-git swap: cachyos-zsh-config depends
+# on oh-my-zsh-git, so ryoku-oh-my-zsh must claim it in provides + conflict +
+# replaces or `pacman -Syu ryoku-desktop` deadlocks on that box (see the package
+# PKGBUILD). Assert it on the freshly built package before we ever publish.
+omz=$(find "$OUT" -name 'ryoku-oh-my-zsh-*.pkg.tar.zst' | head -1)
+[[ -n $omz ]] || die "ryoku-oh-my-zsh package was not built"
+pkginfo=$(bsdtar -xOf "$omz" .PKGINFO)
+for field in provides conflict replaces; do
+  grep -qE "^$field = oh-my-zsh-git" <<<"$pkginfo" \
+    || die "ryoku-oh-my-zsh is missing '$field = oh-my-zsh-git'; a CachyOS box (cachyos-zsh-config) would deadlock the install"
+done
+log "oh-my-zsh-git swap metadata present on ryoku-oh-my-zsh"
+
 # 3. register the local repo and install the desktop. SigLevel=Never relaxes
 #    verification for THIS repo only (it is signed with the throwaway key above,
 #    which pacman does not trust); official repos keep their SigLevel. an
