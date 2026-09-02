@@ -31,7 +31,10 @@ _repo="$startdir/../../.."
 
 build() {
   cd "$_repo/ryoku/shell/ryogami/daemon"
-  go build -o "$srcdir/ryogami" .
+  # -mod=vendor keeps the build off proxy.golang.org so it is reproducible and
+  # works in the offline publish container (the module is stdlib-only, so there
+  # is no vendor/ tree to carry). Matches every other [ryoku] Go package.
+  CGO_ENABLED=0 go build -trimpath -mod=vendor -o "$srcdir/ryogami" .
   "$_repo/ryoku/shell/livewall/build.sh" "$srcdir/ryogami-live"
 }
 
