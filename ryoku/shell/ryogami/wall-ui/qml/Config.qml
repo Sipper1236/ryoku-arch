@@ -242,6 +242,7 @@ QtObject {
     }
 
     readonly property string matugenScheme: _matugenKnobs.schemeType || (_data.matugen && _data.matugen.schemeType) || "scheme-fidelity"
+    readonly property string paletteBridgeSource: _resolve(_data.paletteBridgeSource ?? "/usr/share/ryoku/palette-bridge")
     readonly property string matugenMode: _matugenKnobs.mode || (_data.matugen && _data.matugen.mode) || "dark"
     // The hub's source index runs 0..4 and the picker offers all five, so the
     // clamp has to allow 4: at 3 a stored 4 displayed as 3.
