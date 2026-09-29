@@ -22,6 +22,45 @@ chassis; the *shape* of the conclusions holds for AMD laptops generally.
 
 ## What the power profiles actually do
 
+### Choosing PPD or TLP
+
+Open **Ryoku Hub → Graphics & Power** with Super+comma. The Power Management
+card shows the active backend and a reviewed switch action. **Super+Esc** and
+the bar power menu use the same Ryoku shell state for quick preset changes.
+The four names are Power Saver, Balanced, Balance-Performance, and Performance.
+An unavailable choice stays disabled; neither PPD nor tlp-pd promises an
+intermediate profile on every machine.
+
+PPD is installed by default. TLP mode installs `tlp` and `tlp-pd`, the latter
+providing the same power profile D-Bus interface used by the Ryoku shell.
+Ryoku stops and removes the old manager before starting the new one, then
+checks service state. The switch page lists the package and service changes
+before confirmation. A failed transition attempts to restore the previous
+manager. TLP setup is blocked when a known conflicting manager is active or
+`asusctl` is installed; Ryoku does not remove that package automatically.
+If a switch is interrupted, the Hub shows its recorded stage and offers
+**Restore previous backend**. The equivalent terminal command is
+`ryoku-hub power recover`; it requires polkit authorization.
+
+When TLP is active, Graphics & Power shows a small TLP settings editor for
+USB autosuspend and PCIe ASPM on AC and battery. It writes only
+`/etc/tlp.d/99-ryoku.conf`. Settings explicitly defined in another TLP file
+are displayed as externally managed and cannot be edited here. The editor
+validates choices, calls `tlp start` to reapply, and restores the previous
+Ryoku file if reapply fails. It reports configured values and their source;
+it does not claim that every hardware device adopted the policy. Charge
+thresholds remain device-specific and are not editable through this editor.
+Ryoku's own CPU profile definitions, battery limit and ASPM controls are
+hidden and their helper is disabled while TLP owns power settings.
+
+Headless inspection and control are available through `ryoku-hub power
+status|state|settings`, `ryoku-hub power preset <id>`, and the reviewed
+`ryoku-hub power switch ppd|tlp` command. Package changes require polkit
+authorization. The TLP editor uses `ryoku-hub power set <setting> <value>`.
+
+The reference measurements below were made with PPD and describe that
+configuration specifically.
+
 `power-profiles-daemon` owns the CPU side. Ryoku does not duplicate it. On the
 reference machine each profile writes exactly this:
 

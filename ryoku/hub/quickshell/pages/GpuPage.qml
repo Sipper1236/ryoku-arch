@@ -51,6 +51,15 @@ Item {
     property string cpuProfile: ""
     property string cpuError: ""
 
+    property var powerStatus: ({ active: "none", healthy: false, conflicts: [] })
+    property var powerState: ({ active_profile: "", choices: [] })
+    property var tlpSettings: []
+    property string powerTarget: ""
+    property string powerError: ""
+    property bool powerBusy: false
+    property bool tlpBusy: false
+    property string tlpMessage: ""
+
     // live telemetry for the render GPU (self-contained poll). liveAsleep is not
     // a failure: a runtime-suspended discrete GPU is reported rather than probed,
     // because nvidia-smi would wake it out of D3 (about 10 W on a hybrid laptop)
@@ -140,6 +149,52 @@ Item {
         tuneProc.running = true;
         presetProc.running = true;
         cpuActiveProc.running = true;
+        reloadPower();
+    }
+    function reloadPower() {
+        powerStatusProc.running = true;
+        powerStateProc.running = true;
+        if (pg.powerStatus.active === "tlp")
+            tlpSettingsProc.running = true;
+    }
+    function selectPowerPreset(id) {
+        pg.powerError = "";
+        powerPresetProc.command = ["ryoku-hub", "power", "preset", id];
+        powerPresetProc.running = true;
+    }
+    function switchPowerBackend() {
+        if (pg.powerTarget === "" || pg.powerBusy || pg.tlpBusy)
+            return;
+        pg.powerError = "";
+        pg.powerBusy = true;
+        powerSwitchProc.command = ["ryoku-hub", "power", "switch", pg.powerTarget];
+        powerSwitchProc.running = true;
+    }
+    function setTLPSetting(id, value) {
+        if (pg.powerBusy || pg.tlpBusy)
+            return;
+        pg.powerError = "";
+        pg.tlpMessage = "";
+        pg.tlpBusy = true;
+        tlpSetProc.command = ["ryoku-hub", "power", "set", id, value];
+        tlpSetProc.running = true;
+    }
+    function presetLabel(id) {
+        switch (id) {
+        case "power-saver": return I18n.tr("Power Saver");
+        case "balanced": return I18n.tr("Balanced");
+        case "balance-performance": return I18n.tr("Balance-Performance");
+        case "performance": return I18n.tr("Performance");
+        }
+        return id;
+    }
+    function tlpLabel(id) {
+        switch (id) {
+        case "USB_AUTOSUSPEND": return I18n.tr("USB autosuspend");
+        case "PCIE_ASPM_ON_AC": return I18n.tr("PCIe ASPM on AC");
+        case "PCIE_ASPM_ON_BAT": return I18n.tr("PCIe ASPM on battery");
+        }
+        return id;
     }
     function reloadTune() {
         tuneProc.running = true;
@@ -326,6 +381,86 @@ Item {
         }
     }
     Process {
+        id: powerStatusProc
+        command: ["ryoku-hub", "power", "status"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    pg.powerStatus = JSON.parse(this.text);
+                    if (pg.powerStatus.active === "tlp") tlpSettingsProc.running = true;
+                    else pg.tlpSettings = [];
+                } catch (e) { pg.powerError = I18n.tr("Could not read the power backend."); }
+            }
+        }
+    }
+    Process {
+        id: powerStateProc
+        command: ["ryoku-hub", "power", "state"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try { pg.powerState = JSON.parse(this.text); } catch (e) { pg.powerState = ({ active_profile: "", choices: [] }); }
+            }
+        }
+    }
+    Process {
+        id: powerPresetProc
+        onExited: pg.reloadPower()
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (this.text.trim() !== "") pg.powerError = this.text.trim();
+            }
+        }
+    }
+    Process {
+        id: powerSwitchProc
+        onExited: (code) => {
+            pg.powerBusy = false;
+            if (code === 0) pg.powerTarget = "";
+            pg.reload();
+        }
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (this.text.trim() !== "") pg.powerError = this.text.trim();
+            }
+        }
+    }
+    Process {
+        id: powerRecoverProc
+        command: ["ryoku-hub", "power", "recover"]
+        onExited: (code) => {
+            pg.powerBusy = false;
+            pg.reloadPower();
+            if (code === 0) pg.powerError = "";
+        }
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (this.text.trim() !== "") pg.powerError = this.text.trim();
+            }
+        }
+    }
+    Process {
+        id: tlpSettingsProc
+        command: ["ryoku-hub", "power", "settings"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try { pg.tlpSettings = JSON.parse(this.text) || []; } catch (e) { pg.tlpSettings = []; }
+            }
+        }
+    }
+    Process {
+        id: tlpSetProc
+        onExited: (code) => {
+            pg.tlpBusy = false;
+            if (code === 0) pg.tlpMessage = I18n.tr("TLP configuration saved and reapplied.");
+            tlpSettingsProc.running = true;
+        }
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (this.text.trim() !== "") pg.powerError = this.text.trim();
+            }
+        }
+    }
+    Process {
         id: runProc
         stdout: StdioCollector { onStreamFinished: pg.reload() }
         stderr: StdioCollector {
@@ -383,6 +518,10 @@ done
         interval: 2000; repeat: true; running: pg.visible
         triggeredOnStart: true
         onTriggered: liveProc.running = true
+    }
+    Timer {
+        interval: 3000; repeat: true; running: pg.visible
+        onTriggered: if (!pg.powerBusy) pg.reloadPower()
     }
     Timer {
         interval: 4000; repeat: true; running: pg.enabling
@@ -625,10 +764,154 @@ done
                     }
                 }
 
+                SettingCard {
+                    width: gfxCol.colWidth
+                    title: I18n.tr("POWER MANAGEMENT")
+
+                    Text {
+                        width: parent.width
+                        leftPadding: Tokens.s4; rightPadding: Tokens.s4
+                        topPadding: Tokens.s2; bottomPadding: Tokens.s2
+                        wrapMode: Text.WordWrap
+                        text: I18n.tr("Active backend: %1 · %2").arg(pg.powerStatus.active).arg(pg.powerStatus.healthy ? I18n.tr("ready") : I18n.tr("needs attention"))
+                        color: Tokens.ink; font.family: Tokens.ui; font.pixelSize: Tokens.fBody
+                    }
+                    Text {
+                        visible: (pg.powerStatus.conflicts || []).length > 0
+                        width: parent.width
+                        leftPadding: Tokens.s4; rightPadding: Tokens.s4
+                        wrapMode: Text.WordWrap
+                        text: I18n.tr("Conflicts: %1").arg((pg.powerStatus.conflicts || []).join(", "))
+                        color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                    }
+                    SettingRow {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        block: true
+                        label: I18n.tr("Power preset")
+                        desc: I18n.tr("The same choice appears in Super+Esc.")
+                        Column {
+                            anchors.left: parent.left; anchors.right: parent.right
+                            spacing: Tokens.s1
+                            Repeater {
+                                model: pg.powerState.choices || []
+                                delegate: Btn {
+                                    required property var modelData
+                                    width: parent.width
+                                    text: pg.presetLabel(modelData.id)
+                                        + (pg.powerState.active_profile === modelData.id ? " ✓" : "")
+                                        + (modelData.available ? "" : " · " + (modelData.id === "balance-performance"
+                                            ? I18n.tr("No intermediate mode") : I18n.tr("Unavailable")))
+                                    armed: modelData.available && !powerPresetProc.running && !pg.powerBusy
+                                    onAct: pg.selectPowerPreset(modelData.id)
+                                }
+                            }
+                        }
+                    }
+                    SettingRow {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        block: true
+                        label: I18n.tr("Backend")
+                        desc: I18n.tr("Choose which service owns system power settings.")
+                        Row {
+                            anchors.left: parent.left; anchors.right: parent.right
+                            spacing: Tokens.s2
+                            Btn {
+                                text: "PPD"
+                                armed: !pg.powerBusy && !pg.tlpBusy && pg.powerStatus.active !== "ppd"
+                                onAct: pg.powerTarget = "ppd"
+                            }
+                            Btn {
+                                text: "TLP"
+                                armed: !pg.powerBusy && !pg.tlpBusy && pg.powerStatus.active !== "tlp"
+                                    && (pg.powerStatus.conflicts || []).length === 0
+                                onAct: pg.powerTarget = "tlp"
+                            }
+                        }
+                    }
+                    SettingRow {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        block: true
+                        visible: !!pg.powerStatus.pending || !!pg.powerStatus.journalError
+                        label: I18n.tr("Power switch recovery")
+                        desc: pg.powerStatus.journalError || I18n.tr("An earlier switch stopped during %1.").arg(pg.powerStatus.pending ? pg.powerStatus.pending.stage : "")
+                        Btn {
+                            text: I18n.tr("Restore previous backend")
+                            armed: !pg.powerBusy && !pg.powerStatus.journalError
+                            onAct: { pg.powerBusy = true; powerRecoverProc.running = true; }
+                        }
+                    }
+                    Text {
+                        visible: pg.powerTarget !== ""
+                        width: parent.width
+                        leftPadding: Tokens.s4; rightPadding: Tokens.s4
+                        wrapMode: Text.WordWrap
+                        text: pg.powerTarget === "tlp"
+                            ? I18n.tr("Switch to TLP: stop and remove PPD, install TLP and tlp-pd, then enable both TLP services. Existing user configuration is kept. Ryoku will verify the services and try to restore PPD if setup fails.")
+                            : I18n.tr("Switch to PPD: stop TLP services, remove TLP and tlp-pd, install PPD, and enable its service. Existing TLP configuration is kept. Ryoku will verify the service and try to restore TLP if setup fails.")
+                        color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                    }
+                    Row {
+                        visible: pg.powerTarget !== ""
+                        anchors.left: parent.left; anchors.leftMargin: Tokens.s4
+                        spacing: Tokens.s2
+                        Btn { text: I18n.tr("Cancel"); onAct: pg.powerTarget = "" }
+                        Btn { text: pg.powerBusy ? I18n.tr("Switching…") : I18n.tr("Confirm switch"); primary: true; armed: !pg.powerBusy && !pg.tlpBusy; onAct: pg.switchPowerBackend() }
+                    }
+                    Text {
+                        visible: pg.powerError !== ""
+                        width: parent.width
+                        leftPadding: Tokens.s4; rightPadding: Tokens.s4
+                        wrapMode: Text.WordWrap
+                        text: pg.powerError
+                        color: Tokens.ink; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                    }
+                }
+
+                SettingCard {
+                    width: gfxCol.colWidth
+                    visible: pg.powerStatus.active === "tlp"
+                    title: I18n.tr("TLP SETTINGS")
+                    Text {
+                        width: parent.width
+                        leftPadding: Tokens.s4; rightPadding: Tokens.s4
+                        wrapMode: Text.WordWrap
+                        text: I18n.tr("Values are saved in /etc/tlp.d/99-ryoku.conf. Settings already managed by another TLP file are shown but cannot be changed here. Hardware support and effective state depend on your device.")
+                        color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                    }
+                    Repeater {
+                        model: pg.tlpSettings
+                        delegate: SettingRow {
+                            id: tlpRow
+                            required property var modelData
+                            anchors.left: parent.left; anchors.right: parent.right
+                            block: true
+                            label: pg.tlpLabel(modelData.id)
+                            desc: I18n.tr("Default: %1 · Source: %2").arg(modelData.default).arg(modelData.source)
+                                + (modelData.editable ? "" : " · " + (modelData.reason === "unsupported-device"
+                                    ? I18n.tr("Not supported by this device") : I18n.tr("Managed in another TLP configuration file")))
+                            Seg {
+                                anchors.left: parent.left; anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                options: tlpRow.modelData.options || []
+                                current: tlpRow.modelData.value
+                                enabled: tlpRow.modelData.editable && !pg.tlpBusy && !pg.powerBusy
+                                onChose: (v) => pg.setTLPSetting(tlpRow.modelData.id, v)
+                            }
+                        }
+                    }
+                    Text {
+                        visible: pg.tlpBusy || pg.tlpMessage !== ""
+                        width: parent.width
+                        leftPadding: Tokens.s4; rightPadding: Tokens.s4
+                        text: pg.tlpBusy ? I18n.tr("Applying TLP setting…") : pg.tlpMessage
+                        color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                    }
+                }
+
                 // ── CPU POWER PROFILES ──
                 SettingCard {
                     width: gfxCol.colWidth
-                    visible: pg.cpuTune.length > 0
+                    visible: pg.powerStatus.active === "ppd" && pg.cpuTune.length > 0
                     title: I18n.tr("CPU POWER PROFILES")
 
                     // pick which definition to edit; this never switches the live
@@ -882,7 +1165,7 @@ done
                 // ── BATTERY ──
                 SettingCard {
                     width: gfxCol.colWidth
-                    visible: pg.batteryTune.length > 0
+                    visible: pg.powerStatus.active === "ppd" && pg.batteryTune.length > 0
                     title: I18n.tr("BATTERY")
 
                     Repeater {

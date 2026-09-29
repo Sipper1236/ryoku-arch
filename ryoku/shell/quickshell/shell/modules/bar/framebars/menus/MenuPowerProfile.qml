@@ -26,6 +26,7 @@ Item {
         switch (name) {
         case "power-saver": return I18n.tr("Power Saver");
         case "balanced": return I18n.tr("Balanced");
+        case "balance-performance": return I18n.tr("Balance-Performance");
         case "performance": return I18n.tr("Performance");
         }
         return name;
@@ -65,19 +66,22 @@ Item {
             }
 
             Repeater {
-                model: PowerProfiles.available ? PowerProfiles.profiles : []
+                model: PowerProfiles.available ? PowerProfiles.choices : []
                 delegate: MenuButton {
                     id: prow
                     required property var modelData
-                    readonly property bool sel: PowerProfiles.profile === prow.modelData
+                    readonly property bool sel: PowerProfiles.profile === prow.modelData.id
+                    enabled: prow.modelData.available && PowerProfiles.pendingPreset === ""
                     width: parent.width
                     minH: prowLabel.implicitHeight + prow.pad * 2
-                    onClicked: PowerProfiles.setProfile(prow.modelData)
+                    onClicked: PowerProfiles.setPreset(prow.modelData.id)
                     RevealerIconLabel {
                         id: prowLabel
                         anchors.fill: parent
                         iconName: prow.sel ? "check_circle" : ""
-                        label: root.labelFor(prow.modelData)
+                        label: root.labelFor(prow.modelData.id)
+                            + (prow.modelData.available ? "" : " · " + (prow.modelData.id === "balance-performance"
+                                ? I18n.tr("No intermediate mode") : I18n.tr("Unavailable")))
                     }
                 }
             }

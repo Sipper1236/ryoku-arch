@@ -372,11 +372,13 @@ Item {
             visible: PowerProfiles.available
             width: parent.width
             current: PowerProfiles.profile
-            options: PowerProfiles.profiles.map(profile => ({
-                id: profile,
-                label: profile === "power-saver" ? I18n.tr("Saver") : profile.charAt(0).toUpperCase() + profile.slice(1)
+            options: PowerProfiles.choices.filter(choice => choice.available).map(choice => ({
+                id: choice.id,
+                label: choice.id === "power-saver" ? I18n.tr("Saver")
+                    : choice.id === "balance-performance" ? I18n.tr("Balance+")
+                    : choice.id.charAt(0).toUpperCase() + choice.id.slice(1)
             }))
-            onChose: profile => PowerProfiles.setProfile(profile)
+            onChose: profile => PowerProfiles.setPreset(profile)
         }
     }
 }

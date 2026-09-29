@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- `ryoku-desktop` makes PPD optional so the Hub can install the conflicting TLP and tlp-pd packages.
 - **`ryoku-desktop` ships the `ryoku-gpu-trim` initramfs hook.**
   `/usr/lib/initcpio/install/ryoku-gpu-trim`, from
   `system/boot/mkinitcpio/install/`. The HOOKS drop-in names it and mkinitcpio

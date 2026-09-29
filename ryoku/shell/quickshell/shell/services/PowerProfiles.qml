@@ -16,6 +16,10 @@ Singleton {
     // service order; available when the daemon reports any profile.
     property string profile: ""
     property var profiles: []
+    property string backend: "ppd"
+    property var choices: []
+    property string pendingPreset: ""
+    property string error: ""
     readonly property bool available: root.profiles.length > 0
 
     // active ownership is retained for the menu lifecycle (MenuPowerProfile
@@ -34,6 +38,15 @@ Singleton {
         root.call("powerprofiles.setProfile", { profile: name });
     }
 
+    function setPreset(id) {
+        const choice = root.choices.find(c => c.id === id);
+        if (!choice || !choice.available)
+            return;
+        root.error = "";
+        root.pendingPreset = id;
+        root.call("powerprofiles.setPreset", { id: id });
+    }
+
     readonly property string sockPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-shell.sock"
 
     function apply(line) {
@@ -41,6 +54,10 @@ Singleton {
             const f = JSON.parse(line);
             root.profile = typeof f.active_profile === "string" ? f.active_profile : "";
             root.profiles = Array.isArray(f.profiles) ? f.profiles : [];
+            root.backend = typeof f.backend === "string" ? f.backend : "ppd";
+            root.choices = Array.isArray(f.choices) ? f.choices : [];
+            if (root.pendingPreset === root.profile)
+                root.pendingPreset = "";
         } catch (e) {
             // A malformed frame keeps the last good state.
         }
@@ -66,6 +83,8 @@ Singleton {
             } else {
                 root.profile = "";
                 root.profiles = [];
+                root.choices = [];
+                root.pendingPreset = "";
                 retry.restart();
             }
         }
@@ -81,6 +100,17 @@ Singleton {
         id: ctl
         path: root.sockPath
         property string queued: ""
+        parser: SplitParser {
+            onRead: line => {
+                try {
+                    const reply = JSON.parse(line);
+                    if (!reply.ok) {
+                        root.error = reply.error || "Power profile change failed";
+                        root.pendingPreset = "";
+                    }
+                } catch (e) {}
+            }
+        }
 
         function flushQueued() {
             if (queued.length === 0)

@@ -1,5 +1,10 @@
 # Changelog: ryoku/hub/
 
+## Unreleased
+
+### Added
+- Graphics & Power can switch between PPD and TLP with a privileged, journaled recovery path and exposes supported TLP USB and PCIe settings through a managed drop-in.
+
 
 ### Fixed
 - Palette Bridge detects Vesktop integration from its palette template, so the

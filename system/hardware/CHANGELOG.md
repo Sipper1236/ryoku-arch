@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- `power/ryoku-power` leaves overlapping power and charge settings to TLP while its service is selected.
 - `display/ryoku-monitor`: **a hand-entered resolution is forced, not ignored.**
   When a layout carries a `WxH@rate` mode the panel does not advertise (the Hub's
   new Displays "Custom…" entry), `apply`/`save` generate a CVT reduced-blanking

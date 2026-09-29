@@ -185,7 +185,8 @@ depends=(
   'wtype'                # voice-dictation typing on Wayland (Voxtype)
   'libqalculate'         # calculator backend (launcher Super+Space)
   'upower'               # battery + power status (pill/bar battery indicator)
-  'power-profiles-daemon'
+  # The power profile backend is chosen at runtime. The default install set
+  # includes PPD; a hard dependency here would prevent pacman installing TLP.
   # external-monitor brightness over DDC/CI: the pill DISPLAY faders and the
   # XF86MonBrightness keys drive external displays through `ddcutil setvcp`.
   # was base.packages-only, so it never reached update/shell boxes (the pill
@@ -241,6 +242,7 @@ optdepends=(
   'libisoburn: instant cloud machines in ryovm (cloud-init seed ISO; xorriso)'
   'spice-gtk: SPICE console + headless VM viewer for ryovm'
   'asusctl: ASUS laptop Aura keyboard lighting'
+  'power-profiles-daemon: default power profile backend (choose either this or TLP with tlp-pd)'
   'qmk_hid: QMK/VIA keyboard lighting (Framework 16, custom boards)'
 )
 install="$pkgname.install"

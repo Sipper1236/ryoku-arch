@@ -4,6 +4,8 @@
 
 ### Added
 
+- Power presets in Super+Esc and the bar use the same backend-aware shell service; TLP ownership pauses Ryoku's automatic PPD profile changes.
+
 - **Palette Bridge rides the wallpaper palette to your apps.** A small local
   event server publishes the current matugen palette over HTTP so Spicetify,
   Vesktop and Zen recolour with the wallpaper. The wallpaper settings' Matugen

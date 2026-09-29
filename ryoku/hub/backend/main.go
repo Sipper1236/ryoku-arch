@@ -75,6 +75,11 @@ func main() {
 			fmt.Fprintln(os.Stderr, "ryoku-hub:", err)
 			os.Exit(1)
 		}
+	case "power":
+		if err := runPowerBackend(args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, "ryoku-hub:", err)
+			os.Exit(1)
+		}
 	case "lighting":
 		if err := runLighting(args[1:]); err != nil {
 			fmt.Fprintln(os.Stderr, "ryoku-hub:", err)

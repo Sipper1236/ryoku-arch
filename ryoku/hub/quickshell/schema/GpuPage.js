@@ -7,6 +7,35 @@
 var rows = [
     {
         "tab": "",
+        "group": "POWER MANAGEMENT",
+        "key": "",
+        "label": "Power preset",
+        "desc": "Choose a supported power mode here or in Super+Esc",
+        "ctl": "seg",
+        "src": "ryoku-shell powerprofiles topic (ryoku-hub power state)",
+        "opts": ["power-saver", "balanced", "balance-performance", "performance"]
+    },
+    {
+        "tab": "",
+        "group": "POWER MANAGEMENT",
+        "key": "",
+        "label": "Power backend",
+        "desc": "Choose PPD or TLP after reviewing package and service changes",
+        "ctl": "seg",
+        "src": "ryoku-hub power status|switch",
+        "opts": ["ppd", "tlp"]
+    },
+    {
+        "tab": "",
+        "group": "TLP SETTINGS",
+        "key": "",
+        "label": "TLP settings",
+        "desc": "Configure USB autosuspend and PCIe ASPM when TLP is active",
+        "ctl": "readout",
+        "src": "ryoku-hub power settings|set"
+    },
+    {
+        "tab": "",
         "group": "RYOKU RENDERS ON",
         "key": "AQ_DRM_DEVICES",
         "label": "Graphics mode",

@@ -65,7 +65,7 @@ func (d *daemon) watchAutoPowerSaver() {
 	var a autoProfile
 	prevAC, first := true, true
 	for {
-		if d.pp != nil {
+		if d.pp != nil && activePowerBackend() == "ppd" {
 			st := readPowerState()
 			onBattery := st.present && st.discharging
 			onAC := !onBattery
@@ -92,6 +92,8 @@ func (d *daemon) watchAutoPowerSaver() {
 				}
 			}
 			prevAC, first = onAC, false
+		} else {
+			a, first = autoProfile{}, true
 		}
 		select {
 		case <-d.quit:

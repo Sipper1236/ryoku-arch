@@ -55,6 +55,21 @@ APPLY_LOCK="${TMPDIR:-/tmp}/.ryoku-power-apply-${PKEXEC_UID:-$(id -u)}.lock"
 
 log() { printf 'ryoku-power: %s\n' "$*" >&2; }
 
+tlp_owns_power() {
+  # A fully redirected fixture cannot write this machine's hardware.
+  [[ -n ${RYOKU_POWER_CONFIG:-} && -n ${RYOKU_POWER_SUPPLY_DIR:-} && -n ${RYOKU_ASPM_POLICY_FILE:-} ]] && return 1
+  systemctl is-active --quiet tlp.service 2>/dev/null ||
+    systemctl is-enabled --quiet tlp.service 2>/dev/null ||
+    systemctl is-active --quiet tlp-pd.service 2>/dev/null
+}
+
+require_ryoku_power_owner() {
+  if tlp_owns_power; then
+    log "TLP owns this setting; use Graphics & Power > TLP settings"
+    exit 1
+  fi
+}
+
 hw_laptop() {
   if command -v ryoku-hw-laptop >/dev/null 2>&1; then
     ryoku-hw-laptop is-laptop
@@ -171,6 +186,7 @@ cmd_charge_limit() {
       ;;
     set)
       local n="${2:-}"
+      require_ryoku_power_owner
       charge_supported || { log "battery charge limit not supported on this machine"; exit 1; }
       if ! [[ $n =~ ^[0-9]+$ ]] || (( n < 50 || n > 100 )); then
         log "charge limit must be an integer 50-100"; exit 2
@@ -180,6 +196,7 @@ cmd_charge_limit() {
       priv_write "$(charge_file)" "$n"
       ;;
     clear)
+      require_ryoku_power_owner
       charge_supported || { log "battery charge limit not supported on this machine"; exit 1; }
       cfg_del chargeLimit
       priv_write "$(charge_file)" 100
@@ -244,6 +261,7 @@ cmd_aspm() {
       ;;
     set)
       local want="${2:-}"
+      require_ryoku_power_owner
       aspm_supported || { log "ASPM policy control not available on this machine"; exit 1; }
       aspm_valid "$want" || { log "unknown ASPM policy: $want (valid: $(aspm_options))"; exit 1; }
       cfg_set_str aspm "$want"
@@ -649,6 +667,7 @@ profile_get() {
 }
 
 profile_set() {
+  require_ryoku_power_owner
   (( $# >= 3 )) || { log "profile set needs <profile> <key> <value>"; exit 2; }
   local p="$1" key="$2" val="$3"
   valid_profile "$p" || { log "unknown profile: $p (valid: $PROFILES)"; exit 2; }
@@ -681,6 +700,7 @@ profile_set() {
 }
 
 cmd_apply_profile() {
+  tlp_owns_power && exit 0
   local p="${1:-}"
   [[ -n $p ]] || { log "apply-profile needs a profile name"; exit 2; }
   apply_cpu_profile "$p"
@@ -724,6 +744,7 @@ cmd_status() {
 # ── apply: converge the hardware to power.json (idempotent, any machine) ───────
 
 cmd_apply() {
+  tlp_owns_power && exit 0
   # CPU half first: re-apply the active profile's knobs on top of ppd's defaults
   # (the boot case). Inert without a profiles block, powerprofilesctl or ppd, and
   # unlike the battery/link half it is not laptop-gated.

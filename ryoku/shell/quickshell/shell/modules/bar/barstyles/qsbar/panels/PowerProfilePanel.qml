@@ -3,6 +3,7 @@ import "../modules"
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import shell.services
 import Ryoku.Ui.Singletons
 
 PanelWindow {
@@ -23,18 +24,11 @@ PanelWindow {
     readonly property var allProfiles: [
         { key: "power-saver",  icon: "\uF06C",  label: I18n.tr("Power Saver") },
         { key: "balanced",     icon: "\uF24E", label: I18n.tr("Balanced") },
+        { key: "balance-performance", icon: "\uF0E7", label: I18n.tr("Balance-Performance") },
         { key: "performance",  icon: "\uF0E7", label: I18n.tr("Performance") },
     ]
 
-    // Only offer profiles `powerprofilesctl list` reports (root.powerProfileAvailable),
-    // keeping the canonical order and look. Falls back to all three if availability
-    // can't be read, so a shown button always applies and nothing regresses.
-    readonly property var profiles: {
-        var avail = root.powerProfileAvailable
-        if (!avail || avail.length === 0)
-            return allProfiles
-        return allProfiles.filter(function(p) { return avail.indexOf(p.key) !== -1 })
-    }
+    readonly property var profiles: allProfiles
 
     property real reveal: root.powerProfileVisible ? 1 : 0
     Behavior on reveal {
@@ -53,7 +47,7 @@ PanelWindow {
 
     Rectangle {
         id: card
-        width: 220
+        width: 300
         height: col.implicitHeight + 24
         radius: reveal > 0.001 ? root.panelRadius : 0
         color: "transparent"
@@ -134,6 +128,8 @@ PanelWindow {
                     height: 32
 
                     property bool isActive: root.powerProfileCurrent === modelData.key
+                    readonly property var capability: PowerProfiles.choices.find(c => c.id === modelData.key)
+                    readonly property bool selectable: capability && capability.available
 
                     Rectangle {
                         anchors.fill: parent
@@ -154,13 +150,13 @@ PanelWindow {
                         UiText {
                             text: modelData.icon
                             renderType: Text.QtRendering
-                            color: (ma.containsMouse || isActive) ? root.seal : root.ink
+                            color: selectable && (ma.containsMouse || isActive) ? root.seal : root.ink
                             font.family: root.mono
                             font.pixelSize: 14
                             anchors.verticalCenter: parent.verticalCenter
                         }
                         UiText {
-                            text: I18n.tr(modelData.label)
+                            text: I18n.tr(modelData.label) + (selectable ? "" : " · " + I18n.tr("Unavailable"))
                             color: (ma.containsMouse || isActive) ? root.seal : root.ink
                             font.family: root.mono
                             font.pixelSize: 12
@@ -172,13 +168,12 @@ PanelWindow {
                     MouseArea {
                         id: ma
                         anchors.fill: parent
+                        enabled: selectable
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            setProfileProc.command = ["bash", "-c", "powerprofilesctl set " + modelData.key]
-                            setProfileProc.running = false
-                            setProfileProc.running = true
-                            root.powerProfileCurrent = modelData.key
+                            if (!selectable) return
+                            PowerProfiles.setPreset(modelData.key)
                             root.powerProfileVisible = false
                         }
                     }
@@ -208,9 +203,4 @@ PanelWindow {
         }
     }
 
-    Process {
-        id: setProfileProc
-        command: ["bash", "-c", "powerprofilesctl set balanced"]
-        running: false
-    }
 }

@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import shell.services
 import Ryoku.Ui.Singletons
 
 Item {
@@ -56,28 +57,6 @@ Item {
 
     }
 
-    Process {
-        id: profileProc
-        command: ["bash", "-c", "powerprofilesctl get 2>/dev/null || echo balanced"]
-        running: false
-        stdout: StdioCollector {
-            onStreamFinished: {
-                var p = this.text.trim()
-                if (p) { rootMod.profile = p; root.powerProfileCurrent = p }
-            }
-        }
-    }
-
-    Timer {
-        interval: 5000; running: root.modPower || root.powerProfileVisible; repeat: true; triggeredOnStart: true
-        onTriggered: { profileProc.running = false; profileProc.running = true }
-    }
-
-    Process {
-        id: setProfileProc
-        command: ["bash", "-c", "powerprofilesctl set balanced"]
-    }
-
     TooltipMixin { id: tip; root: rootMod.root; owner: rootMod; text: rootMod.tooltipText }
 
     MouseArea {
@@ -98,9 +77,7 @@ Item {
                 if (cycle.length === 0) cycle = order
                 var idx = cycle.indexOf(root.powerProfileCurrent)
                 var next = cycle[(Math.max(0, idx) + 1) % cycle.length]
-                setProfileProc.command = ["bash", "-c", "powerprofilesctl set " + next]
-                setProfileProc.running = false; setProfileProc.running = true
-                root.powerProfileCurrent = next
+                PowerProfiles.setPreset(next)
             } else {
                 root.powerProfileVisible = !root.powerProfileVisible
             }

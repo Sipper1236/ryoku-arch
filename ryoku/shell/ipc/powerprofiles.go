@@ -88,6 +88,18 @@ func (d *daemon) startPowerProfiles() {
 			p.applyTimer.Stop()
 		}
 	}()
+	go func() {
+		ticker := time.NewTicker(3 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-d.quit:
+				return
+			case <-ticker.C:
+				p.publish()
+			}
+		}
+	}()
 
 	// A pick that came through this call is the user's by construction, so it is
 	// banked here rather than inferred from the signal: it must not be mistaken
@@ -105,6 +117,32 @@ func (d *daemon) startPowerProfiles() {
 		if !gameModeActive() {
 			p.saved.Store(a.Profile)
 			p.persistProfile(a.Profile)
+		}
+		return nil, nil
+	})
+	d.registerCall("powerprofiles.setPreset", func(raw json.RawMessage) (any, error) {
+		var a struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &a); err != nil {
+			return nil, err
+		}
+		available := false
+		for _, choice := range powerPresetChoices(p.profiles()) {
+			if choice.ID == a.ID && choice.Available {
+				available = true
+				break
+			}
+		}
+		if !available {
+			return nil, fmt.Errorf("preset %q is unavailable", a.ID)
+		}
+		if err := p.setProfile(a.ID); err != nil {
+			return nil, err
+		}
+		if !gameModeActive() {
+			p.saved.Store(a.ID)
+			p.persistProfile(a.ID)
 		}
 		return nil, nil
 	})
@@ -143,6 +181,8 @@ func (p *powerProfilesState) publish() {
 	frame, err := json.Marshal(map[string]any{
 		"active_profile": p.activeProfile(),
 		"profiles":       p.profiles(),
+		"backend":        activePowerBackend(),
+		"choices":        powerPresetChoices(p.profiles()),
 	})
 	if err != nil {
 		return
@@ -188,8 +228,18 @@ func (p *powerProfilesState) setProfile(name string) error {
 	if !known {
 		return fmt.Errorf("unknown profile: %s", name)
 	}
-	return p.obj.Call("org.freedesktop.DBus.Properties.Set", 0,
-		ppIface, "ActiveProfile", dbus.MakeVariant(name)).Err
+	if err := p.obj.Call("org.freedesktop.DBus.Properties.Set", 0,
+		ppIface, "ActiveProfile", dbus.MakeVariant(name)).Err; err != nil {
+		return err
+	}
+	for attempt := 0; attempt < 10; attempt++ {
+		if p.activeProfile() == name {
+			p.publish()
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("profile readback did not confirm %q", name)
 }
 
 // persistedProfilePath is the daemon-owned store for the user's last explicit
@@ -426,6 +476,9 @@ func shouldApplyProfile(cfg []byte, active string) string {
 // signal time ppd may not have published the new ActiveProfile yet, and reading
 // it then would apply the outgoing profile's definition over the incoming one.
 func (p *powerProfilesState) scheduleApply() {
+	if activePowerBackend() != "ppd" {
+		return
+	}
 	if p.applyTimer != nil {
 		p.applyTimer.Stop()
 	}
@@ -437,6 +490,9 @@ func (p *powerProfilesState) scheduleApply() {
 // slow or prompting helper cannot stall signal handling. It no-ops (never execs)
 // when the profile is not configured, and logs a failure at most once per profile.
 func (p *powerProfilesState) applyActiveProfile(active string) {
+	if activePowerBackend() != "ppd" {
+		return
+	}
 	cfg, _ := os.ReadFile(powerConfigPath())
 	if shouldApplyProfile(cfg, active) == "" {
 		return
