@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- Checkout deploy skips optional root-only setup when noninteractive sudo cannot authenticate, allowing the user-owned Hub and shell files to finish installing.
+
 ### Added
 
 - Power presets in Super+Esc and the bar use the same backend-aware shell service; TLP ownership pauses Ryoku's automatic PPD profile changes.

@@ -23,6 +23,10 @@ here="$(cd "$(dirname "$0")" && pwd)"
 cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
 bindir="$HOME/.local/bin"
 say() { printf '  %s\n' "$*"; }
+can_sudo() {
+  command -v sudo >/dev/null 2>&1 || return 1
+  [[ -t 0 ]] || sudo -n true >/dev/null 2>&1
+}
 
 # Lay the user's overrides over the freshly-deployed base: a regular file under
 # ~/.config/ryoku/user_edits wins at the mirrored ~/.config path (a fork), the
@@ -255,7 +259,7 @@ say "installed Ryoku CLI and hardware helpers"
 # has no rule to match and the qsbar DNS/wifi toggles silently fail. Install them
 # here when sudo is available (skipped cleanly in a sudo-less/CI env), and skip
 # each dest that already matches so a redeploy is a no-op.
-if command -v sudo >/dev/null 2>&1; then
+if can_sudo; then
   netdir="$here/../../system/hardware/network"
   _priv_install() { # src dest mode
     cmp -s "$1" "$2" && return 0
@@ -499,7 +503,7 @@ if [[ -x "$bindir/ryotunes" ]] && [[ -f "$HOME/.local/share/ryoku/ryotunes.commi
     "$HOME/.local/share/ryoku/ryotunes.commit" "$appshare"/icons/hicolor/*/apps/ryotunes.png
   say "retired the locally built ryotunes (the package takes over)"
 fi
-if command -v sudo >/dev/null 2>&1 && command -v pacman >/dev/null 2>&1; then
+if can_sudo && command -v pacman >/dev/null 2>&1; then
   _rkey=EB6D3C0F55A7B3CABA6B2838847B274F025DD6E3
   _rbase="https://repo.ryoku.dev/stable"
   case "${RYOKU_CHANNEL:-$(sed -n 's/^RYOKU_CHANNEL=//p' "$HOME/.config/environment.d/ryoku.conf" 2>/dev/null)}" in
@@ -770,7 +774,7 @@ mkdir -p "$cfg/pip"; cp -a "$here/../apps/pip/pip.conf" "$cfg/pip/pip.conf"
 # ~/.config/mimeapps.list: that file is the user's own ("Set as default" writes
 # it) and a redeploy must not touch it. Needs root, so it is skipped cleanly in a
 # sudo-less env, and cmp keeps a redeploy a no-op.
-if command -v sudo >/dev/null 2>&1; then
+if can_sudo; then
   cmp -s "$here/../apps/mimeapps.list" /usr/share/applications/mimeapps.list ||
     sudo install -Dm644 "$here/../apps/mimeapps.list" /usr/share/applications/mimeapps.list || true
 fi
