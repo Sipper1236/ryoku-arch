@@ -11,10 +11,8 @@ if [[ "$config_root" == "$HOME/.config" ]]; then
   # shellcheck disable=SC2088
   matugen_template_root='~/.config/matugen/templates'
   # shellcheck disable=SC2088
-  vesktop_quick_css='~/.config/vesktop/settings/quickCss.css'
 else
   matugen_template_root="$config_root/matugen/templates"
-  vesktop_quick_css="$config_root/vesktop/settings/quickCss.css"
 fi
 want_spotify=false
 want_vesktop=false
@@ -85,7 +83,7 @@ record_owned() {
 }
 
 set_matugen_section() {
-  local section="$1" input_path="$2" output_path="$3" temporary
+  local section="$1" input_path="$2" output_path="$3" hook="${4:-}" temporary
   temporary=$(mktemp)
   awk -v target="[$section]" '
     $0 == target { skip=1; next }
@@ -96,6 +94,9 @@ set_matugen_section() {
     printf '\n[%s]\n' "$section"
     printf 'input_path = "%s"\n' "$input_path"
     printf 'output_path = "%s"\n' "$output_path"
+    if [[ -n "$hook" ]]; then
+      printf 'post_hook = %s\n' "$(jq -Rn --arg hook "$hook" '$hook')"
+    fi
   } >> "$temporary"
   install -m 0644 "$temporary" "$overlay_apps"
   rm -f "$temporary"
@@ -121,9 +122,17 @@ if $want_vesktop; then
   prepare_matugen_overlay
   install -m 0644 "$project_root/templates/vesktop-colors.css" "$overlay_root/templates/vesktop-colors.css"
   record_owned vesktop "$overlay_root/templates/vesktop-colors.css"
+  merge_root="$state_root/vesktop"
+  install -d "$merge_root"
+  install -m 0644 "$project_root/vesktop/quickcss.sh" "$merge_root/quickcss.sh"
+  install -m 0644 "$vesktop_rendered" "$merge_root/palette.css"
+  record_owned vesktop "$merge_root/quickcss.sh"
+  record_owned vesktop "$merge_root/palette.css"
+  shell_quote() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
+  merge_hook="bash $(shell_quote "$merge_root/quickcss.sh") $(shell_quote "$config_root/vesktop/settings/quickCss.css") $(shell_quote "$merge_root/palette.css")"
   set_matugen_section templates.vesktop \
     "$matugen_template_root/vesktop-colors.css" \
-    "$vesktop_quick_css"
+    "$merge_root/palette.css" "$merge_hook"
   # Ryoku consumes the same palette roles itself; stacking Midnight changes its layout.
   ryoku_selected=$(jq '(.enabledThemes // []) | any(ascii_downcase == "ryoku.theme.css")' "$settings")
   if [[ "$ryoku_selected" != true ]]; then

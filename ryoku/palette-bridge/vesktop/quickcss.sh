@@ -80,3 +80,12 @@ vesktop_write_palette() (
   fi
   mv -f "$temporary/quickCss.css" "$css"
 )
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  set -euo pipefail
+  [[ $# == 2 && -s "$2" ]] || {
+    printf 'Usage: %s <quickCss.css> <rendered-palette.css>\n' "${0##*/}" >&2
+    exit 2
+  }
+  vesktop_write_palette "$1" "$2"
+fi

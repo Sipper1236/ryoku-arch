@@ -40,6 +40,10 @@
   honour (`wm/caps.go`, `wm/action.go`, `wm/hyprland/act.go`, `wm/niri/act.go`).
 
 ### Fixed
+- **Vesktop wallpaper updates preserve custom QuickCSS.** Palette Bridge
+  stages Matugen colors and merges only its owned block, preserving imports,
+  user styles, and file permissions. Regression tests cover repeated updates,
+  malformed blocks, missing inputs, and cleanup.
 - **niri draws the window border the user sized.** niri 26.04 keeps its border
   off unless the block carries an explicit `on`, so the sized border never drew
   and the thickness slider did nothing; per-app overrides resolve the same way

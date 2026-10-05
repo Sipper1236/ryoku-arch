@@ -25,6 +25,34 @@ Ryotunes, the native music client, joins the suite too: matugen renders its
 Material 3 palette as a Ryoku skin at `~/.config/ryotunes/skins/matugen/skin.json`,
 which the client loads as its "System" theme.
 
+### Palette Bridge for Vesktop, Zen, and Spotify
+
+Open the wallpaper picker with **Super+W > Ryoku Palette Bridge** to set up
+the optional app integrations. Zen and Spotify subscribe to the bridge's local
+palette stream; Vesktop uses the Matugen template fan-out without reloading its
+selected theme. Setup keeps a selected `Ryoku.theme.css`, or supplies Midnight
+as the fallback when Ryoku is not selected.
+
+The Vesktop overlay renders into
+`$XDG_STATE_HOME/ryoku/palette-bridge/vesktop/palette.css` (default
+`~/.local/state/ryoku/palette-bridge/vesktop/palette.css`). Its post-hook runs
+the installed `quickcss.sh` helper beside that file, replacing only the marked
+palette block in `vesktop/settings/quickCss.css`. User CSS and imports survive
+setup, wallpaper changes, and removal. An incomplete owned block stops the merge
+without rewriting QuickCSS. Setup refreshes the helper and upgrades older
+registrations that wrote directly to QuickCSS; removal deletes the owned helper,
+staging file, and template registration.
+
+The isolated regression test is
+`bash ryoku/palette-bridge/tests/install-integrations.test.sh`; it uses real
+Matugen renders to check repeated updates, custom CSS preservation, malformed
+blocks, and symmetric removal. The live `vesktop-seamless-theme.sh` and
+`live-palette-pipeline.sh` checks in that tests directory validate the selected
+Ryoku or Midnight base and the staging/merge registration.
+
+`bash ryoku/palette-bridge/tests/vesktop-quickcss.test.sh` checks the merge
+helper's file permissions, missing inputs, malformed blocks, and cleanup.
+
 ### KDE apps and the optional platform theme
 
 KDE apps (Dolphin, Ark, Gwenview, Kate) never read the qt6ct palette; they
