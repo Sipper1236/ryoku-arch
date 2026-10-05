@@ -6,7 +6,8 @@ repo="$here/../.."
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-mkdir -p "$work/Ryoku" "$work/bin"
+mkdir -p "$work/Ryoku" "$work/bin" "$work/runtime"
+chmod 700 "$work/runtime"
 ln -s "$repo/ryoku/ui" "$work/Ryoku/Ui"
 cp -a "$repo/ryoku/apps/ryostore/quickshell" "$work/ryostore"
 cp "$here/ryostore-components-probe.qml" "$work/probe.qml"
@@ -25,7 +26,12 @@ esac
 SCRIPT
 chmod +x "$work/bin/ryostore"
 
+QT_QPA_PLATFORM=offscreen \
+XDG_RUNTIME_DIR="$work/runtime" \
+XDG_CONFIG_HOME="$work/config" \
+XDG_CACHE_HOME="$work/cache" \
 PATH="$work/bin:$PATH" \
+RYOSTORE_PROBE_SIZE="${1:-${RYOSTORE_PROBE_SIZE:-980x640}}" \
 RYOSTORE_COMMAND_LOG="$work/commands" \
 RYOSTORE_INSTALL_MARKER="$work/install-started" \
 QML2_IMPORT_PATH="$work:${QML2_IMPORT_PATH:-$HOME/.local/lib/qt6/qml}" \

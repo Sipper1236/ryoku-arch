@@ -5,6 +5,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 repo="$here/../.."
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
+mkdir -p "$work/runtime"
+chmod 700 "$work/runtime"
 
 mkdir -p "$work/Ryoku" "$work/bin"
 ln -s "$repo/ryoku/ui" "$work/Ryoku/Ui"
@@ -25,6 +27,10 @@ chmod +x "$work/bin/ryostore"
 
 run_probe() {
     local size="$1"
+    QT_QPA_PLATFORM=offscreen \
+    XDG_RUNTIME_DIR="$work/runtime" \
+    XDG_CONFIG_HOME="$work/config" \
+    XDG_CACHE_HOME="$work/cache" \
     PATH="$work/bin:$PATH" \
     RYOSTORE_PROBE_SIZE="$size" \
     QML2_IMPORT_PATH="$work:${QML2_IMPORT_PATH:-$HOME/.local/lib/qt6/qml}" \

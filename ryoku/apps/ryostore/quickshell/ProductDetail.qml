@@ -643,6 +643,20 @@ FocusScope {
             }
 
             Text {
+                objectName: "ryostore-detail-vesktop-guidance"
+                width: parent.width
+                visible: detail.actionItem !== null && detail.actionItem.category === "vesktop-themes"
+                text: StoreLogic.isInstalled(detail.actionItem)
+                    ? I18n.tr("Installed. Enable this theme in Vesktop Settings > Vencord > Themes.")
+                    : I18n.tr("Install this theme, then enable it in Vesktop Settings > Vencord > Themes.")
+                color: Tokens.inkDim
+                font.family: Tokens.ui
+                font.pixelSize: Tokens.fSmall
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+            }
+
+            Text {
                 objectName: "ryostore-detail-error"
                 width: parent.width
                 text: detail.errorText

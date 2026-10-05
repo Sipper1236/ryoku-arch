@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+- `ryostore/`: **Vesktop themes can be installed from RyoStore.** Browse the
+  Vesktop themes category or search the catalogue, install CSS themes, and
+  manage their updates and removal in the Library. Installation preserves
+  Vesktop settings; product details explain how to enable the theme in
+  Vesktop Settings > Vencord > Themes. Provider tabs and Install All remain
+  scoped to the current theme category.
 - `ryostore/`: **Kairos joins the built-in bar styles in the catalogue.** The
   bar-style provider now lists the shell's island-clock style beside Sumi and QS
   Bar, so Ryoku Settings' Bar Studio shows it as an installed, selectable card
@@ -34,6 +40,10 @@
   v0.56.0-beta.19") via `ryoku version --pretty` (`config.jsonc`).
 
 ### Fixed
+- `ryostore/`: **Hover previews keep installation status attached to the
+  selected product.** Preview artwork can change while an install runs, but
+  the cover badges and progress readout now continue to describe the product
+  targeted by the action buttons (`ShowroomStage.qml`).
 - `fastfetch/`: **the greeting reports the real shell again.** The wrapper
   bounded fastfetch with `timeout 8`, but fastfetch's shell module walks the
   parent chain and skips known wrappers (`time`, `sudo`, ...) without knowing

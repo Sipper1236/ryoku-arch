@@ -36,16 +36,16 @@ Item {
         id: displayItem.id,
         name: displayItem.name || displayItem.id,
         art: displayItem.art || "",
-        category: displayItem.category,
-        categoryName: displayItem.categoryName,
+        category: actionItem.category,
+        categoryName: actionItem.categoryName,
         accent: displayItem.accent,
         surface: displayItem.surface,
-        installed: displayItem.installed,
-        active: displayItem.active,
-        enabled: displayItem.enabled,
-        installedCount: displayItem.installedCount,
-        totalCount: displayItem.totalCount,
-        updateAvailable: displayItem.updateAvailable
+        installed: actionItem.installed,
+        active: actionItem.active,
+        enabled: actionItem.enabled,
+        installedCount: actionItem.installedCount,
+        totalCount: actionItem.totalCount,
+        updateAvailable: actionItem.updateAvailable
     })
 
     clip: true
@@ -225,7 +225,7 @@ Item {
 
         StatusReadout {
             objectName: "ryostore-stage-status"
-            item: stage.displayItem
+            item: stage.actionItem
             busyKey: stage.busyKey
             installStage: stage.installStage
             installErrorKey: stage.installErrorKey

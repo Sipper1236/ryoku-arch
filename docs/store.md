@@ -1,8 +1,8 @@
 # The store
 
 Ryoku's extras are delivered through **RyoStore**: a browsable catalogue of
-rices, lockscreens, bar styles, fastfetch styles, plugins, and bundles that
-install into the running desktop without activating themselves. Remote
+rices, lockscreens, bar styles, fastfetch styles, Vesktop themes, plugins, and
+bundles that install into the running desktop without activating themselves. Remote
 catalogues live in `ryostore`; RyoStore owns discovery and installation;
 Ryoku Settings manages what is already present.
 
@@ -31,6 +31,26 @@ Ryoku Settings manages what is already present.
   reload, and use with no extra setup; removing the bundle takes the guest and
   its state with it. All the guest's code lives in `ryostore`, not here, so
   the shell stays a host and the catalogue stays independent.
+
+## Vesktop themes
+
+Open **RyoStore > Vesktop themes** to browse, install, update, or remove CSS
+themes. Provider tabs and Install All apply only to this category; desktop
+colour schemes keep their separate Themes collection. Installed Vesktop themes
+also appear in the Library.
+
+Installation keeps receipt-owned files under `$XDG_DATA_HOME/ryoku/vesktop-themes`
+(or `~/.local/share/ryoku/vesktop-themes`) and links the CSS into Vesktop's
+Vencord themes directory (`$XDG_CONFIG_HOME/vesktop/themes`, or
+`~/.config/vesktop/themes`). It preserves
+Vesktop settings and does not enable a theme. After installing, open **Vesktop
+Settings > Vencord > Themes** and enable it there. RyoStore's product details
+show this instruction before and after installation. If Vesktop has not noticed
+the new file yet, reopen its Themes page or restart Vesktop.
+
+The catalogue uses a `vesktop-themes/registry.json` and product manifests with
+the `vesktop-themes` destination. Receipts track the installed files for updates
+and removal, so removing a store theme leaves unrelated themes alone.
 
 ## Decision: build Ryostore
 
@@ -296,6 +316,17 @@ A backend smoke scenario uses temporary XDG directories:
 2. install one fixture specimen;
 3. run the catalogue again;
 4. observe `installed: true` and `active: false`.
+
+Run `bash tests/ui/ryostore-vesktop-probe.sh` for the Vesktop install flow,
+category-scoped provider and bulk-install filters, Library state, and the
+instruction to enable the installed theme. The UI probes run Qt offscreen with
+isolated fixture settings so compositor tiling and user motion preferences do
+not alter their assertions. The flow, components, shell, and handoff probes
+cover search restoration, dither choices, hover status, and Settings routes.
+
+Vesktop backend fixtures verify file integrity and owned-file updates/removal,
+including collisions with existing user themes, while preserving Vesktop
+settings and leaving activation to the user.
 
 Pure JavaScript tests cover grouping, filtering, search ranking, status
 precedence, and restored browse state. `qmllint` checks all new and touched QML.

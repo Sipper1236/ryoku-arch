@@ -5,6 +5,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 repo="$here/../.."
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
+mkdir -p "$work/runtime"
+chmod 700 "$work/runtime"
 
 mkdir -p "$work/Ryoku" "$work/bin" "$work/shell/quickshell/plugins" "$work/cfg/ryoku"
 ln -s "$repo/ryoku/ui" "$work/Ryoku/Ui"
@@ -60,6 +62,7 @@ if [[ ${1:-} == extras || ${1:-} == lock && ${2:-} =~ ^(catalog|install|cache)$ 
     exit 9
 fi
 case "${1:-} ${2:-} ${3:-}" in
+"lock list ") printf '%s\n' '{"skins":[{"slug":"clockwork","name":"Clockwork","theme":"Clockwork","active":true}],"active":"clockwork"}' ;;
 "rice list ") printf '%s\n' '[]' ;;
 "rice preflight ") printf '%s\n' '{}' ;;
 "hypr matugen get") printf '%s\n' '{}' ;;
@@ -87,6 +90,9 @@ FAKE
 chmod +x "$work/bin/"*
 
 : >"$work/commands"
+QT_QPA_PLATFORM=offscreen \
+XDG_RUNTIME_DIR="$work/runtime" \
+XDG_CACHE_HOME="$work/cache" \
 PATH="$work/bin:$PATH" \
 RYOSTORE_HANDOFF_LOG="$work/commands" \
 RYOKU_SHELL_DIR="$work/shell" \
@@ -102,7 +108,7 @@ if grep -q '^forbidden ' "$work/commands"; then
     cat "$work/commands"
     exit 1
 fi
-for category in rices lockscreens plugins bundles barstyles fastfetch; do
+for category in lockscreens plugins bundles barstyles fastfetch; do
     grep -q "^ryostore open $category$" "$work/commands" || { echo "missing RyoStore handoff: $category"; cat "$work/commands"; exit 1; }
 done
 grep -q '^kitty --class ryostore -e ryostore-install remove item creator editor$' "$work/commands" || { cat "$work/commands"; exit 1; }

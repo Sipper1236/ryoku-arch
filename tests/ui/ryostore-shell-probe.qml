@@ -6,7 +6,7 @@ import "ryostore/Singletons" as RyoState
 ShellRoot {
     id: root
 
-    property int phase: 0
+    property int phase: -1
     property int attempts: 0
     property var dimensions: String(Quickshell.env("RYOSTORE_PROBE_SIZE") || "1180x760").split("x")
     readonly property int probeWidth: Number(dimensions[0]) || 1180
@@ -58,9 +58,14 @@ ShellRoot {
             const header = root.findObject(app, "ryostore-header");
             const stage = root.findObject(app, "ryostore-stage");
             const grid = root.findObject(app, "ryostore-grid");
-            if (root.phase === 0) {
+            if (root.phase === -1) {
                 if (RyoState.Store.categories.length !== 6 || !header || !stage || !grid)
                     return;
+                app.selectKey("rices:paper");
+                root.phase = 0;
+                return;
+            }
+            if (root.phase === 0) {
                 root.require(!root.findObject(app, "ryostore-rail"), "legacy rail removed");
                 root.require(app.view === "discover" && app.categoryID === "", "Discover route");
                 root.require(root.findObject(app, "ryostore-header-discover"), "Discover control");

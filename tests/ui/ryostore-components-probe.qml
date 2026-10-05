@@ -21,6 +21,7 @@ ShellRoot {
     property string activatedKey: ""
     property int closeCount: 0
     property var lastInstallComponents: null
+    property bool lastInstallDither: false
     property bool sawVerifying: false
     property var probeDimensions: String(Quickshell.env("RYOSTORE_PROBE_SIZE") || "980x640").split("x")
     readonly property int probeWidth: Number(probeDimensions[0]) || 980
@@ -123,6 +124,8 @@ ShellRoot {
 
     FloatingWindow {
         title: "ryostore-components-probe"
+        implicitWidth: root.probeWidth
+        implicitHeight: root.probeHeight
         minimumSize: Qt.size(root.probeWidth, root.probeHeight)
         maximumSize: minimumSize
         color: "#080a0d"
@@ -175,8 +178,8 @@ ShellRoot {
             })
             previewItem: ({
                 id: "b",
-                category: "rices",
-                categoryName: "Rices",
+                category: "plugins",
+                categoryName: "Plugins",
                 name: "Preview B",
                 art: Qt.resolvedUrl("ryostore/logo.svg"),
                 accent: "#d99b50",
@@ -273,6 +276,7 @@ ShellRoot {
                 installed: false
             })
             reducedMotion: true
+            onInstallRequested: (item, dither, components) => root.lastInstallDither = dither
         }
 
         Ryo.ProductDetail {
@@ -344,10 +348,20 @@ ShellRoot {
                     "detail exposes all product metadata");
             const decorCover = root.findObject(decorDetail, "ryostore-detail-cover");
             root.require(decorDetail.hasDither === true, "decor detail exposes dither variants");
-            decorDetail.ditherOn = true;
-            root.require(String(decorCover.artOverride) === "", "dither ON keeps dithered preview");
-            decorDetail.ditherOn = false;
-            root.require(String(decorCover.artOverride) === "img://raw.webp", "dither OFF swaps to raw preview");
+            root.require(!decorDetail.ditherOn && decorCover.coverArt === "img://raw.webp",
+                    "decor defaults to the original artwork");
+            const ditherButton = root.findObject(decorDetail, "ryostore-detail-dither");
+            ditherButton.Accessible.pressAction();
+            root.require(decorDetail.ditherOn, "accessible dither action enables the variant");
+            decorDetail.triggerInstall();
+            root.require(root.lastInstallDither, "dither preview installs the dither variant");
+            root.require(String(decorCover.artOverride) === "img://dithered.webp", "dither ON selects dithered preview");
+            ditherButton.Accessible.pressAction();
+            root.require(!decorDetail.ditherOn, "accessible dither action restores the original");
+            decorDetail.triggerInstall();
+            root.require(!root.lastInstallDither, "original preview installs the original variant");
+            root.require(String(decorCover.artOverride) === "" && decorCover.coverArt === "img://raw.webp",
+                    "dither OFF uses the original preview");
             decorDetail.item = Object.assign({}, decorDetail.item, { installed: true });
             const decorSettings = root.findObject(decorDetail, "ryostore-detail-settings");
             root.require(!decorSettings.visible, "decor detail hides Settings without a settings page");
