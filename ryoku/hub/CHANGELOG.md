@@ -47,6 +47,9 @@
   (`quickshell/Hub.qml`)
 
 ### Added
+- Native battery alerts with configurable warning and critical percentages and
+  a test action in Graphics & Power → Battery. Local backport to the installed
+  source revision for development use.
 - **UPDATE NOW runs the update right in Ryoku Settings.** No terminal window:
   the page asks for your password itself, answers the run's questions, and
   draws the run as a timeline of its steps with how long each took, the line

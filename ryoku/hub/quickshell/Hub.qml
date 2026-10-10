@@ -6,6 +6,7 @@ import Quickshell.Io
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import "Singletons"
+import "pages" as Pages
 import "schema/DesktopPage.js" as DesktopSchema
 import "schema/DesktopScenePage.js" as DesktopSceneSchema
 import "schema/BarStudioPage.js" as BarStudioSchema

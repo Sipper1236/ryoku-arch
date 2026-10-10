@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- Native battery alerts with configurable warning and critical percentages and
+  a test action in Graphics & Power → Battery. Local backport to the installed
+  source revision for development use.
 - **Clipboard history supports keyboard selection.** The up and down arrows
   move through the entries and Enter copies the selected one and closes the
   panel, so the history is usable without reaching for the mouse

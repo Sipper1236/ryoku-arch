@@ -12,8 +12,6 @@ Item {
     readonly property bool isCharging: UPower.displayDevice.ready && (UPower.displayDevice.state === UPowerDeviceState.Charging || UPower.displayDevice.state === UPowerDeviceState.FullyCharged)
 
     property bool notifiedFull: false
-    property bool notifiedLow: false
-    property bool notifiedCritical: false
 
     function sendNotification(summary, body, icon, urgency) {
         let u = urgency ? urgency : "normal";
@@ -37,8 +35,6 @@ Item {
         let charging = state === UPowerDeviceState.Charging || state === UPowerDeviceState.FullyCharged;
 
         if (charging) {
-            root.notifiedLow = false;
-            root.notifiedCritical = false;
 
             if ((pct >= 100 || state === UPowerDeviceState.FullyCharged) && !root.notifiedFull) {
                 root.notifiedFull = true;
@@ -51,35 +47,8 @@ Item {
             } else if (pct < 98) {
                 root.notifiedFull = false;
             }
-        } else {
-            root.notifiedFull = false;
-
-            if (pct <= 5) {
-                if (!root.notifiedCritical) {
-                    root.notifiedCritical = true;
-                    root.notifiedLow = true;
-                    root.sendNotification(
-                        I18n.t("sysnotif.battery.critical_title"),
-                        I18n.t("sysnotif.battery.critical_body", { "pct": pct.toString() }),
-                        "battery-level-0-symbolic",
-                        "critical"
-                    );
-                }
-            } else if (pct <= 20) {
-                if (!root.notifiedLow) {
-                    root.notifiedLow = true;
-                    root.sendNotification(
-                        I18n.t("sysnotif.battery.low_title"),
-                        I18n.t("sysnotif.battery.low_body", { "pct": pct.toString() }),
-                        "battery-level-20-symbolic",
-                        "critical"
-                    );
-                }
-            } else {
-                root.notifiedLow = false;
-                root.notifiedCritical = false;
-            }
         }
+        // Discharge alerts are owned by the global BatteryAlerts service.
     }
 
     Connections {
