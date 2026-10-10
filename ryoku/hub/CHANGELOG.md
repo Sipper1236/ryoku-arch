@@ -47,6 +47,8 @@
   (`quickshell/Hub.qml`)
 
 ### Added
+- Warning and critical battery alerts can each be enabled independently in
+  Graphics & Power → Battery.
 - Native battery alerts with configurable warning and critical percentages and
   a test action in Graphics & Power → Battery. Local backport to the installed
   source revision for development use.
